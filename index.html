@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>River to River</title>
+<meta name="description" content="A parcel-level reading of a Manhattan crosstown street, river to river. 42nd Street is the first one.">
+<style>
+:root{
+  --paper:#FCFAF5; --paper-2:#F4F0E6; --paper-3:#E9E4D6;
+  --ink:#14120F; --ink-70:rgba(20,18,15,.72); --ink-50:rgba(20,18,15,.52);
+  --hair:rgba(20,18,15,.13); --hair-2:rgba(20,18,15,.22);
+  --alarm:#FF5A36; --leaf:#2E9E4F;
+  --sans:"Helvetica Neue",Inter,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:400 15px/1.6 var(--sans);
+  -webkit-font-smoothing:antialiased;padding:0 16px}
+.wrap{max-width:860px;margin:0 auto;padding:clamp(48px,9vw,96px) 0 80px}
+
+.kicker{font:500 11px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--alarm)}
+h1{font:600 clamp(40px,8vw,68px)/1.02 var(--sans);letter-spacing:-.035em;margin:14px 0 0}
+.sub{font-size:17px;color:var(--ink-70);max-width:52ch;margin:16px 0 0}
+
+.rule{height:1px;background:var(--hair-2);margin:44px 0 0}
+
+.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:22px;margin-top:28px}
+.meta dt{font:500 9.5px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--ink-50)}
+.meta dd{margin:7px 0 0;font:500 14px/1.35 var(--sans)}
+
+h2{font:500 11px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-50);
+  margin:56px 0 0}
+
+.sheets{list-style:none;padding:0;margin:20px 0 0;border-top:1px solid var(--hair)}
+.sheets li{border-bottom:1px solid var(--hair)}
+.sheets a{display:grid;grid-template-columns:52px 1fr;gap:18px;align-items:baseline;
+  padding:22px 4px;text-decoration:none;color:inherit;transition:background .12s}
+.sheets a:hover,.sheets a:focus-visible{background:var(--paper-2);outline:none}
+.no{font:500 11px/1.4 var(--mono);color:var(--alarm);letter-spacing:.06em}
+.name{font:600 19px/1.25 var(--sans);letter-spacing:-.015em}
+.name span{color:var(--ink-50);font-weight:400}
+.desc{margin:6px 0 0;font-size:14px;color:var(--ink-70);max-width:62ch}
+
+.findings{list-style:none;padding:0;margin:20px 0 0}
+.findings li{padding:11px 0 11px 18px;border-bottom:1px solid var(--hair);position:relative;
+  font-size:14.5px;color:var(--ink-70)}
+.findings li::before{content:"";position:absolute;left:0;top:19px;width:7px;height:1px;background:var(--alarm)}
+.findings b{color:var(--ink);font-weight:600}
+
+.note{margin-top:20px;padding:16px 18px;background:var(--paper-2);
+  border-left:2px solid var(--hair-2);font-size:13.5px;color:var(--ink-70)}
+.note code{font:400 12.5px var(--mono);background:var(--paper-3);padding:1px 5px;border-radius:2px}
+
+footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--hair);
+  font:400 12px/1.7 var(--mono);color:var(--ink-50)}
+footer a{color:var(--ink-70)}
+
+@media (max-width:560px){
+  .sheets a{grid-template-columns:1fr;gap:6px}
+  .no{letter-spacing:.14em}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">42nd Street &middot; New York</div>
+    <h1>River to River</h1>
+    <p class="sub">A parcel-level reading of a Manhattan crosstown street, from the Hudson to the
+      East River. 42nd Street is the first one.</p>
+
+    <div class="rule"></div>
+    <dl class="meta">
+      <div><dt>Extent</dt><dd>12th Ave to 1st Ave<br>10,411 ft &middot; 1.97 mi</dd></div>
+      <div><dt>Lots</dt><dd>82 fronting the street</dd></div>
+      <div><dt>Sources</dt><dd>MapPLUTO &middot; NYC Parks<br>NYC CSCL &middot; OpenStreetMap</dd></div>
+      <div><dt>Status</dt><dd>In progress</dd></div>
+    </dl>
+  </header>
+
+  <h2>Sheets</h2>
+  <ul class="sheets">
+    <li><a href="plan/">
+      <div class="no">01</div>
+      <div>
+        <div class="name">Existing conditions</div>
+        <p class="desc">The street as it is. Five layers you turn on and off: trees, roadway, lots
+          and what may be built, protected buildings, avenue names. The whole 1.97 miles sits along
+          the bottom as a ruler you drag to move.</p>
+      </div></a></li>
+    <li><a href="analysis/">
+      <div class="no">02</div>
+      <div>
+        <div class="name">The eighty-two lots</div>
+        <p class="desc">Four readings of the same ground, the ten biggest openings, who holds the
+          land, how this could be wrong, and the method.</p>
+      </div></a></li>
+    <li><a href="studies/A-unrolled.html">
+      <div class="no">&mdash;</div>
+      <div>
+        <div class="name">Studies <span>&middot; four ways to draw a street</span></div>
+        <p class="desc">Before any data goes on top. The street straightened onto one axis, the
+          bearing locked so it runs flat, figure and ground inverted, and the graded basemap.</p>
+      </div></a></li>
+  </ul>
+
+  <h2>What the data says</h2>
+  <ul class="findings">
+    <li><b>3.4m sq ft</b> of floor area the zoning appears to allow and nobody built</li>
+    <li>only <b>10%</b> of that survives a check against special districts and landmarks</li>
+    <li><b>88%</b> of the capacity sits outside the four famous hubs</li>
+    <li>the largest single opening is a <b>city owned lot</b> at 234 West 42nd</li>
+    <li><b>67%</b> of the street has no drawn design on it</li>
+  </ul>
+
+  <div class="note">
+    Work in progress. The text on the sheets is placeholder and the numbers above are the only
+    figures that have been checked end to end. Method and known weaknesses are written down on
+    sheet 02. Repo and notes: <code>github.com/judy-huynh/river-to-river</code>
+  </div>
+
+  <footer>
+    Judy Huynh &middot; <a href="https://judyhuynh.ca">judyhuynh.ca</a><br>
+    Basemap &copy; Mapbox &copy; OpenStreetMap
+  </footer>
+
+</div>
+</body>
+</html>
