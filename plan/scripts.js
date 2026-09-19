@@ -154,9 +154,11 @@ const LAYERS=[
       }
       const sp=[...TREES.reduce((m,t)=>m.set(t.common,(m.get(t.common)||0)+1),new Map())]
         .sort((a,b)=>b[1]-a[1]).slice(0,4);
-      h+=`<div class="key"><h5>Most common species</h5>
+      const spTop=sp.length?sp[0][1]:1;
+      h+=`<div class="key key--rank"><h5>Most common species</h5>
         <p>${new Set(TREES.map(t=>t.common)).size} species in all. Hover any tree on the map for its name.</p><ul>${
-        sp.map(([s,c])=>`<li><i class="dot" style="background:#2E9E4F;opacity:.55"></i><span>${s}</span><b>${c}</b></li>`).join('')}</ul></div>`;
+        sp.map(([s,c])=>`<li><div class="row"><span>${s}</span><b>${c}</b></div>`
+          + `<i class="bar" style="width:${Math.max(3,Math.round(c/spTop*100))}%"></i></li>`).join('')}</ul></div>`;
       if(this.extraOn.gaps)
         h+=`<p class="flag"><b>${commas(GAP_FEET)} feet has no tree at all</b>That is ${pct(GAP_FEET,LEN)}% of the street, in two stretches, and both are the famous ones: 8th through Times Square to 6th, and Madison through Grand Central to 3rd.</p>`;
       return h;
@@ -179,7 +181,7 @@ const LAYERS=[
   },
   {
     id:'lots', name:'Lots and what may be built', count:LOTS.features.length+' fronting the street',
-    on:true, open:true, ids:['lotFill','lotLine'], opacity:.58,
+    on:true, open:false, ids:['lotFill','lotLine'], opacity:.58,
     says:`Every property fronting 42nd Street, at its real boundary from the city tax map. <b>Click one to see who owns it.</b>`,
     styles:[['zoning','The rules that govern it'],['capacity','Room left to build'],['age','When it was built'],['plain','Outline only']],
     style:'zoning',
@@ -237,7 +239,13 @@ function buildPanel(){
     const sw=bar.querySelector('.sw');
     sw.onclick=e=>{e.stopPropagation(); toggle(L,row,sw);};
     sw.onkeydown=e=>{ if(e.key===' '||e.key==='Enter'){e.preventDefault(); e.stopPropagation(); toggle(L,row,sw);} };
-    bar.onclick=()=>{ row.dataset.open = row.dataset.open==='true'?'false':'true'; };
+    bar.onclick=()=>{
+      const opening = row.dataset.open!=='true';
+      /* one legend open at a time, or the rail becomes a single unreadable column */
+      if(opening) LAYERS.forEach(o=>{ if(o._row && o._row!==row) o._row.dataset.open='false'; });
+      row.dataset.open = opening ? 'true' : 'false';
+      if(opening) requestAnimationFrame(()=>row.scrollIntoView({block:'nearest'}));
+    };
     const body=el('div','layer__body');
     row.append(bar,body); host.append(row);
     L._row=row; L._body=body; renderBody(L);
@@ -512,6 +520,13 @@ function syncRuler(){
 })();
 
 /* ── boot ─────────────────────────────────────────────────────────────── */
+(()=>{ /* build stamp: the last-modified date of this file, so a stale cache is obvious */
+  const el=$('#stamp'); if(!el) return;
+  fetch('scripts.js',{method:'HEAD'}).then(r=>{
+    const d=r.headers.get('last-modified');
+    el.textContent = d ? 'built '+new Date(d).toISOString().slice(0,16).replace('T',' ') : 'build unknown';
+  }).catch(()=>{ el.textContent='build unknown'; });
+})();
 $('#metaLots').textContent=LOTS.features.length+' lots';
 $('#metaTrees').textContent=TREES.length+' trees';
 buildPanel(); buildRuler();
