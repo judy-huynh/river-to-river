@@ -14,8 +14,12 @@ from a `file://` page and you get a silent grey box.
 
 ```
 cd ~/Documents/GitHub/river-to-river
-python3 -m http.server 8042 --bind 127.0.0.1
+python3 serve.py
 ```
+
+`serve.py` sends `no-store`, so a plain Cmd+R always shows what is on disk. Plain
+`python3 -m http.server` lets the browser cache `style.css` and `scripts.js`, which
+means edits look like they did nothing and you end up debugging a stale page.
 
 Then <http://127.0.0.1:8042/plan/>. The pure SVG pages work either way.
 
