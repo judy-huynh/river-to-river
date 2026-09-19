@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>D / 42nd Street, graded</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.css" rel="stylesheet">
+<style>
+:root{
+  --paper:#F7F4EC; --ink:#0E0C0B; --ink-2:#1A1614; --ink-60:rgba(247,244,236,.6); --ink-40:rgba(247,244,236,.38);
+  --hair:rgba(247,244,236,.18); --volt:#D8F546; --flare:#FF5A36; --slate:#7FA8B8;
+  --sans:"Helvetica Neue",Inter,Arial,sans-serif; --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box} html,body{margin:0}
+body{background:var(--ink); color:var(--paper); font-family:var(--sans); font-size:16px; -webkit-font-smoothing:antialiased}
+.wrap{max-width:1720px; margin:0 auto; padding:clamp(14px,2.6vh,28px) clamp(12px,2vw,28px) 40px}
+.lab{font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-40)}
+h1{font-size:clamp(26px,4.4vw,54px); letter-spacing:-.035em; line-height:.96; margin:6px 0 8px; text-transform:uppercase; font-weight:700}
+h1 em{font-style:normal; color:var(--flare)}
+.sub{max-width:74ch; color:var(--ink-60); font-size:15.5px; margin:0 0 16px}
+
+.bar{display:flex; gap:20px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px}
+.set{display:flex; flex-direction:column; gap:6px}
+.set>span{font-family:var(--mono); font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-40)}
+.chips{display:flex; gap:5px; flex-wrap:wrap}
+.chip{font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; cursor:pointer;
+  background:none; border:1px solid var(--hair); padding:7px 11px; color:var(--ink-60); transition:.15s}
+.chip:hover{color:var(--paper); border-color:var(--paper)}
+.chip[aria-pressed="true"]{background:var(--volt); border-color:var(--volt); color:var(--ink)}
+
+.stage{position:relative}
+#map{height:clamp(460px,74vh,780px); border:1px solid var(--hair); background:var(--ink-2)}
+.hud{position:absolute; left:14px; bottom:14px; z-index:5; pointer-events:none;
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.14em; text-transform:uppercase;
+  background:rgba(14,12,11,.72); border-left:2px solid var(--flare); padding:9px 12px; backdrop-filter:blur(6px)}
+.hud b{display:block; color:var(--volt); font-size:13px; letter-spacing:.04em; margin-bottom:3px}
+
+.card{position:absolute; right:14px; top:14px; width:min(300px,44vw); z-index:5;
+  background:rgba(14,12,11,.86); border:1px solid var(--hair); padding:14px 15px 16px; backdrop-filter:blur(10px)}
+.card[hidden]{display:none}
+.card h3{margin:5px 0 4px; font-size:19px; letter-spacing:-.02em; line-height:1.1}
+.card dl{display:grid; gap:0; margin:10px 0 0}
+.card dl div{display:flex; justify-content:space-between; gap:12px; padding:6px 0; border-top:1px solid var(--hair)}
+.card dt{font-family:var(--mono); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-40)}
+.card dd{margin:0; font-family:var(--mono); font-size:11.5px; text-align:right}
+
+.diag{font-family:var(--mono); font-size:11.5px; line-height:1.7; border:1px solid var(--flare);
+  background:rgba(255,90,54,.07); padding:12px 14px; margin-bottom:10px; white-space:pre-wrap}
+.diag b{color:var(--volt); display:block; margin-bottom:4px; font-size:12.5px}
+.diag.ok{border-color:var(--hair); background:rgba(247,244,236,.04)}
+.diag.ok b{color:var(--volt)}
+.foot{display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-top:10px}
+.note{max-width:96ch; color:var(--ink-60); font-size:14px; margin-top:16px; border-top:1px solid var(--hair); padding-top:12px}
+.note b{color:var(--paper)}
+.note code{font-family:var(--mono); font-size:12px; color:var(--volt)}
+.mapboxgl-ctrl-group{border-radius:0 !important; border:1px solid var(--hair) !important; box-shadow:none !important; background:var(--ink-2) !important}
+.mapboxgl-ctrl-group button+button{border-top:1px solid var(--hair) !important}
+.mapboxgl-ctrl-group button .mapboxgl-ctrl-icon{filter:invert(1)}
+.mapboxgl-ctrl-attrib{background:rgba(14,12,11,.7) !important}
+.mapboxgl-ctrl-attrib a{color:var(--ink-60) !important}
+</style>
+<script>
+/* Mapbox GL JS v3 starts a web worker, and Chrome refuses to create workers from
+   file:// pages because each one is its own opaque origin. Rather than showing a
+   grey box, say so and give the one command that fixes it. */
+if (location.protocol === 'file:') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const b = document.createElement('div');
+    b.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#0E0C0B;color:#F7F4EC;'
+      + 'font:15px/1.7 ui-monospace,Menlo,monospace;padding:min(9vh,70px) min(8vw,60px);overflow:auto';
+    b.innerHTML =
+      '<div style="max-width:70ch">'
+      + '<div style="font-size:12px;letter-spacing:.18em;color:#FF5A36;margin-bottom:18px">CANNOT RUN FROM A FILE URL</div>'
+      + '<div style="font:600 clamp(24px,4vw,44px)/1.05 -apple-system,Helvetica,sans-serif;letter-spacing:-.03em;margin-bottom:22px">'
+      + 'This page needs a local server</div>'
+      + '<p>Mapbox starts a web worker. Chrome will not create a worker from a <code style="color:#D8F546">file://</code> page, '
+      + 'because every file URL counts as its own security origin. That is the grey box.</p>'
+      + '<p style="margin-top:20px">Open Terminal, paste this once, and leave it running:</p>'
+      + '<pre style="background:#1A1614;border-left:3px solid #D8F546;padding:14px 16px;margin:12px 0 20px;'
+      + 'white-space:pre-wrap;color:#D8F546">cd ~/Documents/GitHub/river-to-river\npython3 -m http.server 8042 --bind 127.0.0.1</pre>'
+      + '<p>Then open <a style="color:#FF5A36" href="http://127.0.0.1:8042/">http://127.0.0.1:8042/</a> '
+      + 'and click through to this page from there.</p>'
+      + '<p style="margin-top:24px;color:rgba(247,244,236,.55)">The drawings that are pure SVG, like the unrolled street, '
+      + 'work fine from a file URL. Only the Mapbox ones need this.</p>'
+      + '</div>';
+    document.body.appendChild(b);
+  });
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+  <p class="lab">Basemap study D &middot; Mapbox GL JS 3.28.1</p>
+  <h1>42nd Street, <em>graded</em></h1>
+  <p class="sub">The ribbon geometry with the void palette, built on the Mapbox Standard style rather than a hand rolled one. The whole city is pushed through a colour lookup table I generated, so the map is graded like film instead of styled layer by layer. Move the light around the day, turn the weather on, and click any building in the city to interrogate it.</p>
+
+  <div class="bar">
+    <div class="set"><span>Light</span><div class="chips" id="light"></div></div>
+    <div class="set"><span>Grade</span><div class="chips" id="grade"></div></div>
+    <div class="set"><span>Weather</span><div class="chips" id="weather"></div></div>
+    <div class="set"><span>Camera</span><div class="chips" id="camera"></div></div>
+  </div>
+
+  <div class="diag" id="diag"><b>Starting up…</b></div>
+
+<div class="stage">
+    <div id="map"></div>
+    <div class="hud"><b id="hudWhere">Hudson River</b><span id="hudSub">Bearing locked 28.9&deg;</span></div>
+    <div class="card" id="card" hidden>
+      <span class="lab" id="cardKind">Building</span>
+      <h3 id="cardName">&nbsp;</h3>
+      <dl id="cardFacts"></dl>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span class="lab" id="status">&nbsp;</span>
+    <span class="lab">Standard style &middot; custom 32&sup3; LUT &middot; interactions API</span>
+  </div>
+
+  <p class="note"><b>What is actually new here.</b>
+  <code>setColorTheme</code> pushes every pixel of the basemap through a 32&sup3; lookup table, so the palette is a colour grade rather than a stylesheet.
+  <code>setConfigProperty</code> moves the sun, which is why the shadows change and not just the colours.
+  <code>addInteraction</code> makes every building in the Standard style clickable without adding a single layer of my own.
+  <code>setRain</code> and <code>setSnow</code> put weather in the scene.
+  <code>line-trim-offset</code> draws the street onto the map as you travel it.
+  New York is one of the cities with real landmark models, so Grand Central and the Chrysler arrive as themselves rather than as grey boxes.</p>
+</div>
+
+<script src="grade.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.js"></script>
+<script>
+mapboxgl.accessToken='pk.eyJ1IjoiajAwYnkiLCJhIjoiY2x1bHUzbXZnMGhuczJxcG83YXY4czJ3ayJ9.S5PZpU9VDwLMjoX_0x5FDQ';
+
+const LINE=window.LINE42, LEN=LINE[LINE.length-1][0], BEARING=28.9;
+const at=ft=>{
+  const t=Math.max(0,Math.min(LEN,ft));
+  for(let i=0;i<LINE.length-1;i++) if(t>=LINE[i][0]&&t<=LINE[i+1][0]){
+    const k=(t-LINE[i][0])/((LINE[i+1][0]-LINE[i][0])||1);
+    return [LINE[i][1]+(LINE[i+1][1]-LINE[i][1])*k, LINE[i][2]+(LINE[i+1][2]-LINE[i][2])*k];
+  }
+  return [LINE[LINE.length-1][1],LINE[LINE.length-1][2]];
+};
+const AVES=[[0,'12th Av'],[903,'11th Av'],[1890,'10th Av'],[2699,'9th Av'],[3473,'8th Av'],[4542,'7th Av'],
+ [5480,'6th Av'],[6417,'5th Av'],[6932,'Madison'],[7520,'Park Av'],[8021,'Lexington'],[8940,'3rd Av'],
+ [9730,'2nd Av'],[10411,'1st Av']];
+const set=(id,html)=>{const n=document.getElementById(id); if(n) n.innerHTML=html;};
+const status=t=>set('status',t);
+
+/* ── diagnostics ──────────────────────────────────────────────────────
+   Every step reports. If the map is a grey box, this panel says which
+   step never happened.
+   ────────────────────────────────────────────────────────────────── */
+const steps=[];
+function step(name,ok,detail){
+  steps.push((ok?'  ok   ':'  FAIL ')+name+(detail?'   '+detail:''));
+  const d=document.getElementById('diag');
+  d.innerHTML='<b>'+(ok?'':'Something failed. ')+'Startup</b>'+steps.join('\n');
+  d.classList.toggle('ok', steps.every(l=>l.startsWith('  ok')));
+}
+
+/* WebGL 2 is mandatory for GL JS v3. Check before blaming anything else. */
+(function(){
+  const c=document.createElement('canvas');
+  const gl=c.getContext('webgl2');
+  step('WebGL 2 available', !!gl, gl? (gl.getParameter(gl.VERSION)||'') : 'v3 cannot run without it');
+})();
+step('mapbox-gl.js loaded', typeof mapboxgl!=='undefined', typeof mapboxgl!=='undefined' ? 'v'+mapboxgl.version : 'script blocked');
+step('mapboxgl.supported()', typeof mapboxgl!=='undefined' && (!mapboxgl.supported || mapboxgl.supported()));
+step('colour grade data present', !!(window.LUT_NIGHT && window.LUT_NIGHT.length>1000),
+     window.LUT_NIGHT ? (Math.round(window.LUT_NIGHT.length/1024)+' KB') : 'grade.js missing');
+
+const map=new mapboxgl.Map({
+  container:'map',
+  style:'mapbox://styles/mapbox/standard',
+  center:at(4600), zoom:15.2, bearing:BEARING, pitch:64,
+  antialias:true, attributionControl:true
+});
+map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
+map.dragRotate.disable();
+map.touchZoomRotate.disableRotation();
+
+let styleLoaded=false;
+map.on('error', e=>{
+  const msg=(e && e.error && e.error.message) || 'unknown map error';
+  step('map error', false, msg);
+});
+setTimeout(()=>{ if(!styleLoaded) step('style loaded within 10s', false,
+  'the style request never completed. Usually a token scope or a blocked request.'); }, 10000);
+map.on('load', ()=>step('first tiles painted', true));
+
+/* ── chips ───────────────────────────────────────────────────────────── */
+function chips(hostId, items, initial, onPick){
+  const host=document.getElementById(hostId);
+  items.forEach(([value,label])=>{
+    const b=document.createElement('button');
+    b.className='chip'; b.type='button'; b.textContent=label;
+    b.setAttribute('aria-pressed', String(value===initial));
+    b.onclick=()=>{
+      [...host.children].forEach((c,i)=>c.setAttribute('aria-pressed', String(items[i][0]===value)));
+      onPick(value);
+    };
+    host.appendChild(b);
+  });
+}
+
+let ready=false;
+
+map.on('style.load',()=>{
+  styleLoaded=true; ready=true;
+  step('style loaded', true, map.getStyle().name || 'Mapbox Standard');
+
+  /* Standard configuration. Each one reports separately so a single
+     unsupported key cannot take the whole map down with it. */
+  cfg('lightPreset','dusk');
+  cfg('theme','monochrome');
+  cfg('showPointOfInterest',false);
+  cfg('showTransitLabels',false);
+  cfg('showPlaceLabels',false);
+  cfg('showRoadLabels',false);
+  cfg('show3dObjects',true);
+  step('basemap configured', true, 'dusk / monochrome / labels off');
+
+  addStreet();
+
+  /* the grade goes on LAST and is off by default, because a bad lookup
+     table can flatten the whole map to one colour and look like a failure */
+  wireInteractions();
+});
+
+function addStreet(){
+  try{
+    map.addSource('street',{type:'geojson', lineMetrics:true, data:{type:'Feature',
+      geometry:{type:'LineString',coordinates:LINE.map(p=>[p[1],p[2]])}}});
+    map.addLayer({id:'streetGlow', type:'line', source:'street', slot:'middle',
+      layout:{'line-cap':'round'},
+      paint:{'line-color':'#D8F546','line-emissive-strength':1,
+        'line-width':['interpolate',['linear'],['zoom'],12,10,17,58],
+        'line-opacity':.22,'line-blur':10}});
+    map.addLayer({id:'streetLine', type:'line', source:'street', slot:'middle',
+      layout:{'line-cap':'round'},
+      paint:{'line-color':'#FF5A36','line-emissive-strength':1.4,
+        'line-width':['interpolate',['linear'],['zoom'],12,2,17,7],
+        'line-trim-offset':[0,0],'line-trim-color':'rgba(255,90,54,0.12)','line-trim-fade-range':[0,.35]}});
+    map.addSource('aves',{type:'geojson',data:{type:'FeatureCollection',features:AVES.map(([ft,name])=>({
+      type:'Feature',properties:{name},geometry:{type:'Point',coordinates:at(ft)}}))}});
+    map.addLayer({id:'aveLab', type:'symbol', source:'aves', slot:'top',
+      layout:{'text-field':['get','name'],'text-size':10.5,'text-offset':[0,-1.3],
+        'text-font':['DIN Pro Medium','Arial Unicode MS Regular'],'text-letter-spacing':.14,
+        'text-transform':'uppercase'},
+      paint:{'text-color':'#F7F4EC','text-halo-color':'#0E0C0B','text-halo-width':1.8,'text-emissive-strength':1}});
+    step('street and avenue layers added', true);
+  }catch(e){ step('street layers', false, e.message); }
+}
+
+function cfg(key,value){
+  try{ map.setConfigProperty('basemap',key,value); }
+  catch(e){ step('config '+key, false, e.message); }
+}
+
+function applyGrade(which){
+  if(typeof map.setColorTheme!=='function'){ step('setColorTheme', false, 'not in this build'); return; }
+  try{
+    if(which==='off'){ map.setColorTheme(null); step('grade removed', true); return; }
+    const uri = which==='day' ? window.LUT_DAY : window.LUT_NIGHT;
+    if(!uri){ step('grade '+which, false, 'lookup table missing from grade.js'); return; }
+    map.setColorTheme({ data: uri });
+    step('grade applied', true, which);
+  }catch(e){ step('grade '+which, false, e.message); }
+}
+
+/* ── the Interactions API, new in 3.x ─────────────────────────────────── */
+let hovered=null;
+function wireInteractions(){
+  const target={ featuresetId:'buildings', importId:'basemap' };
+  try{
+    map.addInteraction('b-click',{ type:'click', target, handler:e=>{ showBuilding(e.feature); return true; } });
+    map.addInteraction('b-enter',{ type:'mouseenter', target, handler:e=>{
+      map.getCanvas().style.cursor='pointer';
+      if(hovered) map.setFeatureState(hovered,{highlight:false});
+      hovered=e.feature; map.setFeatureState(hovered,{highlight:true});
+    }});
+    map.addInteraction('b-leave',{ type:'mouseleave', target, handler:()=>{
+      map.getCanvas().style.cursor='';
+      if(hovered) map.setFeatureState(hovered,{highlight:false});
+      hovered=null;
+    }});
+    map.addInteraction('bg-click',{ type:'click', handler:()=>{ document.getElementById('card').hidden=true; } });
+    step('building interactions wired', true, 'click any building');
+  }catch(e){
+    step('interactions API', false, e.message+' — falling back to plain clicks');
+    map.on('click',()=>document.getElementById('card').hidden=true);
+  }
+}
+
+function showBuilding(f){
+  const p=f.properties||{};
+  const card=document.getElementById('card');
+  card.hidden=false;
+  set('cardKind', p.class ? String(p.class).replace(/_/g,' ') : 'Building');
+  set('cardName', p.name || 'Unnamed building');
+  const ft=alongStreet(f);
+  const rows=[
+    ['Height', p.height ? Math.round(p.height)+' m' : 'not in the tile'],
+    ['Floors', p.levels || '—'],
+    ['Along 42nd', ft==null ? 'off the corridor' : Math.round(ft).toLocaleString()+' ft from the Hudson'],
+    ['Nearest avenue', ft==null ? '—' : nearestAve(ft)]
+  ];
+  document.getElementById('cardFacts').innerHTML =
+    rows.map(([k,v])=>`<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+}
+
+/* where a clicked feature sits along the street, in feet from the Hudson */
+function alongStreet(f){
+  let c=null;
+  try{
+    const g=f.geometry;
+    if(!g) return null;
+    const flat=[];
+    (function walk(x){ if(typeof x[0]==='number') flat.push(x); else x.forEach(walk); })(g.coordinates);
+    if(!flat.length) return null;
+    c=[flat.reduce((s,p)=>s+p[0],0)/flat.length, flat.reduce((s,p)=>s+p[1],0)/flat.length];
+  }catch(e){ return null; }
+  const M=(lon,lat)=>[lon*111320*Math.cos(40.755*Math.PI/180), lat*110570];
+  const [px,py]=M(c[0],c[1]);
+  let best=null;
+  for(let i=0;i<LINE.length-1;i++){
+    const [f1,lo1,la1]=LINE[i], [f2,lo2,la2]=LINE[i+1];
+    const [x1,y1]=M(lo1,la1), [x2,y2]=M(lo2,la2);
+    const dx=x2-x1, dy=y2-y1, seg=dx*dx+dy*dy;
+    const t=seg? Math.max(0,Math.min(1,((px-x1)*dx+(py-y1)*dy)/seg)) : 0;
+    const d=Math.hypot(px-(x1+dx*t), py-(y1+dy*t));
+    if(!best||d<best[1]) best=[f1+(f2-f1)*t, d];
+  }
+  return best && best[1]<160 ? best[0] : null;
+}
+const nearestAve=ft=>AVES.reduce((a,b)=>Math.abs(b[0]-ft)<Math.abs(a[0]-ft)?b:a)[1];
+
+/* ── controls ─────────────────────────────────────────────────────────── */
+chips('light',[['dawn','Dawn'],['day','Day'],['dusk','Dusk'],['night','Night']],'dusk',v=>{
+  cfg('lightPreset',v); status('Light preset: '+v);
+});
+chips('grade',[['off','None'],['night','Void'],['day','Warm']],'off',v=>{ applyGrade(v); status('Grade: '+v); });
+chips('weather',[['none','Clear'],['rain','Rain'],['snow','Snow']],'none',v=>{
+  try{
+    map.setRain(v==='rain' ? {density:.5, intensity:1, color:'#b8c7cc', opacity:.6,
+      vignette:.6, 'vignette-color':'#0E0C0B', 'droplet-size':[3,9], 'distortion-strength':.6} : null);
+    map.setSnow(v==='snow' ? {density:.45, intensity:.9, color:'#F7F4EC', opacity:.7,
+      vignette:.5, 'vignette-color':'#0E0C0B', 'flake-size':.6} : null);
+    status(v==='none' ? 'Weather off' : 'Weather: '+v);
+  }catch(e){ status('This build does not support precipitation'); }
+});
+chips('camera',[['corridor','Times Square'],['whole','Whole street'],['plan','Plan'],['travel','Travel it']],'corridor',v=>{
+  if(v==='corridor') map.easeTo({center:at(4600),zoom:15.2,pitch:64,bearing:BEARING,duration:1200});
+  if(v==='whole'){
+    const b=new mapboxgl.LngLatBounds(); [0,LEN].forEach(f=>b.extend(at(f)));
+    map.fitBounds(b,{bearing:BEARING,pitch:56,padding:{top:70,bottom:70,left:30,right:30},duration:1400});
+  }
+  if(v==='plan') map.easeTo({pitch:0,bearing:BEARING,duration:1000});
+  if(v==='travel') travel();
+});
+
+/* ── travel the street, drawing it as you go ──────────────────────────── */
+let travelling=false;
+function travel(){
+  if(travelling||!ready) return;
+  travelling=true;
+  map.easeTo({center:at(0), zoom:16, pitch:72, bearing:BEARING, duration:1400});
+  const t0=performance.now()+1400, dur=30000;
+  const step=now=>{
+    const k=Math.max(0,Math.min(1,(now-t0)/dur));
+    const ft=k*LEN;
+    map.jumpTo({center:at(ft), zoom:16, pitch:72, bearing:BEARING});
+    try{ map.setPaintProperty('streetLine','line-trim-offset',[k,1]); }catch(e){}
+    set('hudWhere', ft<80?'Hudson River' : ft>LEN-80?'East River' : nearestAve(ft));
+    set('hudSub', Math.round(ft).toLocaleString()+' ft &middot; '+(ft/5280).toFixed(2)+' mi');
+    if(k<1) requestAnimationFrame(step); else { travelling=false; status('Arrived at the East River'); }
+  };
+  requestAnimationFrame(step);
+}
+map.on('error',e=>{ if(e && e.error) status('Map: '+e.error.message); });
+</script>
+</body>
+</html>

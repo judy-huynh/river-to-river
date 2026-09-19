@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>42nd Street, lot by lot</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet">
+<style>
+:root{
+  --paper:#F2EEE6; --paper-2:#EAE4D8; --ink:#1E1B18; --ink-soft:#6B6157;
+  --rust:#B0442F; --blue:#2C5A78; --green:#3F6E51; --violet:#7A5C86; --sand:#9A927F;
+  --rule:rgba(30,27,24,.15);
+  --serif: ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans: ui-sans-serif,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono: ui-monospace,SFMono-Regular,Menlo,monospace;
+  --hand: "Bradley Hand","Snell Roundhand","Segoe Print","Comic Sans MS",cursive;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper); color:var(--ink); font-family:var(--serif); font-size:18px; line-height:1.6;
+  -webkit-font-smoothing:antialiased}
+.lab{font-family:var(--mono); font-size:10.5px; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-soft)}
+.ph{background:rgba(176,68,47,.1); border-bottom:1px dotted var(--rust); padding:0 2px}
+.wrap{max-width:1400px; margin:0 auto; padding:clamp(20px,4vh,44px) clamp(14px,2.5vw,32px) 48px}
+
+h1{font-size:clamp(30px,4.6vw,54px); line-height:1.02; letter-spacing:-.03em; font-weight:400; margin:.2em 0 .3em; max-width:20ch}
+h1 em{font-style:italic; color:var(--rust)}
+.standfirst{max-width:62ch; color:var(--ink-soft); margin:0 0 26px; font-size:19px}
+
+/* ---- the four chapters. one thing to do, in order. ---- */
+.chapters{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px}
+@media(max-width:800px){.chapters{grid-template-columns:repeat(2,1fr)}}
+.ch{text-align:left; background:none; border:1px solid var(--rule); padding:12px 14px 13px; cursor:pointer;
+  font:inherit; color:var(--ink-soft); transition:background .2s,border-color .2s,color .2s}
+.ch:hover{border-color:rgba(30,27,24,.4)}
+.ch[aria-pressed="true"]{background:#fff; border-color:var(--ink); color:var(--ink)}
+.ch b{display:block; font-family:var(--sans); font-size:15px; font-weight:600; letter-spacing:-.01em; margin-bottom:2px}
+.ch span{font-family:var(--mono); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; opacity:.7}
+
+.stage{display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:16px; align-items:start}
+@media(max-width:1000px){.stage{grid-template-columns:1fr}}
+#map{height:min(70vh,640px); border:1px solid var(--rule); background:var(--paper-2)}
+.under{display:flex; justify-content:space-between; gap:16px; margin-top:8px; flex-wrap:wrap}
+
+.side{display:grid; gap:14px}
+.card{border:1px solid var(--rule); background:rgba(255,255,255,.55); padding:16px 16px 18px}
+.big{font-family:var(--mono); font-size:clamp(26px,3.4vw,38px); letter-spacing:-.03em; line-height:1.05}
+.big small{display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.15em; text-transform:uppercase;
+  color:var(--ink-soft); margin-top:8px}
+.card p{margin:12px 0 0; font-size:15.5px; color:var(--ink-soft)}
+.card .note{font-family:var(--hand); font-size:18px; line-height:1.35; color:var(--rust); margin-top:14px}
+.card h3{margin:2px 0 .25em; font-size:21px; font-weight:400; letter-spacing:-.02em}
+.facts{display:grid; gap:7px; margin-top:12px}
+.fact{display:flex; justify-content:space-between; gap:14px; font-family:var(--mono); font-size:11.5px;
+  color:var(--ink-soft); border-bottom:1px dotted var(--rule); padding-bottom:5px}
+.fact b{color:var(--ink); font-weight:500; text-align:right}
+.bar{height:8px; background:rgba(30,27,24,.1); margin-top:12px; position:relative; overflow:hidden}
+.bar i{position:absolute; inset:0 auto 0 0; background:var(--ink); opacity:.55}
+.bar u{position:absolute; inset:0 auto 0 0; background:repeating-linear-gradient(90deg,var(--rust) 0 3px,transparent 3px 6px); opacity:.8}
+.barlab{display:flex; justify-content:space-between; font-family:var(--mono); font-size:10px; color:var(--ink-soft); margin-top:6px}
+
+.legend{display:flex; gap:14px; flex-wrap:wrap}
+.key{display:flex; gap:7px; align-items:center; font-family:var(--mono); font-size:10.5px; color:var(--ink-soft)}
+.key i{width:11px; height:11px; border-radius:50%; display:block}
+.disc{font-family:var(--mono); font-size:10px; color:var(--ink-soft); letter-spacing:.05em; margin-top:20px; max-width:95ch}
+.mapboxgl-popup-content{background:var(--paper); border:1px solid var(--rule); border-radius:0; font-family:var(--sans); font-size:13px}
+.mapboxgl-popup-tip{display:none}
+</style>
+<script>
+/* Mapbox GL JS v3 starts a web worker, and Chrome refuses to create workers from
+   file:// pages because each one is its own opaque origin. Rather than showing a
+   grey box, say so and give the one command that fixes it. */
+if (location.protocol === 'file:') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const b = document.createElement('div');
+    b.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#0E0C0B;color:#F7F4EC;'
+      + 'font:15px/1.7 ui-monospace,Menlo,monospace;padding:min(9vh,70px) min(8vw,60px);overflow:auto';
+    b.innerHTML =
+      '<div style="max-width:70ch">'
+      + '<div style="font-size:12px;letter-spacing:.18em;color:#FF5A36;margin-bottom:18px">CANNOT RUN FROM A FILE URL</div>'
+      + '<div style="font:600 clamp(24px,4vw,44px)/1.05 -apple-system,Helvetica,sans-serif;letter-spacing:-.03em;margin-bottom:22px">'
+      + 'This page needs a local server</div>'
+      + '<p>Mapbox starts a web worker. Chrome will not create a worker from a <code style="color:#D8F546">file://</code> page, '
+      + 'because every file URL counts as its own security origin. That is the grey box.</p>'
+      + '<p style="margin-top:20px">Open Terminal, paste this once, and leave it running:</p>'
+      + '<pre style="background:#1A1614;border-left:3px solid #D8F546;padding:14px 16px;margin:12px 0 20px;'
+      + 'white-space:pre-wrap;color:#D8F546">cd ~/Documents/GitHub/river-to-river\npython3 -m http.server 8042 --bind 127.0.0.1</pre>'
+      + '<p>Then open <a style="color:#FF5A36" href="http://127.0.0.1:8042/">http://127.0.0.1:8042/</a> '
+      + 'and click through to this page from there.</p>'
+      + '<p style="margin-top:24px;color:rgba(247,244,236,.55)">The drawings that are pure SVG, like the unrolled street, '
+      + 'work fine from a file URL. Only the Mapbox ones need this.</p>'
+      + '</div>';
+    document.body.appendChild(b);
+  });
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+
+<p class="lab">42nd Street, river to river</p>
+<h1>Eighty two lots, and <em>most of the street is not the part you know</em></h1>
+<p class="standfirst ph">Placeholder. Two or three sentences in your words. What you see when you walk it, and why you went and got the parcel data instead of just saying it.</p>
+
+<div class="chapters" id="chapters"></div>
+
+<div class="stage">
+  <div>
+    <div id="map"></div>
+    <div class="under">
+      <div class="legend" id="legend"></div>
+      <span class="lab">Click any lot</span>
+    </div>
+  </div>
+
+  <div class="side">
+    <div class="card">
+      <div class="big" id="big">&nbsp;<small id="big-lab">&nbsp;</small></div>
+      <p id="big-body"></p>
+      <p class="note ph" id="big-note">Placeholder. Your handwritten line about this one.</p>
+    </div>
+
+    <div class="card" id="lotcard">
+      <p class="lab" id="l-kick">No lot selected</p>
+      <h3 id="l-addr">Click a lot on the map</h3>
+      <div class="facts" id="l-facts"></div>
+      <div class="bar" id="l-bar" hidden><i></i><u></u></div>
+      <div class="barlab" id="l-barlab" hidden><span>built</span><span>what zoning allows</span></div>
+    </div>
+  </div>
+</div>
+
+<p class="disc" id="disc">Every lot is real. Source: NYC Primary Land Use Tax Lot Output (PLUTO), 82 lots fronting 42nd Street, matched to the street centreline from OpenStreetMap. Unbuilt floor area is the greater of the residential, commercial and community facility allowance, minus what is built, times lot area. Lots are drawn at their centre point because PLUTO carries no shape. Sidewalk, truck and bus observations are Judy's and are not yet measured.</p>
+
+</div>
+
+<script src="line42.js"></script>
+<script src="lots42.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+<script>
+mapboxgl.accessToken='pk.eyJ1IjoiajAwYnkiLCJhIjoiY2x1bHUzbXZnMGhuczJxcG83YXY4czJ3ayJ9.S5PZpU9VDwLMjoX_0x5FDQ';
+const FT_MIN=LINE[0][0], FT_MAX=LINE[LINE.length-1][0];
+function at(ft){
+  ft=Math.max(FT_MIN,Math.min(FT_MAX,ft));
+  for(let i=0;i<LINE.length-1;i++) if(ft>=LINE[i][0]&&ft<=LINE[i+1][0]){
+    const t=(ft-LINE[i][0])/((LINE[i+1][0]-LINE[i][0])||1);
+    return [LINE[i][1]+(LINE[i+1][1]-LINE[i][1])*t, LINE[i][2]+(LINE[i+1][2]-LINE[i][2])*t];
+  }
+  return [LINE[LINE.length-1][1],LINE[LINE.length-1][2]];
+}
+const fmt=n=>Math.round(n).toLocaleString();
+
+/* the four places everybody already knows, in feet along the street */
+const HUBS=[
+  {a:2699,b:3473,name:'Port Authority'},
+  {a:4380,b:4760,name:'Times Square'},
+  {a:5480,b:6417,name:'Bryant Park and the library'},
+  {a:7520,b:8021,name:'Grand Central'}
+];
+const hubFt=HUBS.reduce((s,h)=>s+(h.b-h.a),0);
+const inHub=ft=>HUBS.some(h=>ft>=h.a&&ft<=h.b);
+
+/* your notes about being on the street. all placeholder. */
+const FEEL=[
+  {ft:1500,t:'Placeholder. The stretch where the sidewalk is wide and still not wide enough.'},
+  {ft:2900,t:'Placeholder. Trucks.'},
+  {ft:3700,t:'Placeholder. Where the bus gets stuck behind traffic at rush hour.'},
+  {ft:4560,t:'Placeholder. Times Square, honestly.'},
+  {ft:6000,t:'Placeholder. The bench you actually sit on.'},
+  {ft:7700,t:'Placeholder. Grand Central.'},
+  {ft:9200,t:'Placeholder. The part nobody walks.'},
+  {ft:10200,t:'Placeholder. The last block before the water.'}
+];
+
+const totUnbuilt=LOTS.reduce((s,l)=>s+l.unbuilt,0);
+const totBuilt=LOTS.reduce((s,l)=>s+l.bldgarea,0);
+const publicLots=LOTS.filter(l=>l.own!=='Private');
+const biggest=LOTS.slice().sort((a,b)=>b.unbuilt-a.unbuilt)[0];
+const outside=LOTS.filter(l=>!inHub(l.ft));
+const outsideUnbuilt=outside.reduce((s,l)=>s+l.unbuilt,0);
+
+/* =============== chapters =============== */
+const CH=[
+  {id:'hubs', kicker:'Start here', title:'Four places everyone knows',
+   big:Math.round(hubFt/(FT_MAX-FT_MIN)*100)+'%', lab:'of the street is the famous part',
+   body:'Port Authority, Times Square, Bryant Park and Grand Central take up about a quarter of 42nd Street between them. The other three quarters is the part nobody photographs, and it holds '+Math.round(outsideUnbuilt/totUnbuilt*100)+' per cent of every square foot of unused zoning capacity on the street.'},
+  {id:'owners', kicker:'Then', title:'Who actually owns it',
+   big:publicLots.length+' of '+LOTS.length, lab:'lots are public, or pay no tax',
+   body:'City agencies, public authorities and tax exempt institutions hold '+publicLots.length+' of the 82 lots fronting the street. Land that could change without anyone having to buy it first.'},
+  {id:'capacity', kicker:'The finding', title:'What zoning already allows',
+   big:(Math.round(totUnbuilt/1e5)/10)+'m sq ft', lab:'allowed and never built',
+   body:'Against '+fmt(totBuilt/1e6*10)/10+' million square feet standing today, zoning already permits another '+fmt(totUnbuilt)+' square feet on these 82 lots. No rezoning, no variance, no argument. The single largest piece of it sits on a city owned lot.'},
+  {id:'feel', kicker:'And', title:'What it is like to be here',
+   big:'&mdash;', lab:'your observations, not yet measured',
+   body:'Wide sidewalks that are still not wide enough. Trucks. A bus lane that gives up behind traffic at rush hour. None of this is in the parcel data, which is exactly why somebody has to walk it.'}
+];
+let chap='hubs';
+
+const chWrap=document.getElementById('chapters');
+CH.forEach(c=>{
+  const b=document.createElement('button'); b.className='ch'; b.type='button';
+  b.setAttribute('aria-pressed', c.id===chap);
+  b.innerHTML='<span>'+c.kicker+'</span><b>'+c.title+'</b>';
+  b.onclick=()=>{chap=c.id; [...chWrap.children].forEach((x,i)=>x.setAttribute('aria-pressed',CH[i].id===c.id)); paintChapter();};
+  chWrap.appendChild(b);
+});
+
+function paintChapter(){
+  const c=CH.find(x=>x.id===chap);
+  document.getElementById('big').innerHTML=c.big+'<small>'+c.lab+'</small>';
+  document.getElementById('big-body').textContent=c.body;
+  if(!map.getLayer('lots')) return;
+  const on=(id,v)=>map.setLayoutProperty(id,'visibility',v?'visible':'none');
+  on('hub-band', chap==='hubs');
+  on('hub-lab',  chap==='hubs');
+  on('feel', chap==='feel');
+  on('feel-lab', chap==='feel');
+  map.setPaintProperty('lots','circle-color',
+    chap==='owners' ? ['match',['get','own'],
+        'Private','#9A927F','City','#2C5A78','Public authority or state','#7A5C86',
+        'City and private','#3F6E51','Tax exempt','#3F6E51','#9A927F']
+    : chap==='capacity' ? ['interpolate',['linear'],['get','unbuilt'],
+        0,'rgba(30,27,24,0.18)', 60000,'#D9A38F', 250000,'#B0442F', 540000,'#7E2114']
+    : ['case',['boolean',['get','hub'],false],'#1E1B18','#B0442F']);
+  map.setPaintProperty('lots','circle-radius',
+    chap==='capacity'
+      ? ['interpolate',['linear'],['zoom'],13,['*',0.012,['sqrt',['get','unbuilt']]],16,['*',0.055,['sqrt',['get','unbuilt']]]]
+      : ['interpolate',['linear'],['zoom'],13,4,16,9]);
+  legend();
+}
+
+function legend(){
+  const L=document.getElementById('legend');
+  const sets={
+    hubs:[['#1E1B18','Inside a hub'],['#B0442F','Everywhere else']],
+    owners:[['#2C5A78','City'],['#3F6E51','Tax exempt or mixed'],['#9A927F','Private']],
+    capacity:[['rgba(30,27,24,0.18)','Built out'],['#D9A38F','Some room'],['#B0442F','A lot of room'],['#7E2114','The biggest']],
+    feel:[['#B0442F','Something you noticed']]
+  };
+  L.innerHTML=(sets[chap]||[]).map(([c,t])=>'<span class="key"><i style="background:'+c+'"></i>'+t+'</span>').join('');
+}
+
+/* =============== map =============== */
+const map=new mapboxgl.Map({container:'map', style:'mapbox://styles/mapbox/light-v11',
+  center:at(5200), zoom:14.1, bearing:28.9});
+map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
+const fc=f=>({type:'FeatureCollection',features:f});
+
+map.on('load',()=>{
+  /* the street */
+  map.addSource('street',{type:'geojson',data:{type:'Feature',geometry:{type:'LineString',
+    coordinates:LINE.map(p=>[p[1],p[2]])}}});
+  map.addLayer({id:'street',type:'line',source:'street',
+    paint:{'line-color':'#1E1B18','line-width':2,'line-opacity':.5}});
+
+  /* the four hubs, as fat bands along the street */
+  map.addSource('hubs',{type:'geojson',data:fc(HUBS.map(h=>{
+    const pts=[]; for(let f=h.a; f<h.b; f+=60) pts.push(at(f)); pts.push(at(h.b));
+    return {type:'Feature',geometry:{type:'LineString',coordinates:pts},properties:{name:h.name}};
+  }))});
+  map.addLayer({id:'hub-band',type:'line',source:'hubs',
+    paint:{'line-color':'#1E1B18','line-width':22,'line-opacity':.14,'line-blur':1}},'street');
+  map.addLayer({id:'hub-lab',type:'symbol',source:'hubs',
+    layout:{'symbol-placement':'line-center','text-field':['get','name'],'text-size':12,
+      'text-font':['DIN Pro Medium','Arial Unicode MS Regular'],'text-offset':[0,-2]},
+    paint:{'text-color':'#1E1B18','text-halo-color':'#F2EEE6','text-halo-width':2}});
+
+  /* the lots */
+  map.addSource('lots',{type:'geojson',data:fc(LOTS.map((l,i)=>({type:'Feature',
+    geometry:{type:'Point',coordinates:[l.lon,l.lat]},
+    properties:{i, unbuilt:l.unbuilt, own:l.own, hub:inHub(l.ft)}})))});
+  map.addLayer({id:'lots',type:'circle',source:'lots',
+    paint:{'circle-color':'#B0442F','circle-radius':6,'circle-opacity':.82,
+      'circle-stroke-color':'#F2EEE6','circle-stroke-width':1.2}});
+  map.on('click','lots',e=>selectLot(LOTS[e.features[0].properties.i]));
+  map.on('mouseenter','lots',()=>map.getCanvas().style.cursor='pointer');
+  map.on('mouseleave','lots',()=>map.getCanvas().style.cursor='');
+
+  /* what it feels like */
+  map.addSource('feel',{type:'geojson',data:fc(FEEL.map((f,i)=>({type:'Feature',
+    geometry:{type:'Point',coordinates:at(f.ft)},properties:{i,t:f.t}})))});
+  map.addLayer({id:'feel',type:'circle',source:'feel',
+    paint:{'circle-radius':7,'circle-color':'#B0442F','circle-stroke-color':'#F2EEE6','circle-stroke-width':2}});
+  map.addLayer({id:'feel-lab',type:'symbol',source:'feel',
+    layout:{'text-field':['get','t'],'text-size':11,'text-offset':[0,1.5],'text-max-width':14,
+      'text-font':['DIN Pro Medium','Arial Unicode MS Regular']},
+    paint:{'text-color':'#B0442F','text-halo-color':'#F2EEE6','text-halo-width':2}});
+
+  paintChapter();
+});
+
+function selectLot(l){
+  document.getElementById('l-kick').textContent=(l.side==='n'?'North side':'South side')+' · '+l.zone+' · built '+(l.year||'unknown');
+  document.getElementById('l-addr').textContent=l.addr||'Unnamed lot';
+  const rows=[['Owner',l.owner||'Unknown'],['Ownership',l.own],['Land use',l.use],
+    ['Lot area',fmt(l.lotarea)+' sq ft'],['Floors',l.floors||'—'],
+    ['Built floor area',fmt(l.bldgarea)+' sq ft'],
+    ['Unbuilt, allowed today',fmt(l.unbuilt)+' sq ft']];
+  document.getElementById('l-facts').innerHTML=rows.map(([k,v])=>'<div class="fact"><span>'+k+'</span><b>'+v+'</b></div>').join('');
+  const bar=document.getElementById('l-bar'), lab=document.getElementById('l-barlab');
+  bar.hidden=lab.hidden=false;
+  const pct=l.allowed? Math.min(100,l.built/l.allowed*100):0;
+  bar.querySelector('i').style.width=pct+'%';
+  bar.querySelector('u').style.width='100%';
+  lab.firstElementChild.textContent='built '+l.built.toFixed(1);
+  lab.lastElementChild.textContent='allowed '+l.allowed.toFixed(1);
+}
+</script>
+</body>
+</html>

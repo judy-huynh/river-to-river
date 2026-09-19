@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>E / 42nd Street in plan</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.css" rel="stylesheet">
+<style>
+:root{
+  --paper:#FBF9F3; --paper-2:#F1EDE3; --ink:#12100E; --ink-60:rgba(18,16,14,.6); --ink-40:rgba(18,16,14,.4);
+  --hair:rgba(18,16,14,.18);
+  --c5a:#FFC24D; --c5b:#FF9E2C; --c5c:#FF5A36;
+  --c6a:#A8C7FF; --c6b:#4C7DFF; --c6c:#2B5BE0; --c6d:#1B3FB8; --c6e:#0E2280;
+  --park:#2E9E4F; --resid:#E5006D; --leaf:#2E9E4F; --volt:#D8F546;
+  --sans:"Helvetica Neue",Inter,Arial,sans-serif; --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box} html,body{margin:0}
+body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-size:16px; -webkit-font-smoothing:antialiased}
+.wrap{max-width:1760px; margin:0 auto; padding:clamp(14px,2.6vh,28px) clamp(12px,2vw,28px) 44px}
+.lab{font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-40)}
+h1{font-size:clamp(26px,4.4vw,54px); letter-spacing:-.035em; line-height:.96; margin:6px 0 8px; text-transform:uppercase; font-weight:700}
+h1 em{font-style:normal; color:var(--c5c)}
+.sub{max-width:76ch; color:var(--ink-60); font-size:15.5px; margin:0 0 16px}
+
+.bar{display:flex; gap:20px; flex-wrap:wrap; align-items:flex-end; margin-bottom:10px}
+.set{display:flex; flex-direction:column; gap:6px}
+.set>span{font-family:var(--mono); font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-40)}
+.chips{display:flex; gap:5px; flex-wrap:wrap}
+.chip{font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; cursor:pointer;
+  background:none; border:1px solid var(--hair); padding:7px 11px; color:var(--ink-60); transition:.15s}
+.chip:hover{color:var(--ink); border-color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:var(--paper)}
+
+.stage{position:relative}
+#map{height:clamp(440px,72vh,760px); border:1.5px solid var(--ink); background:var(--paper-2)}
+.card{position:absolute; right:12px; top:12px; width:min(300px,44vw); z-index:5;
+  background:rgba(251,249,243,.95); border:1.5px solid var(--ink); padding:13px 14px 15px; backdrop-filter:blur(8px)}
+.card[hidden]{display:none}
+.card h3{margin:5px 0 2px; font-size:18px; letter-spacing:-.02em; line-height:1.15}
+.card .zonechip{display:inline-block; font-family:var(--mono); font-size:10px; letter-spacing:.12em;
+  padding:3px 7px; margin-top:8px; color:#fff}
+.card dl{display:grid; margin:10px 0 0}
+.card dl div{display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-top:1px solid var(--hair)}
+.card dt{font-family:var(--mono); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-40)}
+.card dd{margin:0; font-family:var(--mono); font-size:11.5px; text-align:right}
+
+.tip{position:fixed; z-index:60; pointer-events:none; opacity:0; transform:translateY(3px);
+  transition:opacity .12s, transform .12s; background:var(--ink); color:var(--paper);
+  padding:8px 11px; max-width:250px; border-left:3px solid var(--leaf)}
+.tip[data-show="true"]{opacity:1; transform:none}
+.tip b{display:block; font-size:14px; letter-spacing:-.01em}
+.tip i{display:block; font-style:italic; font-size:12px; opacity:.7; margin:1px 0 5px}
+.tip span{font-family:var(--mono); font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--volt)}
+
+.legend{display:flex; gap:22px; flex-wrap:wrap; margin-top:12px; align-items:flex-start}
+.legend section{display:flex; flex-direction:column; gap:5px}
+.legend h4{margin:0 0 3px; font-family:var(--mono); font-size:9px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-40); font-weight:400}
+.legend .row{display:flex; gap:12px; flex-wrap:wrap}
+.legend span{display:inline-flex; gap:6px; align-items:center; font-family:var(--mono); font-size:10px;
+  letter-spacing:.06em; color:var(--ink-60)}
+.legend i{width:13px; height:13px; display:block; border:1px solid rgba(18,16,14,.3)}
+.legend i.dot{border-radius:50%}
+
+.finding{border-left:3px solid var(--c5c); background:rgba(255,90,54,.07); padding:12px 14px; margin-top:16px; max-width:86ch}
+.finding b{display:block; font-size:17px; letter-spacing:-.02em; margin-bottom:4px}
+.finding p{margin:0; font-size:14.5px; color:var(--ink-60)}
+.note{max-width:96ch; color:var(--ink-60); font-size:13.5px; margin-top:14px; border-top:1px solid var(--hair); padding-top:10px}
+.mapboxgl-ctrl-group{border-radius:0 !important; border:1.5px solid var(--ink) !important; box-shadow:none !important}
+</style>
+<script>
+if (location.protocol === 'file:') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const b=document.createElement('div');
+    b.style.cssText='position:fixed;inset:0;z-index:9999;background:#12100E;color:#FBF9F3;font:15px/1.7 ui-monospace,Menlo,monospace;padding:70px 60px';
+    b.innerHTML='<div style="max-width:70ch"><div style="color:#FF5A36;letter-spacing:.18em;font-size:12px;margin-bottom:16px">CANNOT RUN FROM A FILE URL</div>'
+      +'<div style="font:600 40px/1.05 -apple-system,Helvetica,sans-serif;letter-spacing:-.03em;margin-bottom:20px">Serve it over localhost</div>'
+      +'<pre style="background:#1A1614;border-left:3px solid #D8F546;padding:14px;color:#D8F546;white-space:pre-wrap">cd ~/Documents/GitHub/river-to-river\npython3 -m http.server 8042 --bind 127.0.0.1</pre>'
+      +'<p>Then open <a style="color:#FF5A36" href="http://127.0.0.1:8042/basemap/E-plan.html">http://127.0.0.1:8042/basemap/E-plan.html</a></p></div>';
+    document.body.appendChild(b);
+  });
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+  <p class="lab">Basemap study E &middot; plan &middot; light</p>
+  <h1>42nd Street <em>in plan</em></h1>
+  <p class="sub">Every lot fronting the street, drawn at its real boundary from the city tax map and coloured by the zoning district that governs it. Every street tree the Parks Department currently records, sized by trunk. Flat, daylit, no shadows, north locked so the street always runs left to right.</p>
+
+  <div class="bar">
+    <div class="set"><span>Colour the lots by</span><div class="chips" id="mode"></div></div>
+    <div class="set"><span>Trees</span><div class="chips" id="trees"></div></div>
+    <div class="set"><span>Where</span><div class="chips" id="where"></div></div>
+  </div>
+
+  <div class="stage">
+    <div id="map"></div>
+    <div class="card" id="card" hidden></div>
+  </div>
+
+  <div class="legend" id="legend"></div>
+
+  <div class="finding">
+    <b id="findingHead">&nbsp;</b>
+    <p id="findingBody">&nbsp;</p>
+  </div>
+
+  <p class="note">Lot boundaries and zoning: NYC MapPLUTO, live feature service. Trees: NYC Parks Forestry Tree Points, the current inventory rather than the 2015 census. Retired records removed. A tree counts as on 42nd Street if it sits within 26 m of the centreline.</p>
+</div>
+
+<script src="plandata.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.js"></script>
+<script>
+mapboxgl.accessToken='pk.eyJ1IjoiajAwYnkiLCJhIjoiY2x1bHUzbXZnMGhuczJxcG83YXY4czJ3ayJ9.S5PZpU9VDwLMjoX_0x5FDQ';
+const LINE=window.LINE42, LOTS=window.LOTS_POLY, TREES=window.TREES;
+const LEN=LINE[LINE.length-1][0], BEARING=28.9;
+const at=ft=>{
+  const t=Math.max(0,Math.min(LEN,ft));
+  for(let i=0;i<LINE.length-1;i++) if(t>=LINE[i][0]&&t<=LINE[i+1][0]){
+    const k=(t-LINE[i][0])/((LINE[i+1][0]-LINE[i][0])||1);
+    return [LINE[i][1]+(LINE[i+1][1]-LINE[i][1])*k, LINE[i][2]+(LINE[i+1][2]-LINE[i][2])*k];
+  }
+  return [LINE[LINE.length-1][1],LINE[LINE.length-1][2]];
+};
+const AVES=[[0,'12th Av'],[903,'11th Av'],[1890,'10th Av'],[2699,'9th Av'],[3473,'8th Av'],[4542,'7th Av'],
+ [5480,'6th Av'],[6417,'5th Av'],[6932,'Madison'],[7520,'Park Av'],[8021,'Lexington'],[8940,'3rd Av'],
+ [9730,'2nd Av'],[10411,'1st Av']];
+const commas=n=>Math.round(n).toLocaleString('en-US');
+const $=s=>document.querySelector(s);
+
+/* ── zoning palette: warm for the C5 core, cool for the C6 belt ───────── */
+const ZONE={
+  'C5-2':'#FFC24D','C5-2.5':'#FF9E2C','C5-3':'#FF5A36',
+  'C6-2':'#A8C7FF','C6-4':'#4C7DFF','C6-5':'#2B5BE0','C6-6':'#1B3FB8','C6-7':'#0E2280',
+  'R10':'#E5006D','PARK':'#2E9E4F'
+};
+const zoneColor=['match',['get','zone'],
+  ...Object.entries(ZONE).flatMap(([k,v])=>[k,v]), '#B9B1A1'];
+
+/* trees, coloured by the condition the city recorded */
+const COND={Excellent:'#1F7A3A',Good:'#2E9E4F',Fair:'#FFC24D',Poor:'#FF9E2C',Critical:'#FF5A36',Dead:'#8A8A8A',Unknown:'#B9B1A1'};
+
+/* stretches with no street tree, computed from the data itself */
+const treeGaps=(()=>{
+  const out=[]; let prev=0;
+  TREES.forEach(t=>{ if(t.ft-prev>400) out.push([prev,t.ft]); prev=Math.max(prev,t.ft); });
+  if(LEN-prev>400) out.push([prev,LEN]);
+  return out;
+})();
+const gapFeet=treeGaps.reduce((s,[a,b])=>s+(b-a),0);
+
+const map=new mapboxgl.Map({
+  container:'map', style:'mapbox://styles/mapbox/standard',
+  center:at(LEN/2), zoom:14.1, bearing:BEARING, pitch:0, antialias:true
+});
+map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
+map.dragRotate.disable(); map.touchZoomRotate.disableRotation();
+
+let mode='zoning', treeMode='all';
+
+map.on('style.load',()=>{
+  /* flat, daylit, nothing casting a shadow */
+  const cfg=(k,v)=>{ try{ map.setConfigProperty('basemap',k,v); }catch(e){} };
+  cfg('lightPreset','day');
+  cfg('theme','faded');
+  cfg('show3dObjects',false);          /* no extrusions means no shadows */
+  cfg('showPointOfInterest',false);
+  cfg('showTransitLabels',false);
+  cfg('showPlaceLabels',false);
+  cfg('showRoadLabels',false);
+
+  /* ── lots ── */
+  map.addSource('lots',{type:'geojson',data:LOTS,promoteId:'bbl'});
+  map.addLayer({id:'lotFill',type:'fill',source:'lots',slot:'middle',
+    paint:{'fill-color':zoneColor,
+      'fill-opacity':['case',['boolean',['feature-state','hover'],false],.92,
+        ['case',['==',['get','side'],'n'],.62,.52]],
+      'fill-emissive-strength':1}});
+  map.addLayer({id:'lotLine',type:'line',source:'lots',slot:'middle',
+    paint:{'line-color':'#12100E',
+      'line-width':['case',['boolean',['feature-state','hover'],false],2.4,
+        ['interpolate',['linear'],['zoom'],13,.35,17,1.1]],
+      'line-opacity':.85,'line-emissive-strength':1}});
+
+  /* ── the street ── */
+  map.addSource('street',{type:'geojson',data:{type:'Feature',
+    geometry:{type:'LineString',coordinates:LINE.map(p=>[p[1],p[2]])}}});
+  map.addLayer({id:'streetLine',type:'line',source:'street',slot:'middle',
+    paint:{'line-color':'#12100E','line-width':['interpolate',['linear'],['zoom'],13,1,17,3],
+      'line-opacity':.45,'line-emissive-strength':1}});
+
+  /* ── the stretches with no tree ── */
+  map.addSource('gaps',{type:'geojson',data:{type:'FeatureCollection',features:treeGaps.map(([a,b])=>{
+    const pts=[]; for(let f=a;f<b;f+=60) pts.push(at(f)); pts.push(at(b));
+    return {type:'Feature',properties:{len:Math.round(b-a)},geometry:{type:'LineString',coordinates:pts}};
+  })}});
+  map.addLayer({id:'gapBand',type:'line',source:'gaps',slot:'middle',
+    layout:{visibility:'none'},
+    paint:{'line-color':'#FF5A36','line-width':['interpolate',['linear'],['zoom'],13,10,17,60],
+      'line-opacity':.22,'line-blur':4,'line-emissive-strength':1}});
+
+  /* ── trees ── */
+  map.addSource('trees',{type:'geojson',data:{type:'FeatureCollection',features:TREES.map((t,i)=>({
+    type:'Feature',id:i,properties:t,geometry:{type:'Point',coordinates:[t.lon,t.lat]}}))}});
+  map.addLayer({id:'treeDots',type:'circle',source:'trees',slot:'top',
+    paint:{
+      'circle-color':['match',['get','cond'],...Object.entries(COND).flatMap(([k,v])=>[k,v]),'#B9B1A1'],
+      'circle-radius':['interpolate',['linear'],['zoom'],
+        13,['max',1.6,['*',.12,['get','dbh']]],
+        17,['max',4,['*',.55,['get','dbh']]]],
+      'circle-stroke-color':'#FBF9F3','circle-stroke-width':1.1,
+      'circle-opacity':.95,'circle-emissive-strength':1}});
+
+  /* ── avenue names, the only labels ── */
+  map.addSource('aves',{type:'geojson',data:{type:'FeatureCollection',features:AVES.map(([ft,name])=>({
+    type:'Feature',properties:{name},geometry:{type:'Point',coordinates:at(ft)}}))}});
+  map.addLayer({id:'aveLab',type:'symbol',source:'aves',slot:'top',
+    layout:{'text-field':['get','name'],'text-size':10.5,'text-offset':[0,-1.4],
+      'text-font':['DIN Pro Medium','Arial Unicode MS Regular'],'text-letter-spacing':.14,
+      'text-transform':'uppercase'},
+    paint:{'text-color':'#12100E','text-halo-color':'#FBF9F3','text-halo-width':2,'text-emissive-strength':1}});
+
+  wire();
+  paintMode();
+  legend();
+  finding();
+});
+
+/* ── interaction ─────────────────────────────────────────────────────── */
+const tip=document.createElement('div'); tip.className='tip'; document.body.appendChild(tip);
+let hoverLot=null, hoverTree=null;
+
+function wire(){
+  map.on('mousemove','lotFill',e=>{
+    const f=e.features[0];
+    if(hoverLot!==null) map.setFeatureState({source:'lots',id:hoverLot},{hover:false});
+    hoverLot=f.id; map.setFeatureState({source:'lots',id:hoverLot},{hover:true});
+    map.getCanvas().style.cursor='pointer';
+  });
+  map.on('mouseleave','lotFill',()=>{
+    if(hoverLot!==null) map.setFeatureState({source:'lots',id:hoverLot},{hover:false});
+    hoverLot=null; map.getCanvas().style.cursor='';
+  });
+  map.on('click','lotFill',e=>showLot(e.features[0].properties));
+
+  map.on('mousemove','treeDots',e=>{
+    const p=e.features[0].properties;
+    tip.innerHTML=`<b>${p.common}</b><i>${p.latin||''}</i>`
+      +`<span>${p.dbh} in trunk &middot; ${p.cond}</span>`;
+    tip.dataset.show='true';
+    tip.style.left=Math.min(innerWidth-262, e.originalEvent.clientX+15)+'px';
+    tip.style.top=(e.originalEvent.clientY+15)+'px';
+    map.getCanvas().style.cursor='crosshair';
+  });
+  map.on('mouseleave','treeDots',()=>{ tip.dataset.show='false'; map.getCanvas().style.cursor=''; });
+}
+
+function showLot(p){
+  const card=$('#card'); card.hidden=false;
+  const col=ZONE[p.zone]||'#B9B1A1';
+  const pct=p.allowed>0 ? Math.round(p.built/p.allowed*100) : 0;
+  card.innerHTML=
+    `<span class="lab">${p.side==='n'?'North side':'South side'} &middot; ${p.year||'year unknown'}</span>`
+    +`<h3>${p.addr||'Unnamed lot'}</h3>`
+    +`<span class="zonechip" style="background:${col}">${p.zone||'no district'}</span>`
+    +`<dl>`
+    +`<div><dt>Owner</dt><dd>${p.owner||'—'}</dd></div>`
+    +`<div><dt>Lot area</dt><dd>${commas(p.lotarea)} sq ft</dd></div>`
+    +`<div><dt>Floors</dt><dd>${p.floors||'—'}</dd></div>`
+    +`<div><dt>Built</dt><dd>${p.built} of ${p.allowed} FAR</dd></div>`
+    +`<div><dt>Using</dt><dd>${pct}% of its allowance</dd></div>`
+    +`<div><dt>Unbuilt</dt><dd>${commas(p.unbuilt)} sq ft</dd></div>`
+    +(p.lm==1?`<div><dt>Landmark</dt><dd>yes</dd></div>`:'')
+    +`</dl>`;
+}
+
+/* ── modes ───────────────────────────────────────────────────────────── */
+function chips(host,items,initial,pick){
+  const h=document.getElementById(host);
+  items.forEach(([v,l])=>{
+    const b=document.createElement('button'); b.className='chip'; b.type='button'; b.textContent=l;
+    b.setAttribute('aria-pressed',String(v===initial));
+    b.onclick=()=>{[...h.children].forEach((c,i)=>c.setAttribute('aria-pressed',String(items[i][0]===v))); pick(v);};
+    h.appendChild(b);
+  });
+}
+chips('mode',[['zoning','Zoning'],['capacity','Unbuilt capacity'],['age','Year built'],['plain','Nothing']],'zoning',v=>{mode=v; paintMode(); legend();});
+chips('trees',[['all','All 281'],['cond','By condition'],['gaps','Where there are none'],['off','Off']],'all',v=>{treeMode=v; paintTrees(); legend(); finding();});
+chips('where',[['whole','Whole street'],['times','Times Square'],['west','West of 9th'],['east','East of 3rd']],'whole',v=>{
+  if(v==='whole'){ map.easeTo({center:at(LEN/2),zoom:14.1,bearing:BEARING,pitch:0,duration:1100}); }
+  if(v==='times'){ map.easeTo({center:at(4560),zoom:16,bearing:BEARING,pitch:0,duration:1100}); }
+  if(v==='west'){ map.easeTo({center:at(1400),zoom:15.4,bearing:BEARING,pitch:0,duration:1100}); }
+  if(v==='east'){ map.easeTo({center:at(9600),zoom:15.4,bearing:BEARING,pitch:0,duration:1100}); }
+});
+
+function paintMode(){
+  if(!map.getLayer('lotFill')) return;
+  const c = mode==='zoning' ? zoneColor
+    : mode==='capacity' ? ['interpolate',['linear'],['get','unbuilt'],
+        0,'#E7E2D6', 40000,'#FFC24D', 160000,'#FF5A36', 540000,'#E5006D']
+    : mode==='age' ? ['interpolate',['linear'],['get','year'],
+        1890,'#0E2280', 1930,'#4C7DFF', 1970,'#FFC24D', 2010,'#FF5A36']
+    : '#DED8C9';
+  map.setPaintProperty('lotFill','fill-color',c);
+}
+function paintTrees(){
+  if(!map.getLayer('treeDots')) return;
+  const on = treeMode!=='off';
+  map.setLayoutProperty('treeDots','visibility', on?'visible':'none');
+  map.setLayoutProperty('gapBand','visibility', treeMode==='gaps'?'visible':'none');
+  map.setPaintProperty('treeDots','circle-color',
+    treeMode==='cond' ? ['match',['get','cond'],...Object.entries(COND).flatMap(([k,v])=>[k,v]),'#B9B1A1'] : '#2E9E4F');
+}
+
+function legend(){
+  const zoneRows = mode==='zoning'
+    ? `<section><h4>Zoning district</h4><div class="row">${
+        Object.entries(ZONE).map(([k,v])=>`<span><i style="background:${v}"></i>${k}</span>`).join('')}</div></section>`
+    : mode==='capacity'
+    ? `<section><h4>Unbuilt floor area</h4><div class="row">${
+        [['#E7E2D6','none'],['#FFC24D','some'],['#FF5A36','a lot'],['#E5006D','the most']]
+        .map(([c,t])=>`<span><i style="background:${c}"></i>${t}</span>`).join('')}</div></section>`
+    : mode==='age'
+    ? `<section><h4>Year built</h4><div class="row">${
+        [['#0E2280','1890s'],['#4C7DFF','1930s'],['#FFC24D','1970s'],['#FF5A36','2010s']]
+        .map(([c,t])=>`<span><i style="background:${c}"></i>${t}</span>`).join('')}</div></section>`
+    : '';
+  const treeRows = treeMode==='off' ? ''
+    : treeMode==='cond'
+    ? `<section><h4>Tree condition</h4><div class="row">${
+        Object.entries(COND).map(([k,v])=>`<span><i class="dot" style="background:${v}"></i>${k}</span>`).join('')}</div></section>`
+    : `<section><h4>Street trees</h4><div class="row">
+        <span><i class="dot" style="background:#2E9E4F"></i>one tree, sized by trunk</span></div></section>`;
+  $('#legend').innerHTML=zoneRows+treeRows;
+}
+
+function finding(){
+  if(treeMode==='gaps'){
+    $('#findingHead').textContent=commas(gapFeet)+' feet of 42nd Street has no street tree at all';
+    $('#findingBody').textContent=
+      `That is ${Math.round(gapFeet/LEN*100)} per cent of the street, in ${treeGaps.length} stretches, `
+      +`and they sit exactly where the crowds are: 8th Avenue through Times Square to 6th, and Madison through Grand Central to 3rd. `
+      +`The famous parts of this street are the parts with nothing growing on them.`;
+  } else {
+    const good=TREES.filter(t=>t.cond==='Good'||t.cond==='Excellent').length;
+    $('#findingHead').textContent=TREES.length+' street trees, and the city rates '+good+' of them good or better';
+    $('#findingBody').textContent=
+      'London planetree, thornless honeylocust and Japanese pagoda tree account for more than half of them. '
+      +'Hover any dot for the species. Then switch the trees to "where there are none".';
+  }
+}
+map.on('error',e=>console.warn('map:',e && e.error && e.error.message));
+</script>
+</body>
+</html>

@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>42nd Street, river to river</title>
+<style>
+:root{
+  --paper:#F2EEE6; --paper-2:#EAE4D8; --ink:#1E1B18; --ink-soft:#6B6157;
+  --rust:#B0442F; --blue:#2C5A78; --green:#3F6E51; --violet:#7A5C86; --sand:#8C8578;
+  --rule:rgba(30,27,24,.15);
+  --serif: ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans: ui-sans-serif,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono: ui-monospace,SFMono-Regular,Menlo,monospace;
+  --hand: "Bradley Hand","Snell Roundhand","Segoe Print","Comic Sans MS",cursive;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper); color:var(--ink); font-family:var(--serif); font-size:18px; line-height:1.6;
+  -webkit-font-smoothing:antialiased}
+body::after{content:""; position:fixed; inset:0; pointer-events:none; z-index:90; opacity:.24;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' seed='9'/><feColorMatrix values='0 0 0 0 0.18 0 0 0 0 0.15 0 0 0 0 0.12 0 0 0 0.5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  mix-blend-mode:multiply}
+.lab{font-family:var(--mono); font-size:10.5px; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-soft)}
+.ph{background:rgba(176,68,47,.1); border-bottom:1px dotted var(--rust); padding:0 2px}
+
+.wrap{max-width:1560px; margin:0 auto; padding:clamp(24px,5vh,60px) clamp(14px,2.5vw,34px) 60px}
+h1{font-size:clamp(30px,4.4vw,54px); line-height:1.04; letter-spacing:-.03em; font-weight:400; margin:.25em 0 .3em; max-width:22ch}
+h1 em{font-style:italic; color:var(--rust)}
+.intro{max-width:64ch; color:var(--ink-soft); margin:0 0 26px}
+
+/* ---- controls ---- */
+.controls{display:flex; gap:22px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px}
+.group{display:flex; flex-direction:column; gap:7px}
+.group>span{font-family:var(--mono); font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-soft)}
+.chips{display:flex; gap:6px; flex-wrap:wrap}
+.chip{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
+  background:none; border:1px solid var(--rule); padding:8px 12px; color:var(--ink-soft)}
+.chip[aria-pressed="true"]{border-color:var(--ink); color:var(--ink); background:rgba(255,255,255,.6)}
+.chip.on{border-color:var(--ink); color:var(--ink); background:rgba(255,255,255,.6)}
+
+/* ---- overview / minimap ---- */
+.mini{position:relative; height:34px; border:1px solid var(--rule); background:var(--paper-2); cursor:pointer; margin-bottom:8px}
+.mini svg{display:block; width:100%; height:100%}
+.mini .win{position:absolute; top:-1px; bottom:-1px; border:1.5px solid var(--ink); background:rgba(30,27,24,.07); pointer-events:none}
+
+/* ---- the strip ---- */
+.stripwrap{display:grid; grid-template-columns:136px minmax(0,1fr); border:1px solid var(--rule); background:var(--paper-2)}
+@media(max-width:700px){.stripwrap{grid-template-columns:92px minmax(0,1fr)}}
+.gutter{border-right:1px solid var(--rule); background:rgba(255,255,255,.35)}
+.gutter svg{display:block; width:100%}
+.gutter text{font-family:var(--mono); font-size:9px; letter-spacing:.13em; text-transform:uppercase; fill:rgba(30,27,24,.55)}
+.strip{position:relative; overflow-x:auto; overflow-y:hidden; background:var(--paper-2);
+  cursor:grab; touch-action:pan-x; overscroll-behavior-x:contain}
+.strip.grabbing{cursor:grabbing}
+.strip::-webkit-scrollbar{height:9px}
+.strip::-webkit-scrollbar-thumb{background:rgba(30,27,24,.28)}
+svg.street{display:block}
+
+text{font-family:var(--mono); fill:var(--ink-soft)}
+.ave text{font-size:10px; letter-spacing:.12em; text-transform:uppercase; fill:var(--ink-soft)}
+.ave line{stroke:rgba(30,27,24,.22); stroke-dasharray:2 3}
+.rowlab{font-size:9px; letter-spacing:.14em; text-transform:uppercase; fill:rgba(30,27,24,.45)}
+.lot{stroke:var(--paper-2); stroke-width:1; cursor:pointer}
+.lot:hover{stroke:var(--ink); stroke-width:1.4}
+.silhouette{fill:rgba(30,27,24,.30)}
+.road{fill:rgba(30,27,24,.10)}
+.walkband{fill:rgba(30,27,24,.05)}
+.lane{fill:var(--green); opacity:.75}
+.lanegap{fill:var(--rust); opacity:.5}
+.far{fill:var(--blue); opacity:.72}
+.farcap{fill:rgba(30,27,24,.14)}
+.dead{fill:var(--rust); opacity:.78}
+.alive{fill:rgba(30,27,24,.16)}
+.cars{fill:var(--sand)}
+.pub{fill:var(--violet); opacity:.8}
+.pin circle{fill:var(--rust)}
+.pin line{stroke:var(--rust); stroke-width:1}
+.pin text{font-family:var(--hand); font-size:13px; fill:var(--rust); letter-spacing:0; text-transform:none}
+.landmark{font-size:10px; fill:var(--ink); letter-spacing:.08em}
+g.dim{opacity:.16; transition:opacity .35s}
+g.lit{opacity:1; transition:opacity .35s}
+
+/* ---- readout ---- */
+.readout{display:grid; grid-template-columns:1.4fr 1fr; gap:clamp(16px,3vw,40px); margin-top:20px; align-items:start}
+@media(max-width:900px){.readout{grid-template-columns:1fr}}
+.panel{border-top:1px solid var(--rule); padding-top:16px}
+.panel h3{margin:6px 0 .35em; font-size:clamp(20px,2.4vw,28px); font-weight:400; letter-spacing:-.02em}
+.facts{display:grid; grid-template-columns:repeat(2,1fr); gap:10px 22px; margin-top:14px}
+.fact{font-family:var(--mono); font-size:12px; color:var(--ink-soft); display:flex; justify-content:space-between;
+  border-bottom:1px dotted var(--rule); padding-bottom:5px}
+.fact b{color:var(--ink); font-weight:500}
+.tally{border-top:1px solid var(--rule); padding-top:16px}
+.tally .big{font-family:var(--mono); font-size:clamp(22px,3vw,34px); color:var(--ink); letter-spacing:-.02em}
+.tally p{margin:.4em 0 0; font-size:15px; color:var(--ink-soft); max-width:40ch}
+.note{font-family:var(--hand); font-size:19px; line-height:1.35; color:var(--rust); max-width:30ch; margin:14px 0 0}
+.disc{font-family:var(--mono); font-size:10px; color:var(--ink-soft); letter-spacing:.05em; margin-top:22px; max-width:80ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<p class="lab">The centrepiece</p>
+<h1>42nd Street, <em>river to river</em></h1>
+<p class="intro ph">Placeholder. Three sentences from you. Why this street, what you see on it that other people do not, and what you want someone to do with this thing before they read another word.</p>
+
+<div class="controls">
+  <div class="group">
+    <span>Lens</span>
+    <div class="chips" id="lenses"></div>
+  </div>
+  <div class="group">
+    <span>Reading</span>
+    <div class="chips" id="layers"></div>
+  </div>
+  <div class="group">
+    <span>Scale</span>
+    <div class="chips">
+      <button class="chip" id="zoomout" type="button">&minus;</button>
+      <button class="chip" id="zoomin" type="button">+</button>
+      <button class="chip" id="fit" type="button">Whole street</button>
+    </div>
+  </div>
+</div>
+
+<div class="mini" id="mini"><svg id="minisvg" preserveAspectRatio="none"></svg><div class="win" id="win"></div></div>
+
+<div class="stripwrap"><div class="gutter"><svg id="gut"></svg></div><div class="strip" id="strip"><svg class="street" id="svg"></svg></div></div>
+
+<div class="readout">
+  <div class="panel">
+    <p class="lab" id="sel-kicker">Nothing selected</p>
+    <h3 id="sel-title">Click any lot on the strip</h3>
+    <p class="ph" id="sel-sub">Placeholder. When a lot is selected this is where your sentence about it goes.</p>
+    <div class="facts" id="sel-facts"></div>
+  </div>
+  <div class="tally">
+    <p class="lab">Running total, west to east</p>
+    <div class="big" id="tally-big">&nbsp;</div>
+    <p id="tally-sub">Drag the strip. The total counts only what is on screen.</p>
+    <p class="note ph">Placeholder. Your handwritten note about what that number means to you.</p>
+  </div>
+</div>
+
+<p class="disc" id="disc">Synthetic geometry, placed against real landmarks. Avenue spacing, the Port Authority, Bryant Park, the library, Grand Central, Tudor City and the UN are in their true positions along the street. Lot widths, heights, allowed and built floor area, ground floor use and ownership are generated for layout and are not yet real. Next pass wires NYC MapPLUTO tax lots, DOT roadway widths and the sidewalk polygons.</p>
+
+</div>
+
+<script>
+/* =====================================================================
+   42ND STREET, RIVER TO RIVER
+   x axis is feet from the Hudson bulkhead at 12th Ave.
+   Everything is drawn in feet, then multiplied by PPF (pixels per foot).
+   ===================================================================== */
+const LEN=9900;                    /* 12th Ave to the East River, ~1.9 mi */
+let PPF=0.16;                      /* pixels per foot */
+const H=560;                       /* strip height in px */
+
+const AVES=[
+  [0,'12th Av'],[800,'11th Av'],[1600,'10th Av'],[2400,'9th Av'],[3200,'8th Av'],
+  [3950,'7th Av'],[4120,'Broadway'],[4700,'6th Av'],[5450,'5th Av'],[6100,'Madison'],
+  [6700,'Park Av'],[7300,'Lexington'],[7900,'3rd Av'],[8600,'2nd Av'],[9300,'1st Av'],[9900,'FDR']
+];
+
+/* landmarks that must sit in their real places. side: n | s */
+const FIXED=[
+  {a:180, b:760,  side:'n', name:'Hudson River piers',      use:'pub',  h:40,  far:[0,1],   own:'city'},
+  {a:2400,b:3200, side:'n', name:'Port Authority Bus Terminal', use:'dead', h:120, far:[15,4.2], own:'auth'},
+  {a:3950,b:4260, side:'n', name:'Times Square',            use:'alive',h:520, far:[18,16.4],own:'priv'},
+  {a:4700,b:5450, side:'s', name:'Bryant Park & the Library', use:'pub', h:80,  far:[15,1.1], own:'city'},
+  {a:6700,b:7300, side:'n', name:'Grand Central Terminal',  use:'alive',h:210, far:[21,6.8], own:'auth'},
+  {a:7300,b:7480, side:'n', name:'Chrysler Building',       use:'alive',h:1046,far:[15,14.9],own:'priv'},
+  {a:8600,b:9300, side:'s', name:'Tudor City',              use:'alive',h:180, far:[10,9.2], own:'priv'},
+  {a:9300,b:9900, side:'n', name:'United Nations',          use:'pub',  h:505, far:[15,5.4], own:'auth'}
+];
+
+/* your places. 8 to 12 of them, all placeholder until Judy writes them */
+const PINS=[
+  {x:1750, t:'Placeholder. Something that happened here.'},
+  {x:2950, t:'Placeholder. The bus, and what you think about it.'},
+  {x:4050, t:'Placeholder. Times Square, honestly.'},
+  {x:4980, t:'Placeholder. The bench you actually sit on.'},
+  {x:5460, t:'Placeholder. The lions, and the day you noticed something.'},
+  {x:6820, t:'Placeholder. Grand Central, the ceiling, whatever it is for you.'},
+  {x:7420, t:'Placeholder. Looking up at the Chrysler.'},
+  {x:8180, t:'Placeholder. Dinner, and who with.'},
+  {x:8900, t:'Placeholder. Tudor City bridge, the view west.'},
+  {x:9650, t:'Placeholder. The last block before the water.'}
+];
+
+/* ---- deterministic randomness so the street never changes between loads ---- */
+let seed=20260815;
+const rnd=()=>{seed=(seed*1664525+1013904223)%4294967296; return seed/4294967296;};
+
+/* ---- build the lots ---- */
+function buildSide(side){
+  const lots=[]; const fixed=FIXED.filter(f=>f.side===side).sort((p,q)=>p.a-q.a);
+  let x=0;
+  const pushRun=(from,to)=>{
+    let p=from;
+    while(to-p>10){
+      let w=Math.min(to-p, 22+rnd()*rnd()*180);
+      if(to-p-w<24) w=to-p;
+      const allowed=[10,12,15,18,21][Math.floor(rnd()*5)];
+      const ratio=rnd();
+      const built=Math.max(.4, allowed*(ratio<.18? .12+rnd()*.25 : .45+rnd()*.62));
+      const h=Math.max(18, built*11 + rnd()*90);
+      const r=rnd();
+      lots.push({a:p,b:p+w,side,name:null,
+        use: r<.19?'dead':'alive',
+        h:Math.min(h,1000), far:[allowed,Math.min(built,allowed)],
+        own: r>.93?'city': (r>.88?'auth':'priv')});
+      p+=w;
+    }
+  };
+  fixed.forEach(f=>{ pushRun(x,f.a); lots.push({...f}); x=f.b; });
+  pushRun(x,LEN);
+  return lots;
+}
+const LOTS=[...buildSide('n'),...buildSide('s')];
+
+/* ---- geometry of the ribbons, in px down the strip ---- */
+const Y={
+  skyN:[8,104],      /* north silhouette, grows upward from 104 */
+  lotN:[110,146],
+  groundN:[150,162],
+  street:[168,236],
+  groundS:[240,252],
+  lotS:[256,292],
+  skyS:[298,394],    /* south silhouette, mirrored downward from 298 */
+  far:[406,442],
+  cars:[448,466],
+  pub:[472,486],
+  pins:[496,552]
+};
+const NS='http://www.w3.org/2000/svg';
+const el=(n,a={})=>{const e=document.createElementNS(NS,n); for(const k in a) e.setAttribute(k,a[k]); return e;};
+const hFt=f=>Math.min(1, Math.sqrt(f/1050));   /* compress 1,046 ft of Chrysler into 96 px */
+
+const ROWLABELS=[['Height, north',Y.skyN[1]-4],['Lots, north',Y.lotN[1]-6],['Ground floor',Y.groundN[1]-2],
+ ['42nd Street',Y.street[0]+20],['Ground floor',Y.groundS[1]-2],['Lots, south',Y.lotS[1]-6],
+ ['Height, south',Y.skyS[1]-4],['Unbuilt floor area',Y.far[1]-6],['Given to cars',Y.cars[1]-5],
+ ['Public land',Y.pub[1]-4],['You',Y.pins[0]+14]];
+function buildGutter(){
+  const g=document.getElementById('gut');
+  g.setAttribute('viewBox','0 0 136 '+H); g.setAttribute('height',H);
+  g.innerHTML='';
+  ROWLABELS.forEach(([txt,y])=>{
+    const t=el('text',{x:130,y:y,'text-anchor':'end'}); t.textContent=txt; g.appendChild(t);
+  });
+}
+const svg=document.getElementById('svg');
+const strip=document.getElementById('strip');
+let selected=null;
+
+function render(){
+  const W=LEN*PPF;
+  svg.setAttribute('width',W); svg.setAttribute('height',H);
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  svg.innerHTML='';
+  const X=ft=>ft*PPF;
+
+  /* --- avenues --- */
+  const gAve=el('g',{class:'ave'});
+  AVES.forEach(([ft,name])=>{
+    gAve.appendChild(el('line',{x1:X(ft),x2:X(ft),y1:4,y2:H-56}));
+    const t=el('text',{x:X(ft)+4,y:14}); t.textContent=name; gAve.appendChild(t);
+  });
+  svg.appendChild(gAve);
+
+  /* --- the street itself --- */
+  const gStreet=el('g',{'data-layer':'street'});
+  gStreet.appendChild(el('rect',{class:'walkband', x:0, y:Y.street[0], width:W, height:16}));
+  gStreet.appendChild(el('rect',{class:'road', x:0, y:Y.street[0]+16, width:W, height:36}));
+  gStreet.appendChild(el('rect',{class:'walkband', x:0, y:Y.street[0]+52, width:W, height:16}));
+  /* the bike lane exists in pieces, which is the point */
+  [[0,2400],[3200,3900],[5450,6700],[7900,9300]].forEach(([a,b])=>
+    gStreet.appendChild(el('rect',{class:'lane', x:X(a), y:Y.street[0]+46, width:X(b)-X(a), height:5})));
+  [[2400,3200],[3900,5450],[6700,7900],[9300,LEN]].forEach(([a,b])=>
+    gStreet.appendChild(el('rect',{class:'lanegap', x:X(a), y:Y.street[0]+48, width:X(b)-X(a), height:2})));
+  svg.appendChild(gStreet);
+
+  /* --- lots, silhouettes, ground floor --- */
+  const gLots=el('g',{'data-layer':'lots'});
+  const gSky=el('g',{'data-layer':'sky'});
+  const gGround=el('g',{'data-layer':'ground'});
+  const gFar=el('g',{'data-layer':'far'});
+  const gCars=el('g',{'data-layer':'cars'});
+  const gPub=el('g',{'data-layer':'pub'});
+
+  LOTS.forEach((L,i)=>{
+    const x=X(L.a), w=Math.max(1,X(L.b)-X(L.a)), north=L.side==='n';
+    const [allowed,built]=L.far;
+    /* silhouette */
+    const sh=hFt(L.h)*96;
+    gSky.appendChild(el('rect',{class:'silhouette',
+      x, width:w, y: north? Y.skyN[1]-sh : Y.skyS[0], height:sh}));
+    /* lot band, shaded by how much of its allowance is used */
+    const used=Math.min(1,built/allowed);
+    const r=el('rect',{class:'lot', x, width:w,
+      y: north? Y.lotN[0] : Y.lotS[0], height: north? Y.lotN[1]-Y.lotN[0] : Y.lotS[1]-Y.lotS[0],
+      fill:'rgba(30,27,24,'+(0.12+used*0.5).toFixed(3)+')'});
+    r.dataset.i=i;
+    gLots.appendChild(r);
+    /* ground floor: alive or dead */
+    gGround.appendChild(el('rect',{class: L.use==='dead'?'dead':'alive',
+      x, width:w, y: north? Y.groundN[0] : Y.groundS[0], height:12}));
+    /* unbuilt floor area, one bar per lot */
+    const gap=Math.max(0,(allowed-built)/21);
+    gFar.appendChild(el('rect',{class:'farcap', x, width:w, y:Y.far[0], height:Y.far[1]-Y.far[0]}));
+    gFar.appendChild(el('rect',{class:'far', x, width:w,
+      y:Y.far[1]-gap*(Y.far[1]-Y.far[0]), height:gap*(Y.far[1]-Y.far[0])}));
+    /* public land */
+    if(L.own!=='priv')
+      gPub.appendChild(el('rect',{class:'pub', x, width:w, y:Y.pub[0], height:Y.pub[1]-Y.pub[0],
+        opacity: L.own==='city'?.85:.55}));
+  });
+
+  /* given to cars: roadway plus every garage entrance and ramp */
+  gCars.appendChild(el('rect',{class:'cars', x:0, y:Y.cars[0], width:W, height:Y.cars[1]-Y.cars[0], opacity:.55}));
+  LOTS.filter(L=>L.use==='dead').forEach(L=>
+    gCars.appendChild(el('rect',{class:'cars', x:X(L.a), width:Math.max(1,X(L.b)-X(L.a)),
+      y:Y.cars[0], height:Y.cars[1]-Y.cars[0]})));
+
+  svg.append(gSky,gLots,gGround,gFar,gCars,gPub);
+
+  /* --- landmark names --- */
+  const gMark=el('g',{'data-layer':'marks'});
+  FIXED.forEach(f=>{
+    const t=el('text',{x:X(f.a)+5, y: f.side==='n'? Y.lotN[0]-4 : Y.lotS[1]+13, class:'landmark'});
+    t.textContent=f.name; gMark.appendChild(t);
+  });
+  svg.appendChild(gMark);
+
+  /* --- your pins --- */
+  const gPins=el('g',{'data-layer':'pins'});
+  PINS.forEach((p,i)=>{
+    const g=el('g',{class:'pin'});
+    g.appendChild(el('line',{x1:X(p.x),x2:X(p.x),y1:Y.street[0]+68,y2:Y.pins[0]+6}));
+    g.appendChild(el('circle',{cx:X(p.x),cy:Y.pins[0]+6,r:3.4}));
+    const t=el('text',{x:X(p.x)+7,y:Y.pins[0]+ (i%2?26:12)});
+    t.textContent=p.t; g.appendChild(t);
+    gPins.appendChild(g);
+  });
+  svg.appendChild(gPins);
+
+  applyLens();
+  syncMini();
+}
+
+/* ---- selection ---- */
+svg.addEventListener('click',e=>{
+  const r=e.target.closest('.lot'); if(!r) return;
+  const L=LOTS[+r.dataset.i]; selected=L;
+  const [allowed,built]=L.far;
+  document.getElementById('sel-kicker').textContent=(L.side==='n'?'North side':'South side')+' · '+Math.round(L.a)+' ft from the Hudson';
+  document.getElementById('sel-title').textContent=L.name||'Lot, placeholder address';
+  document.getElementById('sel-sub').textContent=L.name? 'Placeholder. Your sentence about this place.' : 'Placeholder. Your sentence about this lot.';
+  const facts=[['Width', Math.round(L.b-L.a)+' ft'],['Height', Math.round(L.h)+' ft'],
+    ['Allowed floor area', allowed.toFixed(1)],['Built floor area', built.toFixed(1)],
+    ['Unbuilt', (allowed-built).toFixed(1)],['Ground floor', L.use==='dead'?'Dead frontage':'Active'],
+    ['Ownership', L.own==='city'?'City':(L.own==='auth'?'Authority or state':'Private')],
+    ['Bike lane here', bikeAt(L.a)?'Yes':'No']];
+  document.getElementById('sel-facts').innerHTML=facts.map(([k,v])=>'<div class="fact"><span>'+k+'</span><b>'+v+'</b></div>').join('');
+});
+const bikeAt=ft=>[[0,2400],[3200,3900],[5450,6700],[7900,9300]].some(([a,b])=>ft>=a&&ft<b);
+
+/* ---- lenses and layers ---- */
+const LENSES={
+  all:      {name:'Everything',       lit:null},
+  ped:      {name:'Pedestrian',       lit:['street','ground','sky','marks']},
+  cyclist:  {name:'Cyclist',          lit:['street','cars','marks']},
+  personal: {name:'Friend and wife',  lit:['street','pins','marks']},
+  potential:{name:'Untapped',         lit:['far','pub','ground','street','marks']}
+};
+let lens='all';
+const LAYERS=[['sky','Height'],['lots','Lots'],['ground','Ground floor'],['far','Unbuilt'],['cars','Cars'],['pub','Public'],['pins','You']];
+const off=new Set();
+
+const lensWrap=document.getElementById('lenses');
+Object.entries(LENSES).forEach(([k,v])=>{
+  const b=document.createElement('button'); b.className='chip'; b.type='button';
+  b.setAttribute('aria-pressed', k===lens); b.textContent=v.name;
+  b.onclick=()=>{lens=k; [...lensWrap.children].forEach((c,i)=>c.setAttribute('aria-pressed', Object.keys(LENSES)[i]===k)); applyLens();};
+  lensWrap.appendChild(b);
+});
+const layerWrap=document.getElementById('layers');
+LAYERS.forEach(([k,label])=>{
+  const b=document.createElement('button'); b.className='chip on'; b.type='button'; b.textContent=label;
+  b.onclick=()=>{ off.has(k)? off.delete(k) : off.add(k); b.classList.toggle('on',!off.has(k)); applyLens(); };
+  layerWrap.appendChild(b);
+});
+
+function applyLens(){
+  const lit=LENSES[lens].lit;
+  svg.querySelectorAll('g[data-layer]').forEach(g=>{
+    const k=g.dataset.layer;
+    const hidden=off.has(k);
+    const dimmed = hidden || (lit && !lit.includes(k));
+    g.classList.toggle('dim',!!dimmed);
+    g.classList.toggle('lit',!dimmed);
+  });
+  updateTally();
+}
+
+/* ---- running total of what is on screen ---- */
+function updateTally(){
+  const a=strip.scrollLeft/PPF, b=(strip.scrollLeft+strip.clientWidth)/PPF;
+  const seen=LOTS.filter(L=>L.b>a&&L.a<b);
+  let unbuilt=0, deadFt=0, pubFt=0, totalFt=0;
+  seen.forEach(L=>{
+    const w=Math.min(L.b,b)-Math.max(L.a,a);
+    totalFt+=w;
+    unbuilt+=(L.far[0]-L.far[1])*w*40;      /* rough floor area, placeholder maths */
+    if(L.use==='dead') deadFt+=w;
+    if(L.own!=='priv') pubFt+=w;
+  });
+  const big=document.getElementById('tally-big'), sub=document.getElementById('tally-sub');
+  if(lens==='cyclist'){
+    const lane=[[0,2400],[3200,3900],[5450,6700],[7900,9300]]
+      .reduce((s,[p,q])=>s+Math.max(0,Math.min(q,b)-Math.max(p,a)),0);
+    big.textContent=Math.round(lane/Math.max(1,b-a)*100)+'% protected';
+    sub.textContent='of the street you can see right now.';
+  } else if(lens==='personal'){
+    const n=PINS.filter(p=>p.x>a&&p.x<b).length;
+    big.textContent=n+(n===1?' place':' places');
+    sub.textContent='on screen that you have written about.';
+  } else if(lens==='ped'){
+    big.textContent=Math.round(deadFt).toLocaleString()+' ft';
+    sub.textContent='of dead frontage in view, out of '+Math.round(totalFt).toLocaleString()+' ft of street wall.';
+  } else {
+    big.textContent=Math.round(unbuilt/1000).toLocaleString()+'k sq ft';
+    sub.textContent='of floor area that zoning already allows and nobody has built, in view.';
+  }
+}
+
+/* ---- drag to pan. capture only after real movement or clicks die ---- */
+let down=false, startX=0, startScroll=0, captured=false;
+strip.addEventListener('pointerdown',e=>{
+  down=true; captured=false; startX=e.clientX; startScroll=strip.scrollLeft; strip.classList.add('grabbing');
+});
+strip.addEventListener('pointermove',e=>{
+  if(!down) return;
+  const moved=Math.abs(e.clientX-startX);
+  if(!captured && moved>5){ captured=true; try{strip.setPointerCapture(e.pointerId);}catch(err){} }
+  if(!captured) return;
+  strip.scrollLeft=startScroll-(e.clientX-startX);
+});
+addEventListener('pointerup',()=>{down=false; strip.classList.remove('grabbing');});
+strip.addEventListener('scroll',()=>{syncMini(); updateTally();});
+
+/* ---- minimap ---- */
+const mini=document.getElementById('mini'), minisvg=document.getElementById('minisvg'), win=document.getElementById('win');
+function buildMini(){
+  minisvg.setAttribute('viewBox','0 0 '+LEN+' 34');
+  minisvg.innerHTML='';
+  LOTS.filter(L=>L.side==='n').forEach(L=>{
+    const gap=(L.far[0]-L.far[1])/21;
+    minisvg.appendChild(el('rect',{x:L.a,width:Math.max(4,L.b-L.a),y:34-gap*30,height:gap*30,
+      fill:'#2C5A78',opacity:.55}));
+  });
+  AVES.forEach(([ft])=>minisvg.appendChild(el('rect',{x:ft,width:3,y:0,height:34,fill:'rgba(30,27,24,.2)'})));
+  PINS.forEach(p=>minisvg.appendChild(el('rect',{x:p.x,width:5,y:0,height:6,fill:'#B0442F'})));
+}
+function syncMini(){
+  const frac=strip.clientWidth/(LEN*PPF), left=strip.scrollLeft/(LEN*PPF);
+  win.style.left=(left*100)+'%'; win.style.width=(Math.min(1,frac)*100)+'%';
+}
+mini.addEventListener('pointerdown',e=>{
+  const r=mini.getBoundingClientRect(), f=(e.clientX-r.left)/r.width;
+  strip.scrollLeft=f*LEN*PPF-strip.clientWidth/2;
+});
+
+/* ---- zoom ---- */
+function setZoom(p){
+  const centre=(strip.scrollLeft+strip.clientWidth/2)/PPF;
+  PPF=Math.max(0.05,Math.min(1.2,p));
+  render();
+  strip.scrollLeft=centre*PPF-strip.clientWidth/2;
+  syncMini(); updateTally();
+}
+document.getElementById('zoomin').onclick=()=>setZoom(PPF*1.6);
+document.getElementById('zoomout').onclick=()=>setZoom(PPF/1.6);
+document.getElementById('fit').onclick=()=>setZoom(strip.clientWidth/LEN);
+addEventListener('resize',()=>{syncMini(); updateTally();});
+
+buildGutter(); buildMini(); render(); setZoom(0.30); strip.scrollLeft=0; updateTally();
+</script>
+</body>
+</html>

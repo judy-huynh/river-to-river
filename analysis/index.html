@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>42nd Street, Lot by Lot</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet">
+<link href="style.css" rel="stylesheet">
+<script>
+/* Mapbox GL JS v3 starts a web worker, and Chrome refuses to create workers from
+   file:// pages because each one is its own opaque origin. Rather than showing a
+   grey box, say so and give the one command that fixes it. */
+if (location.protocol === 'file:') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const b = document.createElement('div');
+    b.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#0E0C0B;color:#F7F4EC;'
+      + 'font:15px/1.7 ui-monospace,Menlo,monospace;padding:min(9vh,70px) min(8vw,60px);overflow:auto';
+    b.innerHTML =
+      '<div style="max-width:70ch">'
+      + '<div style="font-size:12px;letter-spacing:.18em;color:#FF5A36;margin-bottom:18px">CANNOT RUN FROM A FILE URL</div>'
+      + '<div style="font:600 clamp(24px,4vw,44px)/1.05 -apple-system,Helvetica,sans-serif;letter-spacing:-.03em;margin-bottom:22px">'
+      + 'This page needs a local server</div>'
+      + '<p>Mapbox starts a web worker. Chrome will not create a worker from a <code style="color:#D8F546">file://</code> page, '
+      + 'because every file URL counts as its own security origin. That is the grey box.</p>'
+      + '<p style="margin-top:20px">Open Terminal, paste this once, and leave it running:</p>'
+      + '<pre style="background:#1A1614;border-left:3px solid #D8F546;padding:14px 16px;margin:12px 0 20px;'
+      + 'white-space:pre-wrap;color:#D8F546">cd ~/Documents/GitHub/river-to-river\npython3 -m http.server 8042 --bind 127.0.0.1</pre>'
+      + '<p>Then open <a style="color:#FF5A36" href="http://127.0.0.1:8042/">http://127.0.0.1:8042/</a> '
+      + 'and click through to this page from there.</p>'
+      + '<p style="margin-top:24px;color:rgba(247,244,236,.55)">The drawings that are pure SVG, like the unrolled street, '
+      + 'work fine from a file URL. Only the Mapbox ones need this.</p>'
+      + '</div>';
+    document.body.appendChild(b);
+  });
+}
+</script>
+</head>
+<body>
+
+<!-- ══════════════════════════════ MASTHEAD ══════════════════════════════ -->
+<header class="masthead">
+  <div class="shell">
+    <div class="rule-top">
+      <span class="tag">Urban design reading</span>
+      <span class="tag">New York</span>
+      <span class="tag">2026</span>
+      <span class="tag tag--live">Live city data</span>
+    </div>
+
+    <h1 class="display">
+      42<span class="display__nd">nd</span> Street
+      <em>1976<span class="display__to">&rarr;</span>2026<span class="display__to">&rarr;</span>next</em>
+    </h1>
+
+    <div class="masthead__grid">
+      <p class="standfirst ph">Placeholder. Two or three sentences in your own words. What you notice walking this street, and why you went and pulled the parcel data instead of just saying it.</p>
+      <dl class="colophon">
+        <dt>Extent</dt><dd>Hudson to the East River, 1.97 miles</dd>
+        <dt>Unit</dt><dd>The tax lot</dd>
+        <dt>Method</dt><dd>Record, conditions, instruments</dd>
+        <dt>Source</dt><dd>NYC PLUTO, OpenStreetMap</dd>
+      </dl>
+    </div>
+  </div>
+</header>
+
+<!-- ══════════════════════════════ THE NUMBERS ═══════════════════════════ -->
+<section class="figures" aria-label="Headline figures">
+  <div class="shell figures__grid" id="figures"></div>
+</section>
+
+
+<!-- ══════════════════════════════ THE RECORD ════════════════════════════ -->
+<section class="record" id="record">
+  <div class="shell">
+    <div class="section-head">
+      <span class="numeral">01</span>
+      <h2>The record</h2>
+      <p class="section-head__sub">Before reading the street as it is, it is worth remembering what it took to get here. The 42nd Street Development Project ran across four mayors and two real estate cycles. Lynne Sagalyn&rsquo;s <cite>Times Square Roulette</cite> is the account of it.</p>
+    </div>
+
+    <figure class="quote quote--lead">
+      <blockquote>A human sinkhole, a civic disgrace, a place where no decent person would willingly go and where the only helpful thing would be to blow it all away.</blockquote>
+      <figcaption>Marshall Berman, on Times Square</figcaption>
+    </figure>
+
+    <div class="record__pair">
+      <figure class="quote">
+        <blockquote>I get off the bus from Detroit without a penny in my pocket. I walk up to the blood bank on 42nd Street, where I sell a pint of my blood&hellip; I&rsquo;ve been in town less than an hour and I&rsquo;m already in business.</blockquote>
+        <figcaption>Mayor&rsquo;s Office of Midtown Enforcement, 1976</figcaption>
+      </figure>
+      <div class="record__gloss">
+        <h4>What the street was for</h4>
+        <p>Male turf. Sex shops, action movies, retail built around one appetite. The street was read nationally as the icon of urban distress, and the press and the film industry kept it that way.</p>
+        <h4>What the plan was for</h4>
+        <p>Sagalyn&rsquo;s point is that the redemption was assembled, not discovered. Condemnation, subsidy, negotiated deals, and a coalition that had to be held together for two decades while the market and the mayors turned over.</p>
+        <p class="hand ph">Placeholder. Your line about reading this book while living on the street it is about.</p>
+      </div>
+    </div>
+
+    <ol class="timeline" id="timeline"></ol>
+    <p class="caption caption--warn">Dates are the standard public chronology of the 42nd Street Development Project and should be checked against Sagalyn before this is published.</p>
+
+    <div class="lessons" id="lessons"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ THE INSTRUMENT ════════════════════════ -->
+<section class="instrument" id="instrument">
+  <div class="shell">
+    <div class="section-head">
+      <span class="numeral">02</span>
+      <h2>Read the street four ways</h2>
+      <p class="section-head__sub">Each view keeps the same 82 lots and changes only the question. Use the arrow keys to move between them.</p>
+    </div>
+
+    <nav class="chapters" id="chapters" aria-label="Views"></nav>
+
+    <div class="stage">
+      <figure class="stage__map">
+        <div id="map"></div>
+        <figcaption class="stage__foot">
+          <div class="legend" id="legend"></div>
+          <span class="hint">Hover a lot for its address, click for everything</span>
+        </figcaption>
+      </figure>
+
+      <aside class="stage__side">
+        <div class="panel panel--headline">
+          <output class="figure figure--xl" id="chapterBig">&nbsp;</output>
+          <span class="figure__label" id="chapterLabel">&nbsp;</span>
+          <p id="chapterBody"></p>
+          <p class="hand ph" id="chapterNote">Placeholder. Your handwritten line about this view.</p>
+        </div>
+
+        <div class="panel panel--lot" id="lotPanel" data-empty="true">
+          <span class="panel__eyebrow" id="lotEyebrow">Nothing selected</span>
+          <h3 id="lotAddress">Click a lot</h3>
+          <div class="capacity" id="lotCapacity" hidden>
+            <div class="capacity__track">
+              <span class="capacity__built" id="capBuilt"></span>
+            </div>
+            <div class="capacity__scale">
+              <span id="capBuiltLabel">built</span>
+              <span id="capAllowedLabel">allowed</span>
+            </div>
+          </div>
+          <dl class="facts" id="lotFacts"></dl>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ THE LEAGUE TABLE ══════════════════════ -->
+<section class="league" id="league">
+  <div class="shell">
+    <div class="section-head">
+      <span class="numeral">03</span>
+      <h2>The ten biggest openings</h2>
+      <p class="section-head__sub">Ranked by floor area that zoning already permits and nobody has built. Hover to find it on the map, click to fly there.</p>
+    </div>
+    <ol class="table" id="leagueTable"></ol>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ OWNERSHIP ═════════════════════════════ -->
+<section class="ownership" id="ownership">
+  <div class="shell">
+    <div class="section-head">
+      <span class="numeral">04</span>
+      <h2>Who holds the ground</h2>
+      <p class="section-head__sub">Every lot fronting the street, sorted by who owns it. The lots that are not private can change without anyone buying anything first.</p>
+    </div>
+    <div class="split" id="ownershipSplit"></div>
+    <div class="waffle" id="waffle" aria-hidden="true"></div>
+    <p class="waffle__note" id="ownershipNote"></p>
+  </div>
+</section>
+
+
+<!-- ══════════════════════════════ INSTRUMENTS ═══════════════════════════ -->
+<section class="instruments" id="instruments">
+  <div class="shell">
+    <div class="section-head">
+      <span class="numeral">05</span>
+      <h2>The instruments</h2>
+      <p class="section-head__sub">Sagalyn lists the levers a mayor actually held in the Koch era. They still exist. This is each one set against the ground it can still reach on 42nd Street today.</p>
+    </div>
+    <div class="matrix" id="matrix"></div>
+    <p class="caption">Capacity figures are the unbuilt floor area on the lots each instrument can reach. A lot can be reachable by more than one, so these do not sum to the street total.</p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ CONFIDENCE ════════════════════════════ -->
+<section class="confidence" id="confidence">
+  <div class="shell">
+    <div class="section-head">
+      <span class="numeral">06</span>
+      <h2>How this could be wrong</h2>
+      <p class="section-head__sub">The headline figure came out of the zoning data before anyone checked what actually governs these lots. Here is what happened when someone did. This section stays on the page.</p>
+    </div>
+    <div class="grades" id="gradeBars"></div>
+    <div class="caveats" id="caveats"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════ METHOD ════════════════════════════════ -->
+<section class="method">
+  <div class="shell">
+    <div class="section-head">
+      <span class="numeral">07</span>
+      <h2>How this was made</h2>
+    </div>
+    <div class="method__grid">
+      <div>
+        <h4>The lots</h4>
+        <p>Every tax lot in NYC PLUTO whose centre falls within 125 feet of the 42nd Street centreline, plus any lot addressed on 42nd Street within 230 feet. 82 lots. The rule is mine, and section 06 says what that costs.</p>
+      </div>
+      <div>
+        <h4>The centreline</h4>
+        <p>Pulled from OpenStreetMap rather than interpolated. Measured at 10,411 feet, 1.97 miles, from 12th Avenue to 1st Avenue.</p>
+      </div>
+      <div>
+        <h4>Unbuilt floor area</h4>
+        <p>The greater of the residential, commercial and community facility allowance, minus what is built, times lot area. This is a screening figure. Ninety per cent of it sits on lots where a special district or a landmark designation overrides the base rule.</p>
+      </div>
+      <div>
+        <h4>What is not measured</h4>
+        <p>Sidewalk width, truck volumes and bus reliability are observations, not yet data. Sidewalk polygons, DOT truck routes and MTA bus speeds would close that gap.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="shell foot__grid">
+    <span class="display display--sm">Judy Huynh</span>
+    <a href="mailto:hello@judyhuynh.ca">hello@judyhuynh.ca</a>
+  </div>
+</footer>
+
+<div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
+
+<script src="data.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+<script src="scripts.js"></script>
+</body>
+</html>

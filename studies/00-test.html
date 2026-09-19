@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>00 / Does Mapbox work at all</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.css" rel="stylesheet">
+<style>
+  body{margin:0;font:14px/1.6 ui-monospace,Menlo,monospace;background:#111;color:#eee}
+  #log{padding:14px 16px;white-space:pre-wrap;border-bottom:1px solid #333}
+  #log b{color:#D8F546}
+  .bad{color:#FF5A36}
+  #map{height:60vh}
+  .row{display:flex;gap:10px;padding:10px 16px;flex-wrap:wrap}
+  button{font:inherit;background:none;color:#eee;border:1px solid #444;padding:6px 10px;cursor:pointer}
+</style>
+<script>
+/* Mapbox GL JS v3 starts a web worker, and Chrome refuses to create workers from
+   file:// pages because each one is its own opaque origin. Rather than showing a
+   grey box, say so and give the one command that fixes it. */
+if (location.protocol === 'file:') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const b = document.createElement('div');
+    b.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#0E0C0B;color:#F7F4EC;'
+      + 'font:15px/1.7 ui-monospace,Menlo,monospace;padding:min(9vh,70px) min(8vw,60px);overflow:auto';
+    b.innerHTML =
+      '<div style="max-width:70ch">'
+      + '<div style="font-size:12px;letter-spacing:.18em;color:#FF5A36;margin-bottom:18px">CANNOT RUN FROM A FILE URL</div>'
+      + '<div style="font:600 clamp(24px,4vw,44px)/1.05 -apple-system,Helvetica,sans-serif;letter-spacing:-.03em;margin-bottom:22px">'
+      + 'This page needs a local server</div>'
+      + '<p>Mapbox starts a web worker. Chrome will not create a worker from a <code style="color:#D8F546">file://</code> page, '
+      + 'because every file URL counts as its own security origin. That is the grey box.</p>'
+      + '<p style="margin-top:20px">Open Terminal, paste this once, and leave it running:</p>'
+      + '<pre style="background:#1A1614;border-left:3px solid #D8F546;padding:14px 16px;margin:12px 0 20px;'
+      + 'white-space:pre-wrap;color:#D8F546">cd ~/Documents/GitHub/river-to-river\npython3 -m http.server 8042 --bind 127.0.0.1</pre>'
+      + '<p>Then open <a style="color:#FF5A36" href="http://127.0.0.1:8042/">http://127.0.0.1:8042/</a> '
+      + 'and click through to this page from there.</p>'
+      + '<p style="margin-top:24px;color:rgba(247,244,236,.55)">The drawings that are pure SVG, like the unrolled street, '
+      + 'work fine from a file URL. Only the Mapbox ones need this.</p>'
+      + '</div>';
+    document.body.appendChild(b);
+  });
+}
+</script>
+</head>
+<body>
+<div id="log"><b>Control test</b>
+This page loads a plain Mapbox map with nothing else on it.
+If this is grey too, the problem is the browser or the graphics stack, not the project.
+</div>
+<div class="row">
+  <button onclick="tryStyle('mapbox://styles/mapbox/standard')">Standard (3D)</button>
+  <button onclick="tryStyle('mapbox://styles/mapbox/light-v11')">Light (2D)</button>
+  <button onclick="tryStyle('mapbox://styles/mapbox/streets-v12')">Streets (2D)</button>
+</div>
+<div id="map"></div>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.js"></script>
+<script>
+const log=document.getElementById('log');
+const say=(t,bad)=>{ log.insertAdjacentHTML('beforeend','\n'+(bad?'<span class="bad">FAIL  ':'ok    ')+t+(bad?'</span>':'')); };
+
+/* 1. WebGL 2, which Mapbox v3 requires and will not run without */
+const gl=document.createElement('canvas').getContext('webgl2');
+say('WebGL 2: '+(gl? 'yes' : 'NOT AVAILABLE'), !gl);
+if(gl){
+  const dbg=gl.getExtension('WEBGL_debug_renderer_info');
+  say('renderer: '+(dbg? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)));
+}
+say('mapbox-gl.js: '+(typeof mapboxgl!=='undefined' ? 'v'+mapboxgl.version : 'DID NOT LOAD'), typeof mapboxgl==='undefined');
+if(typeof mapboxgl!=='undefined' && mapboxgl.supported) say('mapboxgl.supported(): '+mapboxgl.supported(), !mapboxgl.supported());
+
+mapboxgl.accessToken='pk.eyJ1IjoiajAwYnkiLCJhIjoiY2x1bHUzbXZnMGhuczJxcG83YXY4czJ3ayJ9.S5PZpU9VDwLMjoX_0x5FDQ';
+
+let map;
+function tryStyle(style){
+  say('trying '+style);
+  if(map) map.remove();
+  map=new mapboxgl.Map({container:'map', style, center:[-73.9857,40.7556], zoom:14, pitch:0});
+  map.on('style.load',()=>say('style loaded: '+style));
+  map.on('load',()=>say('TILES PAINTED: '+style));
+  map.on('error',e=>say('map error: '+((e&&e.error&&e.error.message)||'unknown'), true));
+}
+
+/* also prove the network can reach Mapbox from a file:// page */
+fetch('https://api.mapbox.com/styles/v1/mapbox/standard?access_token='+mapboxgl.accessToken)
+  .then(r=>say('network reached api.mapbox.com: HTTP '+r.status, !r.ok))
+  .catch(e=>say('network blocked: '+e.message, true));
+
+tryStyle('mapbox://styles/mapbox/standard');
+</script>
+</body>
+</html>

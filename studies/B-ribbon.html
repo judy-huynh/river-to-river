@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>B / The ribbon</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet">
+<style>
+:root{
+  --paper:#F7F4EC; --paper-2:#EFE9DC; --ink:#100E0C; --ink-60:rgba(16,14,12,.6); --ink-40:rgba(16,14,12,.4);
+  --hair:rgba(16,14,12,.16); --volt:#D8F546; --flare:#FF5A36;
+  --sans:"Helvetica Neue",Inter,Arial,sans-serif; --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box} html,body{margin:0}
+body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-size:16px; -webkit-font-smoothing:antialiased}
+.wrap{max-width:1680px; margin:0 auto; padding:clamp(16px,3vh,34px) clamp(14px,2.4vw,32px) 46px}
+.lab{font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-40)}
+h1{font-size:clamp(26px,4.4vw,54px); letter-spacing:-.035em; line-height:.98; margin:6px 0 8px; text-transform:uppercase; font-weight:700}
+h1 em{font-style:normal; color:var(--flare)}
+.sub{max-width:70ch; color:var(--ink-60); font-size:16px; margin:0 0 18px}
+.controls{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px}
+.chip{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; cursor:pointer;
+  background:none; border:1px solid var(--hair); padding:8px 12px; color:var(--ink-60)}
+.chip:hover,.chip[aria-pressed="true"]{border-color:var(--ink); color:var(--ink); background:#fff}
+#map{height:clamp(460px,72vh,720px); border:1.5px solid var(--ink); background:var(--paper-2)}
+.readout{display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; margin-top:10px}
+.note{max-width:90ch; color:var(--ink-60); font-size:14.5px; margin-top:16px; border-top:1px solid var(--hair); padding-top:12px}
+.note b{color:var(--ink)}
+.mapboxgl-ctrl-group{border-radius:0 !important; border:1.5px solid var(--ink) !important; box-shadow:none !important}
+</style>
+<script>
+/* Mapbox GL JS v3 starts a web worker, and Chrome refuses to create workers from
+   file:// pages because each one is its own opaque origin. Rather than showing a
+   grey box, say so and give the one command that fixes it. */
+if (location.protocol === 'file:') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const b = document.createElement('div');
+    b.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#0E0C0B;color:#F7F4EC;'
+      + 'font:15px/1.7 ui-monospace,Menlo,monospace;padding:min(9vh,70px) min(8vw,60px);overflow:auto';
+    b.innerHTML =
+      '<div style="max-width:70ch">'
+      + '<div style="font-size:12px;letter-spacing:.18em;color:#FF5A36;margin-bottom:18px">CANNOT RUN FROM A FILE URL</div>'
+      + '<div style="font:600 clamp(24px,4vw,44px)/1.05 -apple-system,Helvetica,sans-serif;letter-spacing:-.03em;margin-bottom:22px">'
+      + 'This page needs a local server</div>'
+      + '<p>Mapbox starts a web worker. Chrome will not create a worker from a <code style="color:#D8F546">file://</code> page, '
+      + 'because every file URL counts as its own security origin. That is the grey box.</p>'
+      + '<p style="margin-top:20px">Open Terminal, paste this once, and leave it running:</p>'
+      + '<pre style="background:#1A1614;border-left:3px solid #D8F546;padding:14px 16px;margin:12px 0 20px;'
+      + 'white-space:pre-wrap;color:#D8F546">cd ~/Documents/GitHub/river-to-river\npython3 -m http.server 8042 --bind 127.0.0.1</pre>'
+      + '<p>Then open <a style="color:#FF5A36" href="http://127.0.0.1:8042/">http://127.0.0.1:8042/</a> '
+      + 'and click through to this page from there.</p>'
+      + '<p style="margin-top:24px;color:rgba(247,244,236,.55)">The drawings that are pure SVG, like the unrolled street, '
+      + 'work fine from a file URL. Only the Mapbox ones need this.</p>'
+      + '</div>';
+    document.body.appendChild(b);
+  });
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+  <p class="lab">Basemap study B</p>
+  <h1>The <em>ribbon</em></h1>
+  <p class="sub">The same street, kept in its real position, but tipped up and locked to its own bearing so it always runs left to right. The city is never shown north up, because nobody experiences 42nd Street from above. Buildings carry their real heights, so the four hubs appear as the canyons they are and the neglected stretches appear as the gaps they are.</p>
+
+  <div class="controls">
+    <button class="chip" id="whole">Whole street</button>
+    <button class="chip" id="travel" aria-pressed="true">Travel it, west to east</button>
+    <button class="chip" id="flat">Drop to plan</button>
+    <button class="chip" id="heights">Heights on</button>
+  </div>
+
+  <div id="map"></div>
+
+  <div class="readout">
+    <span class="lab" id="where">Hudson River</span>
+    <span class="lab">Bearing locked at 28.9&deg; &middot; buildings from Mapbox Streets</span>
+  </div>
+
+  <p class="note"><b>Heights only draw in close.</b> The building data arrives around the zoom where you can read a block, so at the whole street framing the mass is sparse. Travel it, or zoom in, and the wall builds itself. <b>What this does that a plan cannot.</b> Height is the thing a planning map throws away first, and height is what you actually feel walking. Port Authority reads as a wall, Bryant Park reads as a hole in the wall, and the stretch west of 9th reads as almost nothing at all.</p>
+</div>
+
+<script src="data.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+<script>
+mapboxgl.accessToken='pk.eyJ1IjoiajAwYnkiLCJhIjoiY2x1bHUzbXZnMGhuczJxcG83YXY4czJ3ayJ9.S5PZpU9VDwLMjoX_0x5FDQ';
+const LINE=window.LINE42, LEN=LINE[LINE.length-1][0], BEARING=28.9;
+const at=ft=>{
+  const t=Math.max(0,Math.min(LEN,ft));
+  for(let i=0;i<LINE.length-1;i++) if(t>=LINE[i][0]&&t<=LINE[i+1][0]){
+    const k=(t-LINE[i][0])/((LINE[i+1][0]-LINE[i][0])||1);
+    return [LINE[i][1]+(LINE[i+1][1]-LINE[i][1])*k, LINE[i][2]+(LINE[i+1][2]-LINE[i][2])*k];
+  }
+  return [LINE[LINE.length-1][1],LINE[LINE.length-1][2]];
+};
+const AVES=[[0,'12th Av'],[903,'11th Av'],[1890,'10th Av'],[2699,'9th Av'],[3473,'8th Av'],[4542,'7th Av'],
+ [5480,'6th Av'],[6417,'5th Av'],[6932,'Madison'],[7520,'Park Av'],[8021,'Lexington'],[8940,'3rd Av'],
+ [9730,'2nd Av'],[10411,'1st Av']];
+
+const map=new mapboxgl.Map({
+  container:'map', style:'mapbox://styles/mapbox/light-v11',
+  center:at(4600), zoom:15.15, bearing:BEARING, pitch:62, antialias:true
+});
+map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
+map.dragRotate.disable();               /* the bearing is the argument, do not let it drift */
+map.touchZoomRotate.disableRotation();
+
+map.on('load',()=>{
+  /* strip every label the style ships with. the only names on this map are ours. */
+  map.getStyle().layers.forEach(l=>{ if(l.type==='symbol') map.setLayoutProperty(l.id,'visibility','none'); });
+  /* wash the ground back so the mass and the street carry the drawing */
+  ['land','landcover','national-park','landuse'].forEach(id=>{
+    if(map.getLayer(id)) map.setPaintProperty(id,'fill-color','#EFE9DC');
+  });
+  if(map.getLayer('water')) map.setPaintProperty('water','fill-color','#BFD6DE');
+
+  const firstLabel=undefined;
+  map.addLayer({
+    id:'mass', source:'composite', 'source-layer':'building', type:'fill-extrusion',
+    filter:['==',['get','extrude'],'true'], minzoom:12,
+    paint:{
+      'fill-extrusion-color':['interpolate',['linear'],['coalesce',['get','height'],10],
+        0,'#E3DDD0', 40,'#CFC7B6', 120,'#8E8676', 250,'#2A2620'],
+      'fill-extrusion-height':['coalesce',['get','height'],10],
+      'fill-extrusion-base':['coalesce',['get','min_height'],0],
+      'fill-extrusion-opacity':.92,
+      'fill-extrusion-vertical-gradient':true
+    }
+  }, firstLabel);
+
+  /* the street itself, drawn as a bright cut through the mass */
+  map.addSource('street',{type:'geojson',data:{type:'Feature',
+    geometry:{type:'LineString',coordinates:LINE.map(p=>[p[1],p[2]])}}});
+  map.addLayer({id:'streetGlow',type:'line',source:'street',
+    paint:{'line-color':'#D8F546','line-width':['interpolate',['linear'],['zoom'],12,6,17,44],'line-opacity':.5,'line-blur':6}},'mass');
+  map.addLayer({id:'streetLine',type:'line',source:'street',
+    paint:{'line-color':'#FF5A36','line-width':['interpolate',['linear'],['zoom'],12,1.6,17,5]}},'mass');
+
+  /* avenue ticks, so you always know where you are */
+  map.addSource('aves',{type:'geojson',data:{type:'FeatureCollection',features:AVES.map(([ft,name])=>({
+    type:'Feature',properties:{name},geometry:{type:'Point',coordinates:at(ft)}}))}});
+  map.addLayer({id:'aveLab',type:'symbol',source:'aves',
+    layout:{'text-field':['get','name'],'text-size':11,'text-offset':[0,-1.2],
+      'text-font':['DIN Pro Medium','Arial Unicode MS Regular'],'text-letter-spacing':.1},
+    paint:{'text-color':'#100E0C','text-halo-color':'#F7F4EC','text-halo-width':2}});
+});
+
+/* ---- views ---- */
+function fitStreet(duration){
+  const b=new mapboxgl.LngLatBounds(); [0,LEN].forEach(f=>b.extend(at(f)));
+  map.fitBounds(b,{bearing:BEARING,pitch:58,padding:{top:90,bottom:90,left:40,right:40},duration});
+}
+const press=e=>{document.querySelectorAll('.chip').forEach(c=>c.removeAttribute('aria-pressed')); e.target.setAttribute('aria-pressed','true');};
+document.getElementById('whole').onclick=e=>{ press(e); fitStreet(1100); };
+document.getElementById('flat').onclick=e=>{press(e); map.easeTo({pitch:0,duration:900});};
+document.getElementById('heights').onclick=e=>{
+  const on=map.getLayoutProperty('mass','visibility')!=='none';
+  map.setLayoutProperty('mass','visibility',on?'none':'visible');
+  e.target.textContent=on?'Heights off':'Heights on';
+};
+
+/* travel the street, west to east, at walking-ish pace */
+let travelling=false;
+document.getElementById('travel').onclick=e=>{
+  press(e);
+  if(travelling) return;
+  travelling=true;
+  const t0=performance.now(), dur=26000;
+  map.easeTo({center:at(0),zoom:16.1,pitch:70,bearing:BEARING,duration:900});
+  const step=now=>{
+    const k=Math.min(1,(now-t0-900)/dur);
+    if(k>0){
+      const ft=k*LEN;
+      map.jumpTo({center:at(ft),zoom:16.1,pitch:70,bearing:BEARING});
+      const a=[...AVES].reverse().find(([f])=>ft>=f-120);
+      document.getElementById('where').textContent =
+        (ft<60?'Hudson River':(ft>LEN-60?'East River':(a?a[1]:'')))+ ' · ' + Math.round(ft).toLocaleString() + ' ft';
+    }
+    if(k<1) requestAnimationFrame(step); else travelling=false;
+  };
+  requestAnimationFrame(step);
+};
+</script>
+</body>
+</html>

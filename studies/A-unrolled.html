@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>A / The street unrolled</title>
+<style>
+:root{
+  --paper:#F7F4EC; --paper-2:#EFE9DC; --ink:#100E0C; --ink-60:rgba(16,14,12,.6); --ink-40:rgba(16,14,12,.4);
+  --hair:rgba(16,14,12,.16); --volt:#D8F546; --flare:#FF5A36; --magenta:#E5006D; --cobalt:#1B4CFF;
+  --water:#BFD6DE;
+  --sans:"Helvetica Neue",Inter,Arial,sans-serif; --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box} html,body{margin:0}
+body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-size:16px; -webkit-font-smoothing:antialiased}
+.wrap{max-width:1680px; margin:0 auto; padding:clamp(16px,3vh,34px) clamp(14px,2.4vw,32px) 46px}
+.lab{font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-40)}
+h1{font-size:clamp(26px,4.4vw,54px); letter-spacing:-.035em; line-height:.98; margin:6px 0 8px; text-transform:uppercase; font-weight:700}
+h1 em{font-style:normal; color:var(--flare)}
+.sub{max-width:70ch; color:var(--ink-60); font-size:16px; margin:0 0 18px}
+
+.controls{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:12px}
+.chip{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; cursor:pointer;
+  background:none; border:1px solid var(--hair); padding:8px 12px; color:var(--ink-60)}
+.chip[aria-pressed="true"],.chip:hover{border-color:var(--ink); color:var(--ink); background:#fff}
+.spacer{flex:1}
+
+.frame{border:1.5px solid var(--ink); background:var(--paper-2); overflow-x:auto; overflow-y:hidden; cursor:grab}
+.frame.drag{cursor:grabbing}
+svg{display:block}
+
+.scalebar{display:flex; justify-content:space-between; align-items:baseline; gap:20px; flex-wrap:wrap; margin-top:10px}
+.note{max-width:90ch; color:var(--ink-60); font-size:14.5px; margin-top:16px; border-top:1px solid var(--hair); padding-top:12px}
+.note b{color:var(--ink)}
+
+/* svg paint */
+.water{fill:var(--water)}
+.road{fill:rgba(16,14,12,.10)}
+.walk{fill:rgba(16,14,12,.045)}
+.lot{fill:rgba(16,14,12,.78); stroke:var(--paper-2); stroke-width:.8}
+.lot--tall{fill:var(--ink)}
+.lot--low{fill:rgba(16,14,12,.42)}
+.gap{fill:rgba(16,14,12,.07)}
+.ave{stroke:rgba(16,14,12,.30); stroke-width:1; stroke-dasharray:3 3}
+.avetext{font-family:var(--mono); font-size:9px; letter-spacing:.1em; fill:var(--ink-40); text-transform:uppercase}
+.rivertext{font-family:var(--mono); font-size:11px; letter-spacing:.22em; fill:#4F7482; text-transform:uppercase}
+.hub{fill:var(--flare); opacity:.16}
+.hubtext{font-family:var(--mono); font-size:10px; letter-spacing:.14em; fill:var(--flare); text-transform:uppercase}
+.rule{stroke:var(--ink); stroke-width:1.2}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="lab">Basemap study A</p>
+  <h1>The street <em>unrolled</em></h1>
+  <p class="sub">42nd Street straightened into a single axis. Distance along the street runs left to right, Hudson to East River. Distance across the street runs up and down. Every lot is drawn at its true frontage and depth from the city&rsquo;s own records. Nothing here is in its geographic position, and that is the point: at true scale this street is 1.97 miles long and 200 feet deep, so a conventional plan can never show all of it at once.</p>
+
+  <div class="controls">
+    <button class="chip" id="fit" aria-pressed="true">Whole street</button>
+    <button class="chip" id="mid">Times Square</button>
+    <button class="chip" id="detail">Walking scale</button>
+    <span class="spacer"></span>
+    <button class="chip" id="exagg" aria-pressed="true">Depth exaggerated 6&times;</button>
+    <button class="chip" id="mode">Shade by height</button>
+  </div>
+
+  <div class="frame" id="frame"><svg id="svg"></svg></div>
+
+  <div class="scalebar">
+    <span class="lab" id="scaleLabel"></span>
+    <span class="lab">124 lots &middot; 78% of the street wall &middot; NYC PLUTO</span>
+  </div>
+
+  <p class="note"><b>The distortion is declared.</b> Length and depth are drawn at different scales so the street reads on one screen. A section drawing does this and says so. A planning map usually does not distort, and so it usually shows you four blocks and calls it the street.</p>
+</div>
+
+<script src="data.js"></script>
+<script>
+const LINE=window.LINE42, WALL=window.WALL42;
+const LEN=LINE[LINE.length-1][0];
+const AVES=[[0,'12th'],[903,'11th'],[1890,'10th'],[2699,'9th'],[3473,'8th'],[4542,'7th'],
+  [5480,'6th'],[6417,'5th'],[6932,'Mad'],[7520,'Park'],[8021,'Lex'],[8940,'3rd'],[9730,'2nd'],[10411,'1st']];
+const HUBS=[[2699,3473,'Port Authority'],[4380,4760,'Times Square'],[5480,6417,'Bryant Park'],[7520,8021,'Grand Central']];
+
+const NS='http://www.w3.org/2000/svg';
+const el=(n,a={})=>{const e=document.createElementNS(NS,n); for(const k in a)e.setAttribute(k,a[k]); return e;};
+
+const svg=document.getElementById('svg'), frame=document.getElementById('frame');
+let PPF=0.13;        /* pixels per foot along the street */
+let EXAGG=6;         /* how much the cross-street dimension is stretched */
+let SHADE=true;      /* shade lots by height */
+
+const ROAD=60, WALK=18, MAXDEPTH=210;
+function render(){
+  const W=LEN*PPF;
+  const dppf=PPF*EXAGG;                       /* pixels per foot across the street */
+  const half=(ROAD/2+WALK+MAXDEPTH)*dppf;
+  const H=half*2+54;
+  const midY=half+22;
+  svg.setAttribute('width',W); svg.setAttribute('height',H);
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+  svg.innerHTML='';
+  const X=ft=>ft*PPF, D=ft=>ft*dppf;
+
+  /* the two rivers, which are the whole reason this street is worth drawing */
+  const riverW=Math.max(26,60*PPF);
+  svg.appendChild(el('rect',{class:'water', x:-riverW, y:0, width:riverW, height:H}));
+  svg.appendChild(el('rect',{class:'water', x:W, y:0, width:riverW, height:H}));
+
+  /* the ground plane */
+  svg.appendChild(el('rect',{class:'walk', x:0, y:midY-D(ROAD/2+WALK), width:W, height:D(WALK)}));
+  svg.appendChild(el('rect',{class:'road', x:0, y:midY-D(ROAD/2),      width:W, height:D(ROAD)}));
+  svg.appendChild(el('rect',{class:'walk', x:0, y:midY+D(ROAD/2),      width:W, height:D(WALK)}));
+
+  /* the hubs, behind everything */
+  HUBS.forEach(([a,b,name])=>{
+    svg.appendChild(el('rect',{class:'hub', x:X(a), y:0, width:X(b)-X(a), height:H}));
+  });
+
+  /* the street wall, both sides, at true frontage and depth */
+  const north=WALL.filter(w=>w.side==='n').sort((a,b)=>a.ft-b.ft);
+  const south=WALL.filter(w=>w.side==='s').sort((a,b)=>a.ft-b.ft);
+  const draw=(list,up)=>{
+    let cursor=0;
+    list.forEach(w=>{
+      const start=Math.max(cursor, w.ft-w.front/2);
+      const wpx=Math.max(.6, X(w.front));
+      const depth=Math.min(MAXDEPTH, w.depth||100);
+      const dpx=Math.max(1.5, D(depth));
+      const y=up ? midY-D(ROAD/2+WALK)-dpx : midY+D(ROAD/2+WALK);
+      let cls='lot';
+      if(SHADE) cls += w.floors>=30 ? ' lot--tall' : (w.floors<=6 ? ' lot--low' : '');
+      const r=el('rect',{class:cls, x:X(start), y, width:wpx, height:dpx});
+      r.appendChild(el('title',{})).textContent =
+        `${w.addr||'Unnamed'} · ${w.front} ft wide · ${depth} ft deep · ${w.floors||'?'} floors`;
+      svg.appendChild(r);
+      cursor=start+w.front;
+    });
+  };
+  draw(north,true); draw(south,false);
+
+  /* avenues */
+  AVES.forEach(([ft,name])=>{
+    svg.appendChild(el('line',{class:'ave', x1:X(ft), x2:X(ft), y1:8, y2:H-8}));
+    const t=el('text',{class:'avetext', x:X(ft)+4, y:14}); t.textContent=name; svg.appendChild(t);
+  });
+
+  /* hub names and rivers */
+  HUBS.forEach(([a,b,name])=>{
+    const t=el('text',{class:'hubtext', x:X(a)+5, y:H-8}); t.textContent=name; svg.appendChild(t);
+  });
+  const hud=el('text',{class:'rivertext', x:6, y:midY, transform:`rotate(-90 6 ${midY})`, 'text-anchor':'middle'});
+  hud.textContent='Hudson'; svg.appendChild(hud);
+  const east=el('text',{class:'rivertext', x:W-8, y:midY, transform:`rotate(90 ${W-8} ${midY})`, 'text-anchor':'middle'});
+  east.textContent='East River'; svg.appendChild(east);
+
+  /* the centre line of the roadway, drawn as a rule because it is the datum */
+  svg.appendChild(el('line',{class:'rule', x1:0, x2:W, y1:midY, y2:midY, opacity:.25}));
+
+  document.getElementById('scaleLabel').textContent =
+    `Length 1 px = ${Math.round(1/PPF)} ft · depth exaggerated ${EXAGG}×`;
+}
+
+/* ---- controls ---- */
+const setZoom=(p,scrollFt)=>{
+  PPF=p; render();
+  if(scrollFt!=null) frame.scrollLeft=scrollFt*PPF-frame.clientWidth/2;
+};
+document.getElementById('fit').onclick=e=>{press(e); setZoom((frame.clientWidth-4)/LEN,null); frame.scrollLeft=0;};
+document.getElementById('mid').onclick=e=>{press(e); setZoom(0.42,4560);};
+document.getElementById('detail').onclick=e=>{press(e); setZoom(1.1,4560);};
+document.getElementById('exagg').onclick=e=>{
+  EXAGG = EXAGG===6 ? 1 : (EXAGG===1 ? 12 : 6);
+  e.target.textContent = EXAGG===1 ? 'True depth' : `Depth exaggerated ${EXAGG}×`;
+  render();
+};
+document.getElementById('mode').onclick=e=>{
+  SHADE=!SHADE; e.target.textContent = SHADE ? 'Shade by height' : 'Flat';
+  render();
+};
+function press(e){ document.querySelectorAll('.controls .chip').forEach(c=>c.removeAttribute('aria-pressed')); e.target.setAttribute('aria-pressed','true'); }
+
+/* drag to pan, capture only after real movement */
+let down=false,sx=0,ss=0,cap=false;
+frame.addEventListener('pointerdown',e=>{down=true;cap=false;sx=e.clientX;ss=frame.scrollLeft;frame.classList.add('drag');});
+frame.addEventListener('pointermove',e=>{
+  if(!down) return;
+  if(!cap && Math.abs(e.clientX-sx)>5){cap=true; try{frame.setPointerCapture(e.pointerId);}catch(err){}}
+  if(cap) frame.scrollLeft=ss-(e.clientX-sx);
+});
+addEventListener('pointerup',()=>{down=false;frame.classList.remove('drag');});
+addEventListener('resize',()=>render());
+
+setZoom((frame.clientWidth-4)/LEN);
+</script>
+</body>
+</html>

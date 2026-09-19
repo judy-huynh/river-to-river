@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>42nd Street — plan</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.css" rel="stylesheet">
+<link href="style.css" rel="stylesheet">
+</head>
+<body>
+
+<header class="head">
+  <div class="head__id">
+    <span class="kicker">Sheet 01 &middot; existing conditions</span>
+    <h1>42nd Street</h1>
+  </div>
+  <dl class="head__meta">
+    <div><dt>Extent</dt><dd>Hudson to East River, 1.97 mi</dd></div>
+    <div><dt>Lots</dt><dd id="metaLots">—</dd></div>
+    <div><dt>Trees</dt><dd id="metaTrees">—</dd></div>
+    <div><dt>Sources</dt><dd>MapPLUTO &middot; NYC Parks &middot; OSM</dd></div>
+  </dl>
+</header>
+
+<main class="sheet">
+
+  <!-- ══════════ the layer stack. drawing order, top of the list draws on top ══════════ -->
+  <aside class="layers" id="layers" aria-label="Layers">
+    <div class="layers__head">
+      <span>Layers</span>
+      <button class="mini" id="allOff" type="button">clear</button>
+    </div>
+    <div id="layerList"></div>
+
+    <div class="panel" id="readout" hidden></div>
+  </aside>
+
+  <!-- ══════════ the drawing ══════════ -->
+  <section class="draw">
+    <div id="map"></div>
+
+    <!-- the whole street, always visible, doubles as the navigator -->
+    <div class="ruler" id="ruler">
+      <svg id="rulerSvg" preserveAspectRatio="none"></svg>
+      <div class="ruler__window" id="rulerWin"></div>
+    </div>
+    <div class="ruler__foot">
+      <span class="mono" id="rulerLeft">Hudson River</span>
+      <span class="mono" id="rulerMid">drag the bar to move along the street</span>
+      <span class="mono" id="rulerRight">East River</span>
+    </div>
+  </section>
+
+</main>
+
+<div class="tip" id="tip"></div>
+
+<script src="data.js"></script>
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.js"></script>
+<script src="scripts.js"></script>
+</body>
+</html>

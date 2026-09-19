@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>42nd Street, who is already planning it</title>
+<link href="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.css" rel="stylesheet">
+<style>
+:root{
+  --paper:#F2EEE6; --paper-2:#EAE4D8; --ink:#1E1B18; --ink-soft:#6B6157;
+  --rust:#B0442F; --blue:#2C5A78; --green:#3F6E51; --violet:#7A5C86; --sand:#8C8578;
+  --rule:rgba(30,27,24,.15);
+  --serif: ui-serif,"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --sans: ui-sans-serif,"Helvetica Neue",Helvetica,Arial,sans-serif;
+  --mono: ui-monospace,SFMono-Regular,Menlo,monospace;
+  --hand: "Bradley Hand","Snell Roundhand","Segoe Print","Comic Sans MS",cursive;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper); color:var(--ink); font-family:var(--serif); font-size:18px; line-height:1.6;
+  -webkit-font-smoothing:antialiased}
+.lab{font-family:var(--mono); font-size:10.5px; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-soft)}
+.ph{background:rgba(176,68,47,.1); border-bottom:1px dotted var(--rust); padding:0 2px}
+.wrap{max-width:1560px; margin:0 auto; padding:clamp(20px,4vh,48px) clamp(14px,2.5vw,34px) 50px}
+h1{font-size:clamp(28px,4.2vw,50px); line-height:1.05; letter-spacing:-.03em; font-weight:400; margin:.2em 0 .25em; max-width:24ch}
+h1 em{font-style:italic; color:var(--rust)}
+.intro{max-width:70ch; color:var(--ink-soft); margin:0 0 20px}
+
+.controls{display:flex; gap:20px; align-items:flex-end; flex-wrap:wrap; margin-bottom:12px}
+.group{display:flex; flex-direction:column; gap:7px}
+.group>span{font-family:var(--mono); font-size:9.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-soft)}
+.chips{display:flex; gap:6px; flex-wrap:wrap}
+.chip{font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; cursor:pointer;
+  background:none; border:1px solid var(--rule); padding:8px 12px; color:var(--ink-soft)}
+.chip.on{border-color:var(--ink); color:var(--ink); background:rgba(255,255,255,.65)}
+
+.stage{display:grid; grid-template-columns:minmax(0,1fr) 330px; gap:16px; align-items:start}
+@media(max-width:1000px){.stage{grid-template-columns:1fr}}
+#map{height:min(74vh,700px); border:1px solid var(--rule); background:var(--paper-2)}
+.mapnote{margin-top:8px}
+
+.side{border:1px solid var(--rule); background:rgba(255,255,255,.5); padding:16px 16px 18px}
+.side h3{margin:4px 0 .3em; font-size:22px; font-weight:400; letter-spacing:-.02em}
+.side p{margin:0; font-size:15.5px; color:var(--ink-soft)}
+.side .who{font-family:var(--mono); font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink)}
+.side .note{font-family:var(--hand); font-size:18px; color:var(--rust); line-height:1.35; margin-top:14px}
+.side a{color:var(--ink); text-decoration-color:var(--rust); text-underline-offset:4px; font-size:14px}
+
+.legend{margin-top:14px; border-top:1px solid var(--rule); padding-top:12px; display:grid; gap:7px}
+.key{display:flex; gap:9px; align-items:center; font-family:var(--mono); font-size:10.5px; color:var(--ink-soft);
+  letter-spacing:.06em; cursor:pointer}
+.key i{width:24px; height:5px; display:block; flex:0 0 auto}
+.key.off{opacity:.35}
+
+.tally{margin-top:16px; border-top:1px solid var(--rule); padding-top:14px}
+.tally .big{font-family:var(--mono); font-size:28px; letter-spacing:-.02em}
+.tally p{font-size:14.5px}
+.disc{font-family:var(--mono); font-size:10px; color:var(--ink-soft); letter-spacing:.05em; margin-top:20px; max-width:90ch}
+.mapboxgl-popup-content{background:var(--paper); border:1px solid var(--rule); border-radius:0; font-family:var(--sans);
+  font-size:13px; padding:10px 12px; box-shadow:0 10px 30px -14px rgba(30,27,24,.6)}
+.mapboxgl-popup-tip{display:none}
+</style>
+<script>
+/* Mapbox GL JS v3 starts a web worker, and Chrome refuses to create workers from
+   file:// pages because each one is its own opaque origin. Rather than showing a
+   grey box, say so and give the one command that fixes it. */
+if (location.protocol === 'file:') {
+  document.addEventListener('DOMContentLoaded', () => {
+    const b = document.createElement('div');
+    b.style.cssText = 'position:fixed;inset:0;z-index:9999;background:#0E0C0B;color:#F7F4EC;'
+      + 'font:15px/1.7 ui-monospace,Menlo,monospace;padding:min(9vh,70px) min(8vw,60px);overflow:auto';
+    b.innerHTML =
+      '<div style="max-width:70ch">'
+      + '<div style="font-size:12px;letter-spacing:.18em;color:#FF5A36;margin-bottom:18px">CANNOT RUN FROM A FILE URL</div>'
+      + '<div style="font:600 clamp(24px,4vw,44px)/1.05 -apple-system,Helvetica,sans-serif;letter-spacing:-.03em;margin-bottom:22px">'
+      + 'This page needs a local server</div>'
+      + '<p>Mapbox starts a web worker. Chrome will not create a worker from a <code style="color:#D8F546">file://</code> page, '
+      + 'because every file URL counts as its own security origin. That is the grey box.</p>'
+      + '<p style="margin-top:20px">Open Terminal, paste this once, and leave it running:</p>'
+      + '<pre style="background:#1A1614;border-left:3px solid #D8F546;padding:14px 16px;margin:12px 0 20px;'
+      + 'white-space:pre-wrap;color:#D8F546">cd ~/Documents/GitHub/river-to-river\npython3 -m http.server 8042 --bind 127.0.0.1</pre>'
+      + '<p>Then open <a style="color:#FF5A36" href="http://127.0.0.1:8042/">http://127.0.0.1:8042/</a> '
+      + 'and click through to this page from there.</p>'
+      + '<p style="margin-top:24px;color:rgba(247,244,236,.55)">The drawings that are pure SVG, like the unrolled street, '
+      + 'work fine from a file URL. Only the Mapbox ones need this.</p>'
+      + '</div>';
+    document.body.appendChild(b);
+  });
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+
+<p class="lab">The centrepiece, on the ground</p>
+<h1>Everybody plans the <em>same middle mile</em></h1>
+<p class="intro ph">Placeholder. Your three sentences. The map below draws every published proposal for 42nd Street against the length of the street. What is worth saying is what the blank stretches mean.</p>
+
+<div class="controls">
+  <div class="group">
+    <span>Lens</span>
+    <div class="chips" id="lenses"></div>
+  </div>
+  <div class="group">
+    <span>View</span>
+    <div class="chips">
+      <button class="chip on" id="straight" type="button">Street runs flat</button>
+      <button class="chip" id="north" type="button">North up</button>
+      <button class="chip" id="whole" type="button">Whole street</button>
+    </div>
+  </div>
+</div>
+
+<div class="stage">
+  <div>
+    <div id="map"></div>
+    <p class="lab mapnote">Drag to move along it. Click any band for what it is.</p>
+  </div>
+
+  <div class="side">
+    <p class="who" id="s-who">Nothing selected</p>
+    <h3 id="s-title">Click a band on the map</h3>
+    <p id="s-body">Every coloured band is one published plan, drawn to its real extent along the street. The rust bands are the stretches nobody has proposed anything for.</p>
+    <p id="s-src"></p>
+    <p class="note ph" id="s-note">Placeholder. Your handwritten reaction to whichever one is selected.</p>
+
+    <div class="legend" id="legend"></div>
+
+    <div class="tally">
+      <div class="big" id="t-big">&nbsp;</div>
+      <p id="t-sub">of the street has no published proposal touching it.</p>
+    </div>
+  </div>
+</div>
+
+<p class="disc">Plan extents are drawn from published sources and are approximate to the block. The street centreline is interpolated between avenue crossings. Personal pins are placeholder. Sources are in <code>06-42ND-STREET-RESEARCH.md</code>.</p>
+
+</div>
+
+<script src="https://api.mapbox.com/mapbox-gl-js/v3.6.0/mapbox-gl.js"></script>
+<script>
+mapboxgl.accessToken='pk.eyJ1IjoiajAwYnkiLCJhIjoiY2x1bHUzbXZnMGhuczJxcG83YXY4czJ3ayJ9.S5PZpU9VDwLMjoX_0x5FDQ';
+
+/* =====================================================================
+   Geometry. Everything is defined as "feet east along 42nd Street",
+   with 0 at 12th Avenue, then converted to lon/lat by interpolating
+   between real avenue crossings.
+   ===================================================================== */
+const LINE=[[0,-74.00134,40.76207],[83,-74.00106,40.76198],[212,-74.00065,40.76181],[300,-74.00037,40.76170],[482,-73.99979,40.76146],[681,-73.99916,40.76119],[780,-73.99884,40.76106],[903,-73.99845,40.76090],[995,-73.99817,40.76077],[1257,-73.99734,40.76042],[1804,-73.99561,40.75969],[1890,-73.99534,40.75957],[2288,-73.99408,40.75904],[2371,-73.99382,40.75893],[2497,-73.99342,40.75876],[2699,-73.99278,40.75849],[2789,-73.99250,40.75837],[2931,-73.99205,40.75818],[3161,-73.99132,40.75788],[3368,-73.99067,40.75760],[3473,-73.99033,40.75746],[3601,-73.98993,40.75729],[3686,-73.98966,40.75718],[3991,-73.98869,40.75677],[4078,-73.98842,40.75666],[4373,-73.98748,40.75626],[4460,-73.98721,40.75615],[4542,-73.98695,40.75604],[4681,-73.98651,40.75585],[4832,-73.98603,40.75565],[4968,-73.98560,40.75547],[5392,-73.98426,40.75490],[5480,-73.98398,40.75479],[5590,-73.98363,40.75464],[5977,-73.98241,40.75412],[6417,-73.98102,40.75353],[6632,-73.98033,40.75326],[6932,-73.97939,40.75286],[7052,-73.97901,40.75269],[7148,-73.97871,40.75256],[7253,-73.97838,40.75241],[7432,-73.97781,40.75217],[7520,-73.97754,40.75206],[7823,-73.97657,40.75166],[7936,-73.97621,40.75151],[8021,-73.97595,40.75139],[8432,-73.97465,40.75084],[8537,-73.97431,40.75071],[8680,-73.97386,40.75052],[8796,-73.97349,40.75037],[8940,-73.97303,40.75018],[9135,-73.97241,40.74992],[9246,-73.97206,40.74977],[9730,-73.97053,40.74912],[9882,-73.97005,40.74892],[9984,-73.96974,40.74878],[10240,-73.96897,40.74838],[10332,-73.96872,40.74821],[10411,-73.96854,40.74805]];
+const AVES=[
+  [    0,'12th Av'],[  903,'11th Av'],[ 1890,'10th Av'],[ 2699,'9th Av'],
+  [ 3473,'8th Av'],[ 4542,'7th Av'],[ 5480,'6th Av'],[ 6417,'5th Av'],
+  [ 6932,'Madison'],[ 7520,'Park Av'],[ 8021,'Lexington'],[ 8940,'3rd Av'],
+  [ 9730,'2nd Av'],[10411,'1st Av']
+];
+const FT_MIN=LINE[0][0], FT_MAX=LINE[LINE.length-1][0];
+const A=name=>AVES.find(a=>a[1]===name)[0];
+
+/* position along the real OSM centreline of 42nd Street */
+function at(ft){
+  ft=Math.max(FT_MIN,Math.min(FT_MAX,ft));
+  for(let i=0;i<LINE.length-1;i++){
+    if(ft>=LINE[i][0]&&ft<=LINE[i+1][0]){
+      const t=(ft-LINE[i][0])/((LINE[i+1][0]-LINE[i][0])||1);
+      return [LINE[i][1]+(LINE[i+1][1]-LINE[i][1])*t, LINE[i][2]+(LINE[i+1][2]-LINE[i][2])*t];
+    }
+  }
+  return [LINE[LINE.length-1][1],LINE[LINE.length-1][2]];
+}
+const MPD_LAT=110570, mpdLon=lat=>111320*Math.cos(lat*Math.PI/180);
+
+/* a line from ftA to ftB, pushed sideways off the centreline by `m` metres */
+function band(ftA,ftB,m,step=90){
+  const pts=[];
+  for(let f=ftA; f<ftB; f+=step) pts.push(off(f,m));
+  pts.push(off(ftB,m));
+  return {type:'Feature',geometry:{type:'LineString',coordinates:pts}};
+}
+function off(ft,m){
+  const p=at(ft), q=at(Math.min(FT_MAX,ft+60));
+  const dx=(q[0]-p[0])*mpdLon(p[1]), dy=(q[1]-p[1])*MPD_LAT;
+  const L=Math.hypot(dx,dy)||1;
+  const px=-dy/L, py=dx/L;
+  return [p[0]+px*m/mpdLon(p[1]), p[1]+py*m/MPD_LAT];
+}
+
+/* =====================================================================
+   The plans. Extents from 06-42ND-STREET-RESEARCH.md, pinned to avenues.
+   ===================================================================== */
+const PLANS=[
+  {id:'vision42', name:'vision42, auto free light rail boulevard', who:'Institute for Rational Urban Mobility, 1994 to 2015',
+   a:FT_MIN, b:FT_MAX, m:-52, col:'#2C5A78', w:7,
+   body:'River to river. Removes all traffic, lays modern light rail at grade, twelve pairs of stops plus two at the rivers. The only proposal that covers the whole street, and its numbers are from before the pandemic, remote work and congestion pricing.',
+   src:'vision42.org'},
+  {id:'busway', name:'42nd Street busway, requested not designed', who:'Manhattan community boards to DOT, 2025',
+   a:A('8th Av'), b:A('1st Av'), m:-36, col:'#3F6E51', w:6, dash:[2,1.4],
+   body:'Community boards formally asked for it. DOT said it would review. Nothing has been drawn. In the same period the agency advanced a 34th Street busway and extended Madison Avenue bus lanes.',
+   src:'Streetsblog, Jan 2025'},
+  {id:'pabt', drawn:true, name:'Port Authority Bus Terminal replacement', who:'PANYNJ with Foster + Partners, finishing 2032',
+   a:A('9th Av'), b:A('8th Av'), m:-20, col:'#7A5C86', w:12,
+   body:'Ten billion dollars. Five bus floors, forty intercity gates, storage for 300 to 350 buses instead of 50, ramps straight into the Lincoln Tunnel, and 41st Street closed between 8th and 9th.',
+   src:'PANYNJ, 2024'},
+  {id:'timessq', drawn:true, name:'Times Square pedestrian plazas', who:'NYC DOT, built',
+   a:4380, b:4760, m:-20, col:'#B0442F', w:12,
+   body:'The one piece of this street that was actually rebuilt for people, and the thing everyone points at to argue the rest is impossible.',
+   src:'NYC DOT'},
+  {id:'bryant', drawn:true, name:'Bryant Park and the library', who:'Bryant Park Corporation, existing',
+   a:A('6th Av'), b:A('5th Av'), m:20, col:'#3F6E51', w:12,
+   body:'Nearly a thousand feet of the south side is already a park. It is the most used public space on the street and no proposal treats it as part of the street.',
+   src:'Existing condition'},
+  {id:'vanderbilt', drawn:true, name:'East Midtown and the Vanderbilt Corridor', who:'NYC Planning, 2015 and 2017',
+   a:A('Madison'), b:A('Lexington'), m:-20, col:'#8C8578', w:12,
+   body:'Seventy three blocks rezoned to unlock unused air rights. One Vanderbilt bought its floor area with about 210 million dollars of works inside Grand Central. Sidewalk widenings mandated on Madison and Lexington.',
+   src:'NYC DCP'},
+  {id:'msmx', name:'Midtown South rezoning, stops at West 40th', who:'NYC Planning, approved 2025',
+   a:A('8th Av'), b:A('5th Av'), m:72, col:'#B0442F', w:5, dash:[1.5,2],
+   body:'Forty two blocks, roughly 9,700 homes, Fifth to Eighth. It runs up from West 23rd and stops at West 40th. It never reaches this street. This band is drawn where it would be if it did.',
+   src:'NYC CPC, 2025'},
+  {id:'pfizer', drawn:true, name:'Old Pfizer headquarters, 1,600+ homes', who:'Metro Loft and David Werner, under way',
+   a:9050, b:9260, m:-20, col:'#2C5A78', w:12,
+   body:'The largest office to residential conversion on the boards, on East 42nd between 2nd and 3rd. Housing is arriving on this street one building at a time, with no plan for the street it lands on.',
+   src:'Bisnow, 2026'}
+];
+
+/* Gaps are computed, not asserted: every stretch with no drawn design on it.
+   vision42 (1994) and the busway (asked for, never drawn) do not count as coverage. */
+function computeGaps(){
+  const drawn=PLANS.filter(p=>p.drawn).map(p=>[p.a,p.b]).sort((x,y)=>x[0]-y[0]);
+  const merged=[]; let cur=null;
+  drawn.forEach(c=>{ if(!cur||c[0]>cur[1]){cur=[...c]; merged.push(cur);} else cur[1]=Math.max(cur[1],c[1]); });
+  const out=[]; let x=FT_MIN;
+  merged.forEach(([a,b])=>{ if(a>x) out.push([x,a]); x=Math.max(x,b); });
+  if(x<FT_MAX) out.push([x,FT_MAX]);
+  return out.map(([a,b])=>{
+    if(a<=FT_MIN) return {a,b,name:'West of 9th Avenue',
+      body:'Half a mile with nothing drawn for it. Theatre Row, Manhattan Plaza with 1,689 subsidised units and about 70 per cent performing artists, the piers, the ferry. Every proposal treats this as the approach to the real street rather than part of it.'};
+    if(b>=FT_MAX) return {a,b,name:'East of the Pfizer conversion',
+      body:'Tudor City, the UN, the slope down to the East River. Residents, an international institution and a waterfront, and not one drawn design for any of it.'};
+    return {a,b,name:'Between two plans',
+      body:'A stretch where two separate proposals stop short of each other. Nobody is responsible for the join, which is exactly where a street succeeds or fails.'};
+  });
+}
+const GAPS=computeGaps();
+
+const PEOPLE=[
+  {ft:2150, name:'Theatre Row', body:'Six stages on West 42nd, in the half mile no plan covers.'},
+  {ft:2380, name:'Manhattan Plaza', body:'1,689 units, about 70 per cent performing artists, the rest elderly and community residents, Section 8. Nobody plans for them.'},
+  {ft:10150,name:'Tudor City', body:'A residential enclave sitting above the street with its own bridge over 42nd, at the end nobody has drawn.'}
+];
+
+const PINS=[
+  {ft:1900,t:'Placeholder. Something that happened here.'},
+  {ft:3300,t:'Placeholder. The bus, and what you think about it.'},
+  {ft:4560,t:'Placeholder. Times Square, honestly.'},
+  {ft:5900,t:'Placeholder. The bench you actually sit on.'},
+  {ft:6430,t:'Placeholder. The lions.'},
+  {ft:7560,t:'Placeholder. Grand Central.'},
+  {ft:8060,t:'Placeholder. Looking up at the Chrysler.'},
+  {ft:8950,t:'Placeholder. Dinner, and who with.'},
+  {ft:9900,t:'Placeholder. Tudor City bridge, the view west.'},
+  {ft:10330,t:'Placeholder. The last block before the water.'}
+];
+
+/* =====================================================================
+   Map
+   ===================================================================== */
+const mid=at(5200);
+const map=new mapboxgl.Map({
+  container:'map', style:'mapbox://styles/mapbox/light-v11',
+  center:mid, zoom:15.15, bearing:28.9, pitch:0, attributionControl:true
+});
+map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
+
+function fc(features){return {type:'FeatureCollection',features};}
+
+map.on('load',()=>{
+  /* the street itself */
+  map.addSource('street',{type:'geojson',data:band(FT_MIN,FT_MAX,0,80)});
+  map.addLayer({id:'street',type:'line',source:'street',
+    paint:{'line-color':'#1E1B18','line-width':2.2,'line-opacity':.75}});
+
+  /* gaps, drawn fat and behind everything */
+  map.addSource('gaps',{type:'geojson',data:fc(GAPS.map((g,i)=>({...band(g.a,g.b,0,100),properties:{i,kind:'gap',name:g.name}})))});
+  map.addLayer({id:'gaps',type:'line',source:'gaps',
+    paint:{'line-color':'#B0442F','line-width':26,'line-opacity':.16,'line-blur':2}},'street');
+
+  /* one line per plan */
+  PLANS.forEach(p=>{
+    map.addSource('p-'+p.id,{type:'geojson',data:{...band(p.a,p.b,p.m),properties:{id:p.id,kind:'plan'}}});
+    const paint={'line-color':p.col,'line-width':p.w,'line-opacity':.9};
+    if(p.dash) paint['line-dasharray']=p.dash;
+    map.addLayer({id:'l-'+p.id,type:'line',source:'p-'+p.id,paint,layout:{'line-cap':'butt'}});
+    map.on('click','l-'+p.id,()=>select(p));
+    map.on('mouseenter','l-'+p.id,()=>map.getCanvas().style.cursor='pointer');
+    map.on('mouseleave','l-'+p.id,()=>map.getCanvas().style.cursor='');
+  });
+  map.on('click','gaps',e=>{
+    const g=GAPS[e.features[0].properties.i];
+    select({name:g.name,who:'Nobody',body:g.body,src:'Absence of any published proposal'});
+  });
+
+  /* avenues */
+  map.addSource('aves',{type:'geojson',data:fc(AVES.map(a=>({type:'Feature',
+    geometry:{type:'Point',coordinates:at(a[0])},properties:{name:a[1]}})))});
+  map.addLayer({id:'aves',type:'symbol',source:'aves',
+    layout:{'text-field':['get','name'],'text-size':10,'text-font':['DIN Pro Medium','Arial Unicode MS Regular'],
+      'text-offset':[0,-1.4],'text-letter-spacing':.12,'text-allow-overlap':false},
+    paint:{'text-color':'#6B6157','text-halo-color':'#F2EEE6','text-halo-width':1.6}});
+
+  /* who lives here */
+  map.addSource('people',{type:'geojson',data:fc(PEOPLE.map((p,i)=>({type:'Feature',
+    geometry:{type:'Point',coordinates:off(p.ft,-95)},properties:{i,name:p.name}})))});
+  map.addLayer({id:'people',type:'circle',source:'people',
+    paint:{'circle-radius':6,'circle-color':'#3F6E51','circle-stroke-color':'#F2EEE6','circle-stroke-width':2}});
+  map.addLayer({id:'people-lab',type:'symbol',source:'people',
+    layout:{'text-field':['get','name'],'text-size':11,'text-offset':[0,-1.5],
+      'text-font':['DIN Pro Medium','Arial Unicode MS Regular']},
+    paint:{'text-color':'#3F6E51','text-halo-color':'#F2EEE6','text-halo-width':1.6}});
+  map.on('click','people',e=>{const p=PEOPLE[e.features[0].properties.i];
+    select({name:p.name,who:'Who actually lives here',body:p.body,src:'Related, NYC LGBT Historic Sites'});});
+
+  /* your places */
+  map.addSource('pins',{type:'geojson',data:fc(PINS.map((p,i)=>({type:'Feature',
+    geometry:{type:'Point',coordinates:off(p.ft,52)},properties:{i,t:p.t}})))});
+  map.addLayer({id:'pins',type:'circle',source:'pins',
+    paint:{'circle-radius':5,'circle-color':'#B0442F','circle-stroke-color':'#F2EEE6','circle-stroke-width':2}});
+  map.on('click','pins',e=>{
+    const p=PINS[e.features[0].properties.i];
+    new mapboxgl.Popup({closeButton:false,offset:12}).setLngLat(e.lngLat)
+      .setHTML('<span style="font-family:'+getComputedStyle(document.body).getPropertyValue('--hand')+';color:#B0442F">'+p.t+'</span>')
+      .addTo(map);
+  });
+
+  buildLegend();
+  applyLens();
+  tally();
+});
+
+/* ---- side panel ---- */
+function select(p){
+  document.getElementById('s-who').textContent=p.who||'';
+  document.getElementById('s-title').textContent=p.name;
+  document.getElementById('s-body').textContent=p.body;
+  document.getElementById('s-src').innerHTML=p.src? '<span class="lab">Source · '+p.src+'</span>':'';
+}
+
+/* ---- legend doubles as layer switches ---- */
+const hidden=new Set();
+function buildLegend(){
+  const L=document.getElementById('legend');
+  L.innerHTML='';
+  const rows=[
+    ...PLANS.map(p=>({id:'l-'+p.id,col:p.col,label:p.name.split(',')[0]})),
+    {id:'gaps',col:'#B0442F',label:'Nobody has proposed anything'},
+    {id:'people',col:'#3F6E51',label:'Who actually lives here'},
+    {id:'pins',col:'#B0442F',label:'You'}
+  ];
+  rows.forEach(r=>{
+    const d=document.createElement('div'); d.className='key';
+    d.innerHTML='<i style="background:'+r.col+'"></i>'+r.label;
+    d.onclick=()=>{
+      hidden.has(r.id)? hidden.delete(r.id) : hidden.add(r.id);
+      d.classList.toggle('off',hidden.has(r.id));
+      setVis(r.id,!hidden.has(r.id));
+      if(r.id==='people') setVis('people-lab',!hidden.has(r.id));
+    };
+    L.appendChild(d);
+  });
+}
+function setVis(id,on){ if(map.getLayer(id)) map.setLayoutProperty(id,'visibility',on?'visible':'none'); }
+
+/* ---- lenses ---- */
+const LENSES={
+  all:{name:'Everything',show:null},
+  plans:{name:'The plans',show:PLANS.map(p=>'l-'+p.id)},
+  gaps:{name:'The gaps',show:['gaps']},
+  people:{name:'Residents',show:['people','people-lab']},
+  you:{name:'Friend and wife',show:['pins']}
+};
+let lens='all';
+const lw=document.getElementById('lenses');
+Object.entries(LENSES).forEach(([k,v])=>{
+  const b=document.createElement('button'); b.className='chip'+(k===lens?' on':''); b.type='button'; b.textContent=v.name;
+  b.onclick=()=>{lens=k; [...lw.children].forEach((c,i)=>c.classList.toggle('on',Object.keys(LENSES)[i]===k)); applyLens();};
+  lw.appendChild(b);
+});
+function applyLens(){
+  const show=LENSES[lens].show;
+  const all=[...PLANS.map(p=>'l-'+p.id),'gaps','people','people-lab','pins'];
+  all.forEach(id=>{
+    const on = !hidden.has(id) && (!show || show.includes(id) || (id==='people-lab'&&show.includes('people')));
+    setVis(id,on);
+  });
+}
+
+/* ---- how much of the street has nothing on it ---- */
+function tally(){
+  const total=FT_MAX-FT_MIN;
+  const gapFt=GAPS.reduce((s,g)=>s+(g.b-g.a),0);
+  document.getElementById('t-big').textContent=Math.round(gapFt/total*100)+'%';
+  document.getElementById('t-sub').textContent='of 42nd Street has no drawn design on it. The 1994 river to river vision and the busway that was asked for but never drawn are not counted as coverage.';
+}
+
+/* ---- view controls ---- */
+document.getElementById('straight').onclick=e=>{map.easeTo({bearing:28.9,duration:700}); flag(e.target);};
+document.getElementById('north').onclick=e=>{map.easeTo({bearing:0,duration:700}); flag(e.target);};
+document.getElementById('whole').onclick=e=>{
+  const b=new mapboxgl.LngLatBounds();
+  [FT_MIN,FT_MAX].forEach(f=>b.extend(at(f)));
+  map.fitBounds(b,{padding:70,bearing:28.9,duration:900}); flag(e.target);
+};
+function flag(el){ [...el.parentNode.children].forEach(c=>c.classList.remove('on')); el.classList.add('on'); }
+</script>
+</body>
+</html>
