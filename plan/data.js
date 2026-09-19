@@ -7,7 +7,8 @@ window.ROAD={"type":"FeatureCollection","features":[{"type":"Feature","geometry"
 
 /* Sidewalk widths on 42nd Street. Derived from the city's own planimetric sidewalk
    polygons by Meli Harvey (github.com/meliharvey/sidewalkwidths-nyc), which takes the
-   medial axis of each polygon and measures across it. Source snapshot Apr 2024.
+   medial axis of each polygon and measures across it. Source file last changed upstream
+   20 Apr 2020.
    Clipped to a 55 ft buffer on LINE42, then filtered by bearing to within 30 degrees of
    the local centreline heading. That filter matters: the naive buffer returns 191
    segments and nearly half of them are avenue sidewalk running north-south. The often

@@ -54,18 +54,41 @@ Derived figures computed in the page, not typed:
 
 New York publishes no sidewalk width dataset. The substitute is Meli Harvey's medial-axis
 derivation (`github.com/meliharvey/sidewalkwidths-nyc`), which measures across the city's own
-planimetric sidewalk polygons. Source snapshot April 2024.
+planimetric sidewalk polygons. The data file was last changed upstream on 20 April 2020 (commit
+`47fbf73`, the only commit in its history), so the widths describe the planimetrics as they stood
+then or earlier, not the street today. The bake reads the file at upstream commit `86fab1e`
+(29 May 2024), not at the moving `master` branch. That commit is only the pin: it did not touch
+the data. Every run prints the file's byte size and sha256.
 
-1. **Clip** to a 55 ft buffer around `LINE42`. Returns 191 segments.
+1. **Clip** to a 55 ft buffer around `LINE42`, tested at each segment's midpoint. Returns 191
+   segments.
 2. **Bearing filter.** Keep only segments whose bearing is within 30 degrees of the local
-   centreline heading (modulo 180). This step is load-bearing: the naive buffer is nearly half
-   avenue sidewalk running north-south. 84 segments dropped, **107 survive**.
-3. **Station and side** each survivor as in section 1.
+   centreline heading (modulo 180), read at the segment's from-station. This step is
+   load-bearing: the naive buffer is nearly half avenue sidewalk running north-south. 84 segments
+   dropped, **107 survive**. One survivor is sensitive to where the heading is read: the
+   segment stationed 901 to 907, at the station 903 bend, passes at its from-station and would
+   fail at its midpoint (28.5 degrees against 31.6). The bake prints any such segment.
+3. **Station and side** each survivor as in section 1. Stations are in the feet baked on the
+   `LINE42` vertices; offsets are in local flat feet. Over the 10,411 ft baked length the library's
+   flat feet come to 0.17 percent shorter and an independent WGS84 ellipsoid scale to 0.22 percent
+   longer. The bake prints both.
 4. **Coverage** is computed per side by merging overlapping bands: 83% of the north side, 85% of
    the south. The page states this.
 
 Results: median 19.1 ft, maximum 34.3 ft, **minimum 5.6 ft (south side, station 1,455, between
 11th and 10th Avenue)**.
+
+Known weakness, kept so the set reproduces exactly: 6 of the 107 survivors are zero-length after
+rounding (from-station equals to-station). Four are source fragments under a foot long lying just
+past the west end of `LINE42`, which station at 0; the other two sit at stations 6,499 and 7,953.
+A bearing taken on a fragment that short is noise, so the filter does not mean much for them, and
+each counts as one segment in the unweighted median. The bake prints this count and the stations. Dropping them, and
+reading the heading at the midpoint like the clip does, would change the 107 and is left as a
+separate, documented data change.
+
+Reproduce with `python3 scripts/bake/sidewalk.py --check`, which re-derives the set from the
+source file and compares it with what is baked. The stationing library every bake script shares is
+`scripts/bake/station.py`; see `scripts/bake/README.md`.
 
 Two cautions that are printed on the sheet:
 
