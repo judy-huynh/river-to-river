@@ -65,6 +65,21 @@ const TREE_GAPS=(()=>{const out=[];let prev=0;
   if(LEN-prev>400) out.push([prev,LEN]); return out;})();
 const GAP_FEET=TREE_GAPS.reduce((s,[a,b])=>s+(b-a),0);
 
+/* the walking surface, summarised once. gross concrete, not clear width. */
+const SW=window.SIDEWALK||[];
+const SW_STATS=(()=>{
+  if(!SW.length) return null;
+  const w=SW.map(r=>r.w).sort((a,b)=>a-b);
+  const med=w[Math.floor(w.length/2)];
+  const cover=side=>{const segs=SW.filter(r=>r.s===side).map(r=>[r.a,r.b]).sort((x,y)=>x[0]-y[0]);
+    const m=[]; segs.forEach(([a,b])=>{ if(m.length&&a<=m[m.length-1][1]) m[m.length-1][1]=Math.max(m[m.length-1][1],b); else m.push([a,b]); });
+    return m.reduce((t,[a,b])=>t+(b-a),0);};
+  const narrow=SW.reduce((x,y)=>y.w<x.w?y:x);
+  return {med, min:w[0], max:w[w.length-1], n:SW.length,
+    coverN:cover(1), coverS:cover(-1), narrow,
+    under8:SW.filter(r=>r.w<8).length};
+})();
+
 /* what the roadway is, summarised once */
 const ROAD_STATS=(()=>{
   let total=0, fourPlusTwo=0, wSum=0;
@@ -165,18 +180,30 @@ const LAYERS=[
     }
   },
   {
-    id:'road', name:'The roadway', count:ROAD_STATS.avgW+' ft wide on average',
-    on:false, open:false, ids:['roadLine'], opacity:.85,
-    says:`How much of the ground is given to vehicles, from the city's own street file. <b>The line is drawn at the real width of the roadway.</b>`,
+    id:'road', name:'Who gets the ground',
+    count: SW_STATS ? ROAD_STATS.avgW+' ft of roadway, '+SW_STATS.med+' ft of sidewalk'
+                    : ROAD_STATS.avgW+' ft wide on average',
+    on:false, open:false, ids:['roadLine','swLine'], opacity:.85,
+    says:`The roadway and both sidewalks, drawn at their real widths on the same scale. <b>The comparison is the point.</b>`,
     legend(){
-      return `<div class="key"><h5>What the lanes are for</h5>
-        <p>On ${ROAD_STATS.share}% of the street it is four lanes for moving traffic and two more for parked cars.</p>
+      let h=`<div class="key"><h5>Drawn at real width</h5>
         <ul>
-          <li><i class="rule" style="border-top-width:7px;border-top-color:#6E6A62"></i><span>66 ft</span><b>widest</b></li>
-          <li><i class="rule" style="border-top-width:5px;border-top-color:#6E6A62"></i><span>55 ft</span><b>most of it</b></li>
-          <li><i class="rule" style="border-top-width:3px;border-top-color:#6E6A62"></i><span>32 ft</span><b>narrowest</b></li>
-        </ul></div>
-        <p class="flag"><b>Six lanes, and two of them do not move</b>Two of the six are for cars that are parked. Hover any stretch for its exact width and lane count.</p>`;
+          <li><i class="rule" style="border-top-width:7px;border-top-color:#6E6A62"></i><span>Roadway</span><b>${ROAD_STATS.avgW} ft avg</b></li>`;
+      if(SW_STATS) h+=`
+          <li><i class="rule" style="border-top-width:3px;border-top-color:#2E9E4F"></i><span>Sidewalk, each side</span><b>${SW_STATS.med} ft typical</b></li>`;
+      h+=`</ul></div>
+        <p class="flag"><b>Six lanes, and two of them do not move</b>On ${ROAD_STATS.share}% of the street it is four lanes for moving traffic and two more for cars that are parked.</p>`;
+      if(SW_STATS){
+        h+=`<div class="key"><h5>The walking surface</h5>
+          <p>Measured across ${SW_STATS.n} stretches of the street's own sidewalk.</p>
+          <ul>
+            <li><span>Narrowest</span><b>${SW_STATS.narrow.w} ft</b></li>
+            <li><span>Typical</span><b>${SW_STATS.med} ft</b></li>
+            <li><span>Widest</span><b>${SW_STATS.max} ft</b></li>
+          </ul></div>
+          <p class="flag"><b>This is gross concrete, not clear width</b>Sheds, stairs, newsstands and kiosks are not deducted, so every figure here is an upper bound on what you can actually walk on. Coverage is ${pct(SW_STATS.coverN,LEN)}% of the north side and ${pct(SW_STATS.coverS,LEN)}% of the south.</p>`;
+      }
+      return h;
     }
   },
   {
@@ -303,7 +330,8 @@ function paint(L){
     if(map.getLayer('gapBand'))
       map.setLayoutProperty('gapBand','visibility',(L.on&&L.extraOn.gaps)?'visible':'none');
   }
-  if(L.id==='road') map.setPaintProperty('roadLine','line-opacity',L.opacity);
+  if(L.id==='road'){ map.setPaintProperty('roadLine','line-opacity',L.opacity);
+    if(map.getLayer('swLine')) map.setPaintProperty('swLine','line-opacity',L.opacity); }
 }
 
 /* ── the drawing ──────────────────────────────────────────────────────── */
@@ -338,6 +366,16 @@ map.on('style.load',()=>{
     layout:{visibility:'none'},
     paint:{'line-color':'#14120F','line-width':3,'line-opacity':.9,'line-dasharray':[1,1.4],'line-emissive-strength':1}});
 
+  if(SW.length){
+    map.addSource('sw',{type:'geojson',data:{type:'FeatureCollection',features:SW.map(r=>({
+      type:'Feature', properties:{w:r.w, s:r.s, a:r.a, b:r.b},
+      geometry:{type:'LineString', coordinates:r.c}}))}});
+    map.addLayer({id:'swLine',type:'line',source:'sw',slot:'middle',
+      layout:{visibility:'none','line-cap':'butt'},
+      paint:{'line-color':'#2E9E4F','line-opacity':.85,'line-emissive-strength':1,
+        'line-width':['interpolate',['exponential',2],['zoom'],
+          13,['*',['get','w'],0.035], 17,['*',['get','w'],0.56]]}});
+  }
   map.addSource('road',{type:'geojson',data:ROAD});
   map.addLayer({id:'roadLine',type:'line',source:'road',slot:'middle',layout:{visibility:'none','line-cap':'butt'},
     paint:{'line-color':'#6E6A62','line-opacity':.85,'line-emissive-strength':1,
@@ -394,6 +432,12 @@ function wire(){
     showTip(e,`<b>${p.w} ft of roadway</b><em>${p.dir}</em>`
       +`<span>${p.lanes} travel &middot; ${p.park} parking</span>`);});
   map.on('mouseleave','roadLine',()=>tip.dataset.show='false');
+  if(map.getLayer('swLine')){
+    map.on('mousemove','swLine',e=>{const p=e.features[0].properties;
+      showTip(e,`<b>${p.w} ft of sidewalk</b><em>${p.s==1?'north':'south'} side</em>`
+        +`<span>gross width, nothing deducted</span>`);});
+    map.on('mouseleave','swLine',()=>tip.dataset.show='false');
+  }
   map.on('move',syncRuler);
 }
 
