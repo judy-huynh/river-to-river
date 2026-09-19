@@ -566,6 +566,10 @@ function syncRuler(){
 /* ── boot ─────────────────────────────────────────────────────────────── */
 (()=>{ /* build stamp: the last-modified date of this file, so a stale cache is obvious */
   const el=$('#stamp'); if(!el) return;
+  /* sheet number and build time are working notes, not something the public needs.
+     they only appear when the page is served from this machine. */
+  if(!/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) return;
+  const dev=$('#devline'); if(dev) dev.hidden=false;
   fetch('scripts.js',{method:'HEAD'}).then(r=>{
     const d=r.headers.get('last-modified');
     el.textContent = d ? 'built '+new Date(d).toISOString().slice(0,16).replace('T',' ') : 'build unknown';
