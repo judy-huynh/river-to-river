@@ -6,6 +6,7 @@ Split out of the judyhuynh.ca website redesign on 18 Sep 2026 and made its own p
 redesign now lives in `../judyhuynh-ca`.
 
 See `PLAN.md` for the phased plan, the standing rules and the open decisions.
+See `METHODOLOGY.md` for every data source and every spatial step, including what the data cannot say.
 
 ## Run it
 

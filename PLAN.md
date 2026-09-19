@@ -73,7 +73,24 @@ decisions the author has not made yet.
 - **The chronology.** Whether the author appears on it, and in what words. Nothing about her is
   republished there until she says.
 
+## Direction, settled 19 Sep 2026
+
+The plan sheet is the centrepiece and `analysis/` is parked. The sheet becomes a tool:
+
+- **Questions, not layers.** Each rail row is a question with its answer visible while collapsed,
+  grouped People, Movement, Built.
+- **Stand anywhere on the street.** Click any spot and get everything known about that station:
+  the cross-section, the bus speed there, the nearest bench, the trees, who owns the lots.
+- **An hour-of-day slider** for bus speed and subway entries.
+- **The ruler carries evidence** as bands, at no cost in rail rows.
+- **A first screen that says what this is**, a link to any view, and a printable sheet.
+- **Original fieldwork** fills the gap the public data leaves: six-station pedestrian counts
+  anchored to the city's one counter.
+
+Every dataset is added through a reusable bake script, so that re-basing to pier to pier, and
+later a second street, is a script run rather than hand work.
+
 ## Where the numbers live
 
-Every headline must be computed by a page that ships. See `RESEARCH.md` for sources and
-`analysis/` for the derivations.
+Every headline must be computed by a page that ships. `METHODOLOGY.md` records every source and
+every spatial step. `RESEARCH.md` covers the published proposals for the street.
