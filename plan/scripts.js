@@ -75,8 +75,16 @@ const ROAD_STATS=(()=>{
 
 /* ── map ──────────────────────────────────────────────────────────────── */
 mapboxgl.accessToken=TOKEN;
+
+/* the street's own bounding box, so the opening view frames the subject at any
+   window size. a fixed zoom only ever looked right on one screen. */
+const STREET_BOUNDS=LINE.reduce((b,[,lng,lat])=>b.extend([lng,lat]),
+  new mapboxgl.LngLatBounds(at(0),at(0)));
+const FIT={bearing:BEARING, padding:{top:48,bottom:48,left:28,right:28}, maxZoom:15.4};
+
 const map=new mapboxgl.Map({container:'map', style:'mapbox://styles/mapbox/standard',
-  center:at(LEN/2), zoom:14.05, bearing:BEARING, pitch:0, antialias:true});
+  bounds:STREET_BOUNDS, fitBoundsOptions:{...FIT, duration:0},
+  pitch:0, antialias:true});
 map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
 map.dragRotate.disable(); map.touchZoomRotate.disableRotation();
 
@@ -364,23 +372,56 @@ function showLot(p){
 /* ── ruler ────────────────────────────────────────────────────────────── */
 const NS='http://www.w3.org/2000/svg';
 function buildRuler(){
-  const svg=$('#rulerSvg'), W=1000, H=50, X=ft=>ft/LEN*W;
+  const host=$('#ruler'), svg=$('#rulerSvg');
+  const W=Math.max(320,Math.round(host.clientWidth||960)), H=58, X=ft=>ft/LEN*W;
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.innerHTML='';
   const add=(n,a)=>{const e=document.createElementNS(NS,n); for(const k in a) e.setAttribute(k,a[k]); svg.appendChild(e); return e;};
+  const MONO='ui-monospace,SFMono-Regular,Menlo,monospace';
+  /* mono advance is ~.6em, close enough to place labels without measuring each one */
+  const wide=(txt,px)=>txt.length*px*.62;
+
+  /* the four hubs, shaded. label only where it genuinely fits inside its own band. */
+  let hubRight=-1e9;
   HUBS.forEach(([a,b,name])=>{
-    add('rect',{x:X(a),y:0,width:X(b)-X(a),height:H,fill:'#14120F','fill-opacity':.06});
-    const t=add('text',{x:X(a)+3,y:10,'font-family':'ui-monospace,Menlo,monospace','font-size':6.5,
-      'letter-spacing':.8,fill:'rgba(20,18,15,.45)'}); t.textContent=name.toUpperCase();
+    const x=X(a), w=X(b)-X(a);
+    add('rect',{x,y:0,width:w,height:H,fill:'#14120F','fill-opacity':.06});
+    const label=name.toUpperCase(), px=10, half=wide(label,px)/2;
+    const cx=Math.min(Math.max(x+w/2,half+3),W-half-3);
+    if(cx-half > hubRight+8){
+      add('text',{x:cx,y:14,'text-anchor':'middle','font-family':MONO,'font-size':px,
+        'letter-spacing':.4,fill:'rgba(20,18,15,.5)'}).textContent=label;
+      hubRight=cx+half;
+    }
   });
-  TREE_GAPS.forEach(([a,b])=>add('rect',{x:X(a),y:H-10,width:X(b)-X(a),height:5,fill:'#FF5A36','fill-opacity':.45}));
-  TREES.forEach(t=>add('rect',{x:X(t.ft),y:H-10,width:1,height:5,fill:'#2E9E4F','fill-opacity':.9}));
-  add('line',{x1:0,x2:W,y1:H/2+2,y2:H/2+2,stroke:'#14120F','stroke-opacity':.3,'stroke-width':.6});
+
+  /* trees along the bottom, and the stretches with none */
+  TREE_GAPS.forEach(([a,b])=>add('rect',{x:X(a),y:H-8,width:X(b)-X(a),height:5,fill:'#FF5A36','fill-opacity':.45}));
+  TREES.forEach(t=>add('rect',{x:X(t.ft),y:H-8,width:1,height:5,fill:'#2E9E4F','fill-opacity':.9}));
+
+  add('line',{x1:0,x2:W,y1:27,y2:27,stroke:'#14120F','stroke-opacity':.3,'stroke-width':.8});
+
+  /* avenues, decluttered left to right: a label is drawn only if it clears the
+     last one drawn, so nothing ever collides no matter how narrow the window */
+  const PX=11; let lastRight=-1e9;
   AVES.forEach(([ft,name])=>{
-    add('line',{x1:X(ft),x2:X(ft),y1:H/2-4,y2:H/2+8,stroke:'#14120F','stroke-opacity':.35,'stroke-width':.6});
-    const t=add('text',{x:X(ft),y:H/2-7,'text-anchor':'middle','font-family':'ui-monospace,Menlo,monospace',
-      'font-size':6.5,fill:'rgba(20,18,15,.5)'}); t.textContent=name;
+    const x=X(ft);
+    add('line',{x1:x,x2:x,y1:21,y2:33,stroke:'#14120F','stroke-opacity':.35,'stroke-width':.8});
+    const half=wide(name,PX)/2;
+    let tx=x, anchor='middle';
+    if(x-half<2){ tx=2; anchor='start'; }
+    else if(x+half>W-2){ tx=W-2; anchor='end'; }
+    const left = anchor==='start' ? tx : anchor==='end' ? tx-half*2 : x-half;
+    if(left > lastRight+7){
+      add('text',{x:tx,y:46,'text-anchor':anchor,'font-family':MONO,'font-size':PX,
+        fill:'rgba(20,18,15,.58)'}).textContent=name;
+      lastRight=left+half*2;
+    }
   });
 }
+
+/* redraw on resize, debounced, because the drawing is now width-dependent */
+let _rulerT; addEventListener('resize',()=>{clearTimeout(_rulerT); _rulerT=setTimeout(buildRuler,120);});
+
 function syncRuler(){
   const b=map.getBounds();
   const near=(lng,lat)=>{let best=0,bd=1e9;
