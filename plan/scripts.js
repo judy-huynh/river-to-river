@@ -208,9 +208,10 @@ const LAYERS=[
   },
   {
     id:'lots', name:'Lots and what may be built', count:LOTS.features.length+' fronting the street',
-    on:true, open:false, ids:['lotFill','lotLine'], opacity:.58,
+    on:true, open:false, ids:['lotFill','lotLine','lmHatch'], opacity:.58,
     says:`Every property fronting 42nd Street, at its real boundary from the city tax map. <b>Click one to see who owns it.</b>`,
-    styles:[['zoning','The rules that govern it'],['capacity','Room left to build'],['age','When it was built'],['plain','Outline only']],
+    styles:[['zoning','The rules that govern it'],['capacity','Room left to build'],
+      ['landmark','What cannot be touched'],['age','When it was built'],['plain','Outline only']],
     style:'zoning',
     legend(){
       if(this.style==='zoning'){
@@ -231,6 +232,15 @@ const LAYERS=[
           CAP.map(([v,c],i)=>`<li><i style="background:${c}"></i><span>${i===0?'nothing spare':commas(v)+'+ sq ft'}</span></li>`).join('')}</ul></div>
           <p class="flag"><b>Treat this as a screen, not a promise</b>Most of these lots sit in a special district where the base rule is not the rule that governs. ${LOTS.features.filter(f=>f.properties.lm===1).length} are landmarked and cannot be built on at all.</p>`;
       }
+      if(this.style==='landmark'){
+        const n=LOTS.features.filter(f=>f.properties.lm===1).length;
+        return `<div class="key"><h5>Designated landmarks</h5>
+          <p>Whatever the zoning allows, these cannot grow.</p><ul>
+          <li><i style="background:#14120F"></i><span>designated</span><b>${n} lots</b></li>
+          <li><i style="background:#E9E4D6"></i><span>not designated</span><b>${LOTS.features.length-n} lots</b></li>
+          </ul></div>
+          <p class="flag"><b>This is why the capacity figure is a screen, not a promise</b>A landmarked lot can carry unbuilt floor area on paper and never be able to use it.</p>`;
+      }
       if(this.style==='age'){
         return `<div class="key"><h5>Year the building went up</h5>
           <p>The street rebuilt itself in patches, not all at once.</p><ul>${
@@ -238,19 +248,6 @@ const LAYERS=[
       }
       return `<div class="key"><h5>Boundaries only</h5><p>Every lot line, no fill.</p></div>`;
     }
-  },
-  {
-    id:'landmarks', name:'Protected buildings', count:LOTS.features.filter(f=>f.properties.lm===1).length+' designated landmarks',
-    on:false, open:false, ids:['lmHatch'], opacity:1,
-    says:`Buildings the Landmarks Preservation Commission has designated. <b>Whatever the zoning says, these cannot grow.</b>`,
-    legend(){ return `<div class="key"><h5>Designated</h5><ul>
-      <li><i class="rule" style="border-top-width:3px;border-top-style:dashed;border-top-color:#14120F"></i><span>landmark boundary</span></li></ul></div>`; }
-  },
-  {
-    id:'labels', name:'Avenue names', count:'14 crossings',
-    on:true, open:false, ids:['aveLab'], opacity:1,
-    says:`The only labels on this map. Every name the basemap ships with is switched off.`,
-    legend(){ return ''; }
   }
 ];
 
@@ -318,6 +315,7 @@ function paint(L){
     const colour = L.style==='zoning' ? ['match',['get','zone'],...Object.entries(ZONE).flatMap(([k,v])=>[k,v]),'#B9B1A1']
       : L.style==='capacity' ? ['interpolate',['linear'],['get','unbuilt'],...CAP.flatMap(([v,c])=>[v,c])]
       : L.style==='age'      ? ['interpolate',['linear'],['get','year'],...AGE.flatMap(([v,c])=>[v,c])]
+      : L.style==='landmark' ? ['case',['==',['get','lm'],1],'#14120F','#E9E4D6']
       : 'rgba(0,0,0,0)';
     map.setPaintProperty('lotFill','fill-color',colour);
     map.setPaintProperty('lotFill','fill-opacity',
@@ -403,6 +401,8 @@ map.on('style.load',()=>{
     layout:{'text-field':['get','name'],'text-size':11,'text-offset':[0,-1.5],'text-letter-spacing':.16,
       'text-font':['DIN Pro Medium','Arial Unicode MS Regular'],'text-transform':'uppercase'},
     paint:{'text-color':'#14120F','text-halo-color':'#FCFAF5','text-halo-width':2.2,'text-emissive-strength':1}});
+  /* avenue names are not a layer, they are how the sheet is read. always on. */
+  map.setLayoutProperty('aveLab','visibility','visible');
 
   wire(); LAYERS.forEach(paint); syncRuler();
 });
