@@ -53,17 +53,13 @@ const HUBS = [
 const hubFeet = HUBS.reduce((s, h) => s + (h.b - h.a), 0);
 const inHub   = ft => HUBS.some(h => ft >= h.a && ft <= h.b);
 
-/* ── Judy's observations. Placeholder until she writes them. ──────────── */
-const FIELD_NOTES = [
-  { ft: 1500,  t: 'Placeholder. Where the sidewalk is wide and still not wide enough.' },
-  { ft: 2900,  t: 'Placeholder. Trucks.' },
-  { ft: 3700,  t: 'Placeholder. Where the bus gives up behind traffic at rush hour.' },
-  { ft: 4560,  t: 'Placeholder. Times Square, honestly.' },
-  { ft: 6000,  t: 'Placeholder. The bench you actually sit on.' },
-  { ft: 7700,  t: 'Placeholder. Grand Central.' },
-  { ft: 9200,  t: 'Placeholder. The part nobody walks.' },
-  { ft: 10200, t: 'Placeholder. The last block before the water.' }
-];
+/* ── Judy's observations ──────────────────────────────────────────────────
+   Empty on purpose. The eight entries that used to sit here were written for
+   her and every one of them was painted onto the map with the word
+   "Placeholder" in front of it. Nothing goes back in here that is not in her
+   own words. The layer below reads this array and draws nothing while it is
+   empty, so the chapter degrades to its prose instead of to fake pins. */
+const FIELD_NOTES = [];
 
 /* ── confidence grading ───────────────────────────────────────────────────
    PLUTO carries a base district FAR. It does not carry the rules that
@@ -288,8 +284,8 @@ function paintMap() {
   const show = (id, on) => map.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
   show('hubBand',    chapter.id === 'hubs');
   show('hubLabel',   chapter.id === 'hubs');
-  show('field',      chapter.id === 'field');
-  show('fieldLabel', chapter.id === 'field');
+  show('field',      chapter.id === 'field' && FIELD_NOTES.length > 0);
+  show('fieldLabel', chapter.id === 'field' && FIELD_NOTES.length > 0);
 
   map.setPaintProperty('lots', 'circle-color',
     chapter.id === 'owners'
@@ -451,8 +447,10 @@ const TIMELINE = [
   { year: '1992', text: '42nd Street Now! An interim plan, after the office market collapses.', key: true },
   { year: '1995', text: 'The New Amsterdam is leased to Disney.' },
   { year: '1997', text: 'The New Victory and the restored theatres reopen.' },
-  { year: '2000s', text: 'The towers finally get built, two decades after they were drawn.' },
-  { year: '2026', text: 'Judy lives on it.', key: true }
+  { year: '2000s', text: 'The towers finally get built, two decades after they were drawn.' }
+  /* no entry for her. whether she appears on this chronology, and in what
+     words, is hers to decide. the previous line said 2026; she has lived in
+     Hell's Kitchen since June 2025. */
 ];
 
 const LESSONS = [
