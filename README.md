@@ -5,6 +5,8 @@ A parcel-level reading of a Manhattan crosstown street, river to river. 42nd Str
 Split out of the judyhuynh.ca website redesign on 18 Sep 2026 and made its own project. The website
 redesign now lives in `../judyhuynh-ca`.
 
+See `PLAN.md` for the phased plan, the standing rules and the open decisions.
+
 ## Run it
 
 Every Mapbox page must be served over localhost. Chrome will not let Mapbox start its web worker
