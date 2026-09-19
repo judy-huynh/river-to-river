@@ -45,13 +45,11 @@ page runs standalone with no path rewriting.
 
 ## Findings so far, all from real data
 
-- 82 lots front the street
+- 82 lots front the street *(under revision: the selection rule is being reapplied, see `PLAN.md` Phase 1)*
 - 3.4m sq ft of floor area the zoning data appears to allow and nobody built
 - **only 10% of that survives a check against special districts and landmarks**
 - 88% of the capacity sits outside the four famous hubs
 - the biggest single opening is a city owned lot at 234 West 42nd
-- **67% of the street has no drawn design on it**, counting only actual designs and excluding the
-  1994 vision42 and the never-drawn busway
 
 ## Gotchas that cost hours
 

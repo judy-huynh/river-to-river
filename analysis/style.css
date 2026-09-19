@@ -9,7 +9,7 @@
   --paper:        #F7F4EC;
   --paper-warm:   #EFE9DC;
   --ink:          #100E0C;
-  --ink-60:       rgba(16,14,12,.60);
+  --ink-60:       rgba(16,14,12,.68);   /* was .60, 2.62:1 against this paper */
   --ink-40:       rgba(16,14,12,.40);
   --hair:         rgba(16,14,12,.16);
 
@@ -258,7 +258,7 @@ section{ padding:clamp(38px,7vh,86px) 0 }
 .grades{ display:grid; grid-template-columns:repeat(3,1fr); gap:clamp(12px,2vw,26px); margin-bottom:clamp(26px,4vh,50px) }
 @media (max-width:820px){ .grades{ grid-template-columns:1fr } }
 .grade{ display:flex; flex-direction:column; border-top:1.5px solid var(--ink); padding-top:12px }
-.grade__bar{ height:12px; margin-bottom:14px; background:var(--volt) }
+.grade__bar{ height:12px; flex:0 0 auto; margin-bottom:14px; background:var(--volt) }
 .grade--special .grade__bar{ background:var(--flare) }
 .grade--landmark .grade__bar{ background:var(--magenta) }
 .grade .figure{ font-size:clamp(24px,3vw,38px) }

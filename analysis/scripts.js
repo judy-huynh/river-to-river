@@ -537,7 +537,7 @@ function renderCaveats() {
   const total = grades.reduce((s, x) => s + x.sqft, 0) || 1;
   $('#gradeBars').innerHTML = grades.map(x => `
     <div class="grade grade--${x.g}">
-      <span class="grade__bar" style="flex-basis:${(x.sqft / total * 100).toFixed(1)}%"></span>
+      <span class="grade__bar" style="width:${(x.sqft / total * 100).toFixed(1)}%"></span>
       <output class="figure">${commas(x.sqft)}</output>
       <span class="figure__label">${x.label}, ${x.count} lots</span>
       <p>${x.note}</p>

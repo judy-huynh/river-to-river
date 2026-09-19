@@ -7,7 +7,10 @@
 
 :root{
   --paper:#FCFAF5; --paper-2:#F4F0E6; --paper-3:#E9E4D6;
-  --ink:#14120F; --ink-70:rgba(20,18,15,.72); --ink-50:rgba(20,18,15,.52); --ink-30:rgba(20,18,15,.30);
+  --ink:#14120F; --ink-70:rgba(20,18,15,.72); --ink-50:rgba(20,18,15,.60); --ink-30:rgba(20,18,15,.30);
+  /* 4.53:1 on paper. every uppercase label uses this. --ink-30 (1.98:1) is kept only for
+     switched-off layers and the switch knob, where looking inactive is the point. */
+  --ink-label:rgba(20,18,15,.58);
   --hair:rgba(20,18,15,.13); --hair-2:rgba(20,18,15,.22);
 
   --c5-2:#FFC24D; --c5-25:#FF9E2C; --c5-3:#FF5A36;
@@ -33,26 +36,42 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   text-transform:uppercase; color:var(--ink-50)}
 
 /* ── title block ──────────────────────────────────────────────────────── */
-.head{display:flex; justify-content:space-between; align-items:flex-end; gap:24px; flex-wrap:wrap;
+.head{display:flex; justify-content:space-between; align-items:flex-end; gap:16px 24px; flex-wrap:wrap;
+  max-width:100%; overflow:hidden;
   padding:14px clamp(14px,2vw,24px) 12px; border-bottom:1.5px solid var(--ink); flex:0 0 auto}
 .kicker{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.14em;
   text-transform:uppercase; color:var(--alarm)}
 .head h1{margin:5px 0 0; font-size:clamp(22px,3vw,34px); letter-spacing:-.035em;
   text-transform:uppercase; font-weight:700; line-height:.95}
 .head__meta{display:flex; gap:10px clamp(16px,2.4vw,30px); margin:0; flex-wrap:wrap;
-  justify-content:flex-end; min-width:0}
+  justify-content:flex-end; min-width:0; max-width:100%}
+.head__meta div{min-width:0}
+.head__meta dd{overflow-wrap:anywhere}
 .head__meta div{display:flex; flex-direction:column; gap:3px}
 .head__meta dt{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
-  text-transform:uppercase; color:var(--ink-30); white-space:nowrap}
+  text-transform:uppercase; color:var(--ink-label); white-space:nowrap}
 .head__meta dd{margin:0; font-family:var(--mono); font-size:var(--t-small); color:var(--ink-70)}
 
 /* ── sheet ────────────────────────────────────────────────────────────── */
 .sheet{flex:1; display:grid; grid-template-columns:var(--rail) minmax(0,1fr); min-height:0}
-@media (max-width:900px){ .sheet{grid-template-columns:1fr; overflow:auto} .layers{max-height:none} }
+/* grid items default to min-width:auto, so the map canvas was forcing this column
+   wider than the viewport and dragging the ruler off the right edge with it */
+.sheet > *{min-width:0}
+@media (max-width:900px){
+  body{overflow:auto}
+  .sheet{grid-template-columns:1fr; overflow:visible}
+  .layers{overflow:visible; border-right:0; border-bottom:1.5px solid var(--ink); order:2}
+  #layerList{overflow:visible}
+  .panel{max-height:none; position:sticky; bottom:0; z-index:4}
+  .draw{order:1; height:62vh; min-height:320px}
+  .ruler{height:52px}
+}
 
 /* ── layer stack ──────────────────────────────────────────────────────── */
-.layers{border-right:1.5px solid var(--ink); overflow-y:auto; overscroll-behavior:contain;
-  background:var(--paper); scrollbar-gutter:stable}
+.layers{border-right:1.5px solid var(--ink); background:var(--paper);
+  display:flex; flex-direction:column; min-height:0; overflow:hidden}
+#layerList{flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain;
+  scrollbar-gutter:stable}
 .layers::-webkit-scrollbar{width:9px}
 .layers::-webkit-scrollbar-thumb{background:var(--hair-2)}
 
@@ -60,7 +79,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   padding:12px 16px; border-bottom:1px solid var(--hair); position:sticky; top:0;
   background:var(--paper); z-index:3}
 .layers__head span{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
-  text-transform:uppercase; color:var(--ink-30)}
+  text-transform:uppercase; color:var(--ink-label)}
 .mini{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.12em; text-transform:uppercase;
   background:none; border:1px solid var(--hair); color:var(--ink-50); padding:6px 10px;
   cursor:pointer; white-space:nowrap}
@@ -75,7 +94,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .layer__count{display:block; font-family:var(--mono); font-size:var(--t-micro);
   letter-spacing:var(--track); color:var(--ink-50); margin-top:4px; line-height:1.4;
   overflow-wrap:anywhere}
-.layer__caret{font-size:10px; color:var(--ink-30); transition:transform .18s;
+.layer__caret{font-size:10px; color:var(--ink-label); transition:transform .18s;
   justify-self:end; margin-top:5px}
 .layer[data-open="true"] .layer__caret{transform:rotate(90deg)}
 .layer[data-on="false"] .layer__name,
@@ -98,7 +117,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 /* controls inside a layer */
 .ctl{display:flex; flex-direction:column; gap:6px; margin:0 0 14px}
 .ctl > span{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
-  text-transform:uppercase; color:var(--ink-30)}
+  text-transform:uppercase; color:var(--ink-label)}
 .ctl select{font:inherit; font-size:var(--t-body); padding:8px 10px; border:1px solid var(--hair-2);
   background:var(--paper); color:var(--ink); border-radius:0; width:100%}
 .ctl select:focus{outline:2px solid var(--ink); outline-offset:-2px}
@@ -144,7 +163,8 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .flag b{display:block; color:var(--ink); font-weight:600; margin-bottom:2px}
 
 /* ── selected feature ─────────────────────────────────────────────────── */
-.panel{border-top:1.5px solid var(--ink); padding:15px 16px 18px; background:var(--paper-2)}
+.panel{border-top:1.5px solid var(--ink); padding:15px 16px 18px; background:var(--paper-2);
+  flex:0 0 auto; max-height:46%; overflow-y:auto; overscroll-behavior:contain}
 .panel h3{margin:7px 0 0; font-size:17px; letter-spacing:-.02em; line-height:1.2}
 .zonechip{display:inline-block; font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.12em;
   padding:4px 8px; margin-top:9px; color:#fff}
@@ -153,7 +173,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   border-top:1px solid var(--hair); align-items:baseline}
 .panel dl div > *{min-width:0}
 .panel dt{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.13em;
-  text-transform:uppercase; color:var(--ink-30)}
+  text-transform:uppercase; color:var(--ink-label)}
 .panel dd{margin:0; font-family:var(--mono); font-size:var(--t-small); text-align:right;
   color:var(--ink-70); overflow-wrap:anywhere; font-variant-numeric:tabular-nums}
 .gauge{height:10px; border:1px solid var(--ink); margin-top:13px; position:relative;
@@ -162,8 +182,9 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .gauge__lab{display:flex; justify-content:space-between; margin-top:6px}
 
 /* ── drawing ──────────────────────────────────────────────────────────── */
-.draw{display:flex; flex-direction:column; min-height:0}
-#map{flex:1; min-height:320px; background:var(--paper-2)}
+.draw{display:flex; flex-direction:column; min-height:0; min-width:0}
+#map{flex:1; min-height:320px; min-width:0; background:var(--paper-2)}
+.ruler{min-width:0; overflow:hidden}
 
 .ruler{position:relative; height:50px; border-top:1.5px solid var(--ink); background:var(--paper-2);
   cursor:ew-resize; user-select:none; touch-action:none; flex:0 0 auto}
@@ -173,7 +194,8 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .ruler__foot{display:flex; justify-content:space-between; align-items:baseline; gap:8px 16px;
   padding:8px 16px 10px; border-top:1px solid var(--hair); flex:0 0 auto; flex-wrap:wrap}
 .ruler__foot > *{min-width:0}
-.ruler__foot > :nth-child(2){flex:1 1 auto; text-align:center}
+.ruler__foot > :nth-child(2){flex:1 1 100%; text-align:center; order:3}
+@media (min-width:620px){ .ruler__foot > :nth-child(2){flex:1 1 auto; order:0} }
 .ruler{height:58px}
 
 /* ── tooltip ──────────────────────────────────────────────────────────── */
@@ -188,4 +210,17 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 
 .mapboxgl-ctrl-group{border-radius:0 !important; border:1.5px solid var(--ink) !important; box-shadow:none !important}
 .mapboxgl-ctrl-attrib{font-family:var(--mono); font-size:9px}
+/* ── narrow screens ───────────────────────────────────────────────────────
+   a right-aligned flex row overflows to the right when it wraps, it does not
+   reflow left, so below 620px everything in the title block and under the ruler
+   aligns left and is allowed to wrap. */
+@media (max-width:620px){
+  .head{padding-left:14px; padding-right:14px}
+  .head__meta{justify-content:flex-start; width:100%; gap:10px 18px}
+  .head__meta dd{font-size:10.5px}
+  .ruler__foot{padding-left:14px; padding-right:14px}
+  .ruler__foot > *{text-align:left !important; white-space:normal}
+  .ruler__foot > :nth-child(2){flex:1 1 100%}
+}
+
 @media (prefers-reduced-motion:reduce){ *{transition:none !important} }

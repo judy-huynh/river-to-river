@@ -51,14 +51,27 @@ Each phase ends in something a stranger could be shown.
 Phases 0 to 4 are bounded and sized. Phases 5 and 6 are open ended and gated on fieldwork and on
 decisions the author has not made yet.
 
-## Known open decisions
+## Decisions, settled 19 Sep 2026
 
-- **Extent.** The project measures 12th Avenue to 1st Avenue, 10,411 ft. Pier 83 sits at the foot of
-  West 42nd and the 42nd Street Ferry once ran from East 42nd to Williamsburg. Whether the extent
-  should become pier to pier is open, and changing it re-bases every measurement.
-- **Grand Central Terminal.** Whether it belongs in the lot set, and how its paper floor area is
-  graded. It swings the headline finding by 33 points.
-- **The chronology.** Whether the author appears on it, and in what words.
+- **Extent is pier to pier.** Not 12th Avenue to 1st Avenue. Pier 83 stands at the foot of West
+  42nd Street, and the 42nd Street Ferry once ran from East 42nd Street across to Williamsburg, so
+  the street was built river to river and boat to boat. Changing the extent re-bases every
+  measurement in the repo.
+- **The lot rule is the address.** If a lot is addressed on 42nd Street it is in the set. Grand
+  Central Terminal, 89 East 42nd Street, is in. Lots addressed on 41st and 43rd are out. The rule
+  applies in both directions with no exceptions, including when it weakens a finding.
+- **The instrument diagnoses and then prices one trade.** It does not propose a design. It ends on
+  a single quantified claim: this much capacity exists, this is what it is worth, this is how much
+  public space it could buy. The reader draws the conclusion.
+- **Read only.** Nobody else writes into it. The observation layer is built as a container so that
+  contributions could be added later without a rewrite.
+- **Text contrast may be corrected without asking.** Scoped to text alphas. The data palette is not
+  to be changed.
+
+## Still open
+
+- **The chronology.** Whether the author appears on it, and in what words. Nothing about her is
+  republished there until she says.
 
 ## Where the numbers live
 

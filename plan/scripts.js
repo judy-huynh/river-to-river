@@ -82,10 +82,48 @@ const STREET_BOUNDS=LINE.reduce((b,[,lng,lat])=>b.extend([lng,lat]),
   new mapboxgl.LngLatBounds(at(0),at(0)));
 const FIT={bearing:BEARING, padding:{top:48,bottom:48,left:28,right:28}, maxZoom:15.4};
 
-const map=new mapboxgl.Map({container:'map', style:'mapbox://styles/mapbox/standard',
-  bounds:STREET_BOUNDS, fitBoundsOptions:{...FIT, duration:0},
-  pitch:0, antialias:true});
+/* If WebGL is unavailable, the token is rejected or Mapbox fails to construct, the
+   old code threw here and killed the rest of this IIFE, so the layer panel, the
+   legends, the ruler and every number silently never rendered. All of that data is
+   local and does not need the map, so fall back to a stub and keep the sheet
+   readable instead of showing a page of empty headings. */
+let MAP_OK=true, map;
+try{
+  map=new mapboxgl.Map({container:'map', style:'mapbox://styles/mapbox/standard',
+    bounds:STREET_BOUNDS, fitBoundsOptions:{...FIT, duration:0},
+    pitch:0, antialias:true});
+}catch(err){
+  MAP_OK=false;
+  const noop=()=>{}, nul=()=>null;
+  map={on:noop, addLayer:noop, addSource:noop, addControl:noop, setPaintProperty:noop,
+    setLayoutProperty:noop, setFeatureState:noop, setConfigProperty:noop, getLayer:nul,
+    getCanvas:()=>({style:{}}), easeTo:noop, getBounds:()=>({getWest:()=>at(0)[0],
+      getNorth:()=>at(0)[1], getEast:()=>at(LEN)[0], getSouth:()=>at(LEN)[1]}),
+    touchZoomRotate:{disableRotation:noop}, dragRotate:{disable:noop},
+    resize:noop, fitBounds:noop};
+  const host=document.getElementById('map');
+  if(host) host.innerHTML='<div style="padding:40px 32px;max-width:52ch;'
+    + 'font:400 14px/1.6 -apple-system,Helvetica,sans-serif;color:rgba(20,18,15,.72)">'
+    + '<div style="font:500 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.1em;'
+    + 'text-transform:uppercase;color:#FF5A36">The drawing did not load</div>'
+    + '<p>This browser could not start the map. Everything else on this sheet is '
+    + 'measured from local data and is still correct: the layer list, the counts, the '
+    + 'legends and the ruler all work.</p>'
+    + '<p style="font-size:13px">Most often this is WebGL being disabled or unavailable.</p></div>';
+  console.warn('map failed to construct:', err && err.message);
+}
 map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
+
+/* the constructor measures the container before the mobile media query has laid it
+   out, so the opening fit was computed against the wrong box and the street ran off
+   the right edge on a phone. re-fit once, on load, and again on resize until the
+   reader touches the map. */
+let userMoved=false;
+map.on('dragstart',()=>{userMoved=true;}); map.on('zoomstart',()=>{userMoved=true;});
+const refit=()=>{ if(userMoved||!MAP_OK) return;
+  try{ map.resize(); map.fitBounds(STREET_BOUNDS,{...FIT,duration:0}); }catch(e){} };
+map.on('load',refit);
+let _fitT; addEventListener('resize',()=>{clearTimeout(_fitT); _fitT=setTimeout(refit,160);});
 map.dragRotate.disable(); map.touchZoomRotate.disableRotation();
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -162,7 +200,7 @@ const LAYERS=[
         return `<div class="key"><h5>Floor area allowed and never built</h5>
           <p>The gap between what the rules permit and what is standing.</p><ul>${
           CAP.map(([v,c],i)=>`<li><i style="background:${c}"></i><span>${i===0?'nothing spare':commas(v)+'+ sq ft'}</span></li>`).join('')}</ul></div>
-          <p class="flag"><b>Treat this as a screen, not a promise</b>Most of these lots sit in a special district where the base rule is not the rule that governs. Nine are landmarked and cannot be built on at all.</p>`;
+          <p class="flag"><b>Treat this as a screen, not a promise</b>Most of these lots sit in a special district where the base rule is not the rule that governs. ${LOTS.features.filter(f=>f.properties.lm===1).length} are landmarked and cannot be built on at all.</p>`;
       }
       if(this.style==='age'){
         return `<div class="key"><h5>Year the building went up</h5>
@@ -353,6 +391,8 @@ function wire(){
 
 function showLot(p){
   const panel=$('#readout'); panel.hidden=false;
+  /* the rail is taller than the window; without this the readout updates out of sight */
+  panel.scrollTop=0; panel.scrollIntoView({block:'nearest'});
   const used=p.allowed>0?Math.min(100,p.built/p.allowed*100):0;
   panel.innerHTML=
     `<span class="micro">${p.side==='n'?'North side':'South side'} &middot; ${p.year||'year unknown'}</span>`
@@ -377,21 +417,35 @@ function buildRuler(){
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.innerHTML='';
   const add=(n,a)=>{const e=document.createElementNS(NS,n); for(const k in a) e.setAttribute(k,a[k]); svg.appendChild(e); return e;};
   const MONO='ui-monospace,SFMono-Regular,Menlo,monospace';
-  /* mono advance is ~.6em, close enough to place labels without measuring each one */
-  const wide=(txt,px)=>txt.length*px*.62;
+  /* measure for real. an advance-width estimate was close enough on a wide screen
+     and let "GRAND CENTRAL" run off the right edge on a phone. */
+  const label=(txt,px,tracking)=>{
+    const t=document.createElementNS(NS,'text');
+    t.setAttribute('font-family',MONO); t.setAttribute('font-size',px);
+    if(tracking) t.setAttribute('letter-spacing',tracking);
+    t.textContent=txt; svg.appendChild(t);
+    let w=0; try{ w=t.getComputedTextLength(); }catch(e){ w=txt.length*px*.66; }
+    if(!w) w=txt.length*px*.66;
+    return {node:t, w};
+  };
 
   /* the four hubs, shaded. label only where it genuinely fits inside its own band. */
+  /* Below ~620px the four hub bands are each a few pixels wide and their names
+     cannot be placed without crowding or clipping. Draw the shading, drop the
+     names: the bands still read as the four busy stretches. */
+  const HUB_LABELS = W >= 620;
   let hubRight=-1e9;
   HUBS.forEach(([a,b,name])=>{
     const x=X(a), w=X(b)-X(a);
     add('rect',{x,y:0,width:w,height:H,fill:'#14120F','fill-opacity':.06});
-    const label=name.toUpperCase(), px=10, half=wide(label,px)/2;
-    const cx=Math.min(Math.max(x+w/2,half+3),W-half-3);
-    if(cx-half > hubRight+8){
-      add('text',{x:cx,y:14,'text-anchor':'middle','font-family':MONO,'font-size':px,
-        'letter-spacing':.4,fill:'rgba(20,18,15,.5)'}).textContent=label;
+    if(!HUB_LABELS) return;
+    const {node,w:tw}=label(name.toUpperCase(),10,.4);
+    const half=tw/2, cx=Math.min(Math.max(x+w/2,half+3),W-half-3);
+    if(tw<=W-6 && cx-half > hubRight+8){
+      node.setAttribute('x',cx); node.setAttribute('y',14);
+      node.setAttribute('text-anchor','middle'); node.setAttribute('fill','rgba(20,18,15,.5)');
       hubRight=cx+half;
-    }
+    } else node.remove();
   });
 
   /* trees along the bottom, and the stretches with none */
@@ -406,16 +460,25 @@ function buildRuler(){
   AVES.forEach(([ft,name])=>{
     const x=X(ft);
     add('line',{x1:x,x2:x,y1:21,y2:33,stroke:'#14120F','stroke-opacity':.35,'stroke-width':.8});
-    const half=wide(name,PX)/2;
+    const {node,w:tw}=label(name,PX);
+    const half=tw/2;
     let tx=x, anchor='middle';
     if(x-half<2){ tx=2; anchor='start'; }
     else if(x+half>W-2){ tx=W-2; anchor='end'; }
-    const left = anchor==='start' ? tx : anchor==='end' ? tx-half*2 : x-half;
+    const left = anchor==='start' ? tx : anchor==='end' ? tx-tw : x-half;
     if(left > lastRight+7){
-      add('text',{x:tx,y:46,'text-anchor':anchor,'font-family':MONO,'font-size':PX,
-        fill:'rgba(20,18,15,.58)'}).textContent=name;
-      lastRight=left+half*2;
-    }
+      node.setAttribute('x',tx); node.setAttribute('y',46);
+      node.setAttribute('text-anchor',anchor); node.setAttribute('fill','rgba(20,18,15,.58)');
+      lastRight=left+tw;
+    } else node.remove();
+  });
+  /* Final guarantee. Font metrics vary by machine, so rather than trust any
+     placement calculation, measure what actually got drawn and drop anything that
+     sticks out of the box. A missing label is fine; a label sliced in half by the
+     edge of the ruler looks broken. */
+  [...svg.querySelectorAll('text')].forEach(t=>{
+    let bb; try{ bb=t.getBBox(); }catch(e){ return; }
+    if(bb.width && (bb.x < 1 || bb.x + bb.width > W - 1)) t.remove();
   });
 }
 
