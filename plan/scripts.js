@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   42nd STREET — PLAN SHEET
+   42nd STREET · PLAN SHEET
    Sources, all baked into data.js so the page calls Mapbox and nothing else:
      LINE42     centreline, used only as the measuring axis
      LOTS_POLY  NYC MapPLUTO tax lots, real boundaries
@@ -37,8 +37,6 @@ function at(ft){
   }
   return [LINE.at(-1)[1], LINE.at(-1)[2]];
 }
-const AVES=[[0,'12th'],[903,'11th'],[1890,'10th'],[2699,'9th'],[3473,'8th'],[4542,'7th'],[5480,'6th'],
-  [6417,'5th'],[6932,'Mad'],[7520,'Park'],[8021,'Lex'],[8940,'3rd'],[9730,'2nd'],[10411,'1st']];
 const HUBS=[[2699,3473,'Port Authority'],[4380,4760,'Times Sq'],[5480,6417,'Bryant Park'],[7520,8021,'Grand Central']];
 
 /* ── palettes ─────────────────────────────────────────────────────────── */
@@ -87,6 +85,10 @@ const ROAD_STATS=(()=>{
     total+=l; wSum+=p.w*l; if(p.lanes>=4&&p.park>=2) fourPlusTwo+=l;});
   return {total, share:pct(fourPlusTwo,total), avgW:Math.round(wSum/total)};
 })();
+
+/* ── stationing ───────────────────────────────────────────────────────── */
+/* the lookups live in station.js so node can load and test them without a page */
+const {AVES, TREE_REACH, REACH, LOT_BAND, LOT_BY_BBL, project, stationProfile}=window.STATION;
 
 /* ── map ──────────────────────────────────────────────────────────────── */
 mapboxgl.accessToken=TOKEN;
@@ -358,8 +360,9 @@ map.on('style.load',()=>{
     paint:{'fill-color':'#B9B1A1','fill-opacity':.58,'fill-emissive-strength':1}});
   map.addLayer({id:'lotLine',type:'line',source:'lots',slot:'middle',
     paint:{'line-color':'#14120F','line-opacity':.8,'line-emissive-strength':1,
-      'line-width':['case',['boolean',['feature-state','hover'],false],2.4,
-        ['interpolate',['linear'],['zoom'],13,.35,17,1.1]]}});
+      'line-width':['interpolate',['linear'],['zoom'],
+        13,['case',['boolean',['feature-state','hover'],false],2.4,.35],
+        17,['case',['boolean',['feature-state','hover'],false],2.4,1.1]]}});
   map.addLayer({id:'lmHatch',type:'line',source:'lots',slot:'middle',filter:['==',['get','lm'],1],
     layout:{visibility:'none'},
     paint:{'line-color':'#14120F','line-width':3,'line-opacity':.9,'line-dasharray':[1,1.4],'line-emissive-strength':1}});
@@ -424,7 +427,14 @@ function wire(){
     if(hoverLot!==null) map.setFeatureState({source:'lots',id:hoverLot},{hover:false});
     hoverLot=null; map.getCanvas().style.cursor='';
   });
-  map.on('click','lotFill',e=>showLot(e.features[0].properties));
+  /* any spot on the map is a station. a lot under the click opens inside the same card. */
+  map.on('click',e=>{
+    const hit=map.getLayer('lotFill')?map.queryRenderedFeatures(e.point,{layers:['lotFill']}):[];
+    const q=project(e.lngLat.lng,e.lngLat.lat);
+    /* a click past the deepest drawn lot is off the sheet, not a place on the street */
+    if(!hit.length&&q.off>REACH) return;
+    select({st:q.ft, lot:hit.length?String(hit[0].properties.bbl):null});
+  });
   map.on('mousemove','treeDots',e=>{const p=e.features[0].properties;
     showTip(e,`<b>${p.common}</b><em>${p.latin||''}</em><span>${p.dbh} in trunk &middot; ${p.cond}</span>`);});
   map.on('mouseleave','treeDots',()=>tip.dataset.show='false');
@@ -441,25 +451,146 @@ function wire(){
   map.on('move',syncRuler);
 }
 
-function showLot(p){
-  const panel=$('#readout'); panel.hidden=false;
-  /* the rail is taller than the window; without this the readout updates out of sight */
-  panel.scrollTop=0; panel.scrollIntoView({block:'nearest'});
+/* ── the station card ─────────────────────────────────────────────────── */
+/* one selection, one place. st is feet from the west end, lot is a bbl or null. */
+const SEL={st:null, lot:null};
+const AVE_FULL={Mad:'Madison',Lex:'Lexington'};
+const aveShort=n=>AVE_FULL[n]||n;
+const aveName=n=>aveShort(n)+' Avenue';
+const ON_42=/\b42(nd)?\b/i;
+const feet=v=>v==null?'not measured here':v+' ft';
+/* source, date and caveat travel with the figures, whichever layers are on */
+/* the rendered file on GitHub. a relative .md link is not served the same way by every host. */
+const METHOD='https://github.com/judy-huynh/river-to-river/blob/main/METHODOLOGY.md';
+const NOTE_WALK=`Walk widths are gross concrete. Sheds, stairs, newsstands and kiosks are not deducted, `
+  +`so each width is an upper bound, not a clear width. Sidewalks: NYC planimetric sidewalk polygons `
+  +`via Sidewalk Widths NYC, source file dated 20 Apr 2020. Roadway: NYC CSCL street centerline. `
+  +`Trees: NYC Parks Forestry Tree Points.`;
+const NOTE_LOT=`Unbuilt floor area is lot area &times; the base floor area ratio of the zoning district, minus `
+  +`floor area built. Special district rules are not applied, and a landmarked lot may not be able `
+  +`to use it. Lots: NYC MapPLUTO.`;
+const note=t=>`<p class="note">${t} <a href="${METHOD}">Method</a></p>`;
+const where=P=>P.west.ft===P.ft?`At ${aveName(P.west.name)}`
+  : P.east.ft===P.ft?`At ${aveName(P.east.name)}`
+  : `Between ${aveShort(P.west.name)} and ${aveName(P.east.name)}`;
+
+/* a slider must always carry a value: with no station picked it reports the middle of the view */
+function restSlider(){
+  const r=$('#ruler');
+  r.setAttribute('aria-valuenow',Math.round((VIEW[0]+VIEW[1])/2));
+  r.setAttribute('aria-valuetext','No station picked');
+}
+let pin=null;
+function select(next,boot){
+  Object.assign(SEL,next);
+  if(SEL.st!=null) SEL.st=Math.max(0,Math.min(LEN,Math.round(SEL.st)));
+  if(SEL.lot&&!LOT_BY_BBL.has(SEL.lot)) SEL.lot=null;
+  const open=SEL.st!=null;
+  const panel=$('#readout'), mark=$('#rulerMark'), ruler=$('#ruler');
+  panel.hidden=!open; mark.hidden=!open;
+  if(open){
+    const P=stationProfile(SEL.st);
+    mark.style.left=(SEL.st/LEN*100)+'%';
+    ruler.setAttribute('aria-valuenow',SEL.st);
+    ruler.setAttribute('aria-valuetext',`${commas(SEL.st)} ft from the west end. ${where(P)}`);
+    const lot=SEL.lot&&LOT_BY_BBL.get(SEL.lot);
+    /* one short line is announced, not the whole card. walking the ruler already speaks
+       through the slider, so it stays quiet then. */
+    $('#said').textContent=document.activeElement===ruler?''
+      : lot?`${lot.addr||'Unnamed lot'}. ${lot.owner||'owner not recorded'}.`
+      : `Station ${commas(SEL.st)} ft. ${where(P)}.`;
+    panel.innerHTML=lot?lotHTML(lot):stationHTML(P);
+    /* the rail is taller than the window, and stacked the card sits below the ruler:
+       either way it must be brought into view or it updates out of sight */
+    panel.scrollTop=0;
+    /* not on the boot call: the layout has not settled and the page lands past the card */
+    if(!boot) panel.scrollIntoView({block:'nearest'});
+    if(MAP_OK){
+      if(!pin) pin=new mapboxgl.Marker({element:el('div','pin'),anchor:'center'});
+      pin.setLngLat(at(SEL.st)).addTo(map);
+    }
+  } else {
+    panel.innerHTML=''; $('#said').textContent=''; restSlider();
+    if(pin) pin.remove();
+  }
+  /* the view is a link: ?st=4000 opens this card, &lot= opens the lot inside it */
+  const q=new URLSearchParams(location.search);
+  open?q.set('st',SEL.st):q.delete('st');
+  SEL.lot&&open?q.set('lot',SEL.lot):q.delete('lot');
+  const qs=q.toString();
+  try{ history.replaceState(null,'',location.pathname+(qs?'?'+qs:'')+location.hash); }catch(e){}
+}
+
+function stationHTML(P){
+  const parts=[['n',P.north,'North walk'],['r',P.road&&P.road.w,'Roadway'],['s',P.south,'South walk']];
+  const whole=parts.every(x=>x[1]!=null);
+  const said=parts.map(([,v,t])=>`${t} ${feet(v)}`).join(', ');
+  /* flags come from the record: the lot's own address and whether it is the largest listed here */
+  const tags=p=>{const t=[];
+    if(P.biggest&&p.bbl===P.biggest.bbl) t.push('largest lot here');
+    if(p.addr&&!ON_42.test(p.addr)) t.push('not a 42 Street address');
+    return t.length?`<span class="num">${t.join(' &middot; ')}</span>`:'';};
+  const none=parts.every(x=>x[1]==null);
+  const lotList=(side,list)=>`<h4 class="micro">${side} side &middot; ${list.length} lot${list.length===1?'':'s'}</h4>`
+    +(list.length?`<ul class="lotrows">${list.map(p=>
+      `<li><button type="button" data-lot="${p.bbl}">`
+      +`<b>${p.addr||'Unnamed lot'}</b><span>${p.owner||'owner not recorded'}</span>`
+      +`<span class="num">${commas(p.unbuilt)} sq ft unbuilt${p.lm===1?' &middot; landmark':''}</span>`
+      +tags(p)
+      +`</button></li>`).join('')}</ul>`
+    :`<p class="none">No lot in the set at this station.</p>`);
+  return `<div class="card__top"><span class="micro">Station</span>`
+    +`<button class="mini" type="button" data-close>close</button></div>`
+   +`<h3>${where(P)}</h3>`
+   +`<span class="micro">${commas(P.ft)} ft from the west end`
+   +(P.west.ft!==P.ft&&P.east.ft!==P.ft?` &middot; ${commas(P.ft-P.west.ft)} ft past ${aveShort(P.west.name)}, ${commas(P.east.ft-P.ft)} ft to ${aveShort(P.east.name)}`:'')+`</span>`
+   /* flex-grow is the width in feet, so the bar is to scale by construction */
+   +`<div class="xsec${none?' xsec--none':''}" role="img" aria-label="Cross-section. ${said}.">${parts.map(([k,v])=>
+      v!=null?`<i class="xsec__${k}" style="flex:${v} 1 0"></i>`:`<i class="xsec__gap"></i>`).join('')}</div>`
+   +`<div class="xsec__lab"><span class="micro">north</span>`
+   +`<span class="micro">${whole?'drawn to scale':none?'not measured here':'measured parts to scale'}</span><span class="micro">south</span></div>`
+   +`<dl>`
+   +`<div><dt><i class="key-n"></i>North walk</dt><dd>${feet(P.north)}</dd></div>`
+   +`<div><dt><i class="key-r"></i>Roadway</dt><dd>${P.road?`${P.road.w} ft &middot; ${P.road.lanes} moving + ${P.road.park} parked`:feet(null)}</dd></div>`
+   +`<div><dt><i class="key-n"></i>South walk</dt><dd>${feet(P.south)}</dd></div>`
+   +`<div><dt>Trees within ${TREE_REACH} ft</dt><dd>${P.trees.all}${P.trees.all?`<span>${P.trees.n} north, ${P.trees.s} south</span>`:''}</dd></div>`
+   +`</dl>`+note(NOTE_WALK)
+   +lotList('North',P.lots.n)+lotList('South',P.lots.s)
+   +(P.lots.n.length+P.lots.s.length?note(NOTE_LOT):'');
+}
+
+function lotHTML(p){
   const used=p.allowed>0?Math.min(100,p.built/p.allowed*100):0;
-  panel.innerHTML=
-    `<span class="micro">${p.side==='n'?'North side':'South side'} &middot; ${p.year||'year unknown'}</span>`
+  return `<div class="card__top"><button class="mini" type="button" data-back>&larr; station ${commas(SEL.st)} ft</button>`
+    +`<button class="mini" type="button" data-close>close</button></div>`
+   +`<span class="micro">${p.side==='n'?'North side':'South side'} &middot; ${p.year||'year unknown'}</span>`
    +`<h3>${p.addr||'Unnamed lot'}</h3>`
    +`<span class="zonechip" style="background:${ZONE[p.zone]||'#B9B1A1'}">${p.zone||'no district'}</span>`
    +`<div class="gauge"><i style="width:${used}%"></i></div>`
    +`<div class="gauge__lab"><span class="micro">built ${p.built}&times;</span><span class="micro">allowed ${p.allowed}&times;</span></div>`
    +`<dl>`
-   +`<div><dt>Owner</dt><dd>${p.owner||'—'}</dd></div>`
+   +`<div><dt>Owner</dt><dd>${p.owner||'not recorded'}</dd></div>`
    +`<div><dt>Lot area</dt><dd>${commas(p.lotarea)} sq ft</dd></div>`
-   +`<div><dt>Floors</dt><dd>${p.floors||'—'}</dd></div>`
-   +`<div><dt>Room left</dt><dd>${commas(p.unbuilt)} sq ft</dd></div>`
+   +`<div><dt>Floors</dt><dd>${p.floors||'not recorded'}</dd></div>`
+   +`<div><dt>Unbuilt floor area</dt><dd>${commas(p.unbuilt)} sq ft</dd></div>`
    +(p.lm===1?`<div><dt>Landmark</dt><dd>protected</dd></div>`:'')
-   +`</dl>`;
+   +`</dl>`+note(NOTE_LOT);
 }
+
+/* one delegated handler for the whole card, bound once */
+$('#readout').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  const from=SEL.lot;
+  if(b.dataset.lot) select({lot:b.dataset.lot});
+  else if('back' in b.dataset) select({lot:null});
+  else if('close' in b.dataset){ closeCard(); return; }
+  /* the pressed button is gone after a re-render: back returns to the lot's own row,
+     anything else to the first button left */
+  const f=('back' in b.dataset&&from&&$(`#readout [data-lot="${from}"]`))||$('#readout button');
+  if(f) f.focus();
+});
+function closeCard(){ select({st:null,lot:null}); $('#ruler').focus(); }
+$('#readout').addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); closeCard(); } });
 
 /* ── ruler ────────────────────────────────────────────────────────────── */
 const NS='http://www.w3.org/2000/svg';
@@ -544,6 +675,8 @@ function syncRuler(){
     return best;};
   const a=near(b.getWest(),b.getNorth()), c=near(b.getEast(),b.getSouth());
   const lo=Math.max(0,Math.min(a,c)), hi=Math.min(LEN,Math.max(a,c));
+  VIEW=[lo,hi];
+  if(SEL.st==null) restSlider();
   const win=$('#rulerWin');
   win.style.left=(lo/LEN*100)+'%';
   win.style.width=Math.max(.5,(hi-lo)/LEN*100)+'%';
@@ -551,16 +684,30 @@ function syncRuler(){
   $('#rulerMid').textContent = mid<120?'at the Hudson' : mid>LEN-120?'at the East River'
     : `near ${ave[1]} Avenue · ${commas(mid)} ft from the Hudson`;
 }
+let VIEW=[0,LEN];
 (function drag(){
   const r=$('#ruler'); let down=false,cap=false,sx=0;
-  const go=e=>{const box=r.getBoundingClientRect();
-    const ft=Math.max(0,Math.min(LEN,(e.clientX-box.left)/box.width*LEN));
-    map.easeTo({center:at(ft),duration:down?0:600,bearing:BEARING});};
+  const ftAt=e=>{const box=r.getBoundingClientRect();
+    return Math.max(0,Math.min(LEN,(e.clientX-box.left)/box.width*LEN));};
+  const go=e=>map.easeTo({center:at(ftAt(e)),duration:down&&cap?0:600,bearing:BEARING});
   r.addEventListener('pointerdown',e=>{down=true;cap=false;sx=e.clientX;go(e);});
   r.addEventListener('pointermove',e=>{ if(!down) return;
     if(!cap&&Math.abs(e.clientX-sx)>4){cap=true; try{r.setPointerCapture(e.pointerId);}catch(err){}}
     if(cap) go(e);});
+  /* a press that never became a drag is a pick: stand at that station */
+  r.addEventListener('pointerup',e=>{ if(down&&!cap) select({st:ftAt(e),lot:null}); });
   addEventListener('pointerup',()=>down=false);
+  /* arrows walk the street 100 ft at a time and the card follows */
+  const STEP=100;
+  r.addEventListener('keydown',e=>{
+    const from=SEL.st!=null?SEL.st:Math.round((VIEW[0]+VIEW[1])/2/STEP)*STEP;
+    const to={ArrowRight:from+STEP,ArrowUp:from+STEP,ArrowLeft:from-STEP,ArrowDown:from-STEP,
+      Home:0,End:LEN,Enter:from,' ':from}[e.key];
+    if(e.key==='Escape'&&SEL.st!=null){ select({st:null,lot:null}); return; }
+    if(to===undefined) return;
+    e.preventDefault(); select({st:to,lot:null});
+    if(SEL.st<VIEW[0]||SEL.st>VIEW[1]) map.easeTo({center:at(SEL.st),duration:300,bearing:BEARING});
+  });
 })();
 
 /* ── boot ─────────────────────────────────────────────────────────────── */
@@ -577,6 +724,21 @@ function syncRuler(){
 })();
 $('#metaLots').textContent=LOTS.features.length+' lots';
 $('#metaTrees').textContent=TREES.length+' trees';
+$('#ruler').setAttribute('aria-valuemax',LEN);
 buildPanel(); buildRuler();
+(()=>{ /* ?st=4000 opens the card at 4,000 ft. ?lot=<bbl> alone stands at that lot. */
+  const q=new URLSearchParams(location.search), lot=q.get('lot');
+  const p=lot&&LOT_BY_BBL.get(lot), k=p&&LOT_BAND.get(p.bbl);
+  let st=q.has('st')?parseFloat(q.get('st')):NaN;
+  /* a hand-edited link can name a lot and a station that are nowhere near each other */
+  if(p&&!(st>=k.a&&st<=k.b)) st=p.ft>=k.a&&p.ft<=k.b?p.ft:(k.a+k.b)/2;
+  if(Number.isFinite(st)) select({st, lot:p?lot:null},true); else restSlider();
+  /* stacked, the card sits under the map: once the layout has settled, put the ruler at the
+     top so the mark and the card share the first screen */
+  if(Number.isFinite(st)&&matchMedia('(max-width:900px)').matches){
+    const go=()=>requestAnimationFrame(()=>$('#ruler').scrollIntoView({block:'start'}));
+    if(document.readyState==='complete') go(); else addEventListener('load',go,{once:true});
+  }
+})();
 map.on('error',e=>console.warn('map:',e&&e.error&&e.error.message));
 })();

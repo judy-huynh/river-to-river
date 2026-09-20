@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════
-   42nd STREET — PLAN SHEET
+   42nd STREET · PLAN SHEET
    A drawing sheet with a layer stack. Every legend lives inside the layer
    it belongs to, and every legend is written for someone who has never
    read a zoning map.
@@ -60,16 +60,6 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 /* grid items default to min-width:auto, so the map canvas was forcing this column
    wider than the viewport and dragging the ruler off the right edge with it */
 .sheet > *{min-width:0}
-@media (max-width:900px){
-  body{overflow:auto}
-  .sheet{grid-template-columns:1fr; overflow:visible}
-  .layers{overflow:visible; border-right:0; border-bottom:1.5px solid var(--ink); order:2}
-  #layerList{overflow:visible}
-  .panel{max-height:none; position:sticky; bottom:0; z-index:4}
-  .draw{order:1; height:62vh; min-height:320px}
-  .ruler{height:52px}
-}
-
 /* ── layer stack ──────────────────────────────────────────────────────── */
 .layers{border-right:1.5px solid var(--ink); background:var(--paper);
   display:flex; flex-direction:column; min-height:0; overflow:hidden}
@@ -175,12 +165,13 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 
 /* ── selected feature ─────────────────────────────────────────────────── */
 .panel{border-top:1.5px solid var(--ink); padding:15px 16px 18px; background:var(--paper-2);
-  flex:0 0 auto; max-height:46%; overflow-y:auto; overscroll-behavior:contain}
+  flex:0 0 auto; max-height:50%; overflow-y:auto; overscroll-behavior:contain}
 .panel h3{margin:7px 0 0; font-size:17px; letter-spacing:-.02em; line-height:1.2}
 .zonechip{display:inline-block; font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.12em;
   padding:4px 8px; margin-top:9px; color:#fff}
-.panel dl{display:grid; margin:12px 0 0}
-.panel dl div{display:flex; justify-content:space-between; gap:12px; padding:7px 0;
+/* one explicit track, or the implicit one grows to its widest row and sticks out of the card */
+.panel dl{display:grid; grid-template-columns:minmax(0,1fr); margin:12px 0 0}
+.panel dl div{display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 12px; padding:7px 0;
   border-top:1px solid var(--hair); align-items:baseline}
 .panel dl div > *{min-width:0}
 .panel dt{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.13em;
@@ -192,6 +183,44 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .gauge i{position:absolute; inset:0 auto 0 0; background:var(--ink)}
 .gauge__lab{display:flex; justify-content:space-between; margin-top:6px}
 
+/* ── the station card, inside the same panel ──────────────────────────── */
+.card__top{display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;
+  margin-bottom:8px}
+.card__top > *{min-width:0}
+.panel .mini:focus-visible, .lotrows button:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+/* to scale by construction: each cell's flex-grow is its width in feet */
+.xsec{display:flex; height:24px; margin-top:12px; border:1px solid var(--ink)}
+.xsec i{display:block; min-width:0}
+.xsec__n,.xsec__s,.key-n{background:var(--leaf)}
+.xsec__r,.key-r{background:var(--asphalt)}
+/* no measurement: drawn blank and hatched, never given a width */
+.xsec__gap{flex:0 0 16%;
+  background:repeating-linear-gradient(90deg,var(--hair-2) 0 3px,transparent 3px 6px)}
+.xsec--none .xsec__gap{flex:1 1 0}
+.xsec__lab{display:flex; justify-content:space-between; gap:4px 8px; flex-wrap:wrap; margin-top:4px}
+/* the scale note takes its own line, so north and south always sit under their ends */
+.xsec__lab > :nth-child(2){order:3; flex:1 1 100%}
+.panel dt i{display:inline-block; width:8px; height:8px; margin-right:8px}
+/* when label and value do not fit side by side the value drops to its own line, whole */
+.panel dd{margin-left:auto}
+.panel dd span{display:block}
+.panel h4{display:block; margin:16px 0 0; font-weight:400}
+.lotrows{list-style:none; margin:8px 0 0; padding:0}
+.lotrows li{border-top:1px solid var(--hair)}
+.lotrows button{display:block; width:100%; min-height:44px; padding:8px 0; border:0; background:none;
+  text-align:left; cursor:pointer; color:var(--ink); font:inherit}
+.lotrows button:hover b{text-decoration:underline}
+.lotrows b{display:block; font-size:var(--t-body); font-weight:600; letter-spacing:-.01em; line-height:1.3}
+.lotrows span{display:block; font-family:var(--mono); font-size:var(--t-small); color:var(--ink-70);
+  line-height:1.4; overflow-wrap:break-word}
+.lotrows .num{color:var(--ink-50); font-variant-numeric:tabular-nums}
+.panel .note{margin:12px 0 0; font-size:var(--t-small); line-height:1.45; color:var(--ink-70);
+  overflow-wrap:break-word}
+.panel .note a{color:var(--ink)}
+.sr{position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip-path:inset(50%);
+  white-space:nowrap}
+.panel .none{margin:8px 0 0; font-family:var(--mono); font-size:var(--t-small); color:var(--ink-50)}
+
 /* ── drawing ──────────────────────────────────────────────────────────── */
 .draw{display:flex; flex-direction:column; min-height:0; min-width:0}
 #map{flex:1; min-height:320px; min-width:0; background:var(--paper-2)}
@@ -202,6 +231,15 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .ruler svg{display:block; width:100%; height:100%}
 .ruler__window{position:absolute; top:-1px; bottom:-1px; border:1.5px solid var(--ink);
   background:rgba(20,18,15,.06); pointer-events:none; min-width:3px}
+/* the station being read, on the ruler and on the map */
+.ruler__mark{position:absolute; top:0; bottom:0; width:0; border-left:1.5px solid var(--ink);
+  pointer-events:none}
+.ruler__mark::before{content:""; position:absolute; left:-5px; top:4px; width:8px; height:8px;
+  border-radius:50%; background:var(--ink)}
+.ruler:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+.pin{width:2px; height:72px; background:var(--ink); pointer-events:none}
+.pin::before{content:""; position:absolute; left:-6px; top:-8px; width:14px; height:14px;
+  box-sizing:border-box; border-radius:50%; background:var(--ink); border:2px solid var(--paper)}
 .ruler__foot{display:flex; justify-content:space-between; align-items:baseline; gap:8px 16px;
   padding:8px 16px 10px; border-top:1px solid var(--hair); flex:0 0 auto; flex-wrap:wrap}
 .ruler__foot > *{min-width:0}
@@ -232,6 +270,22 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   .ruler__foot{padding-left:14px; padding-right:14px}
   .ruler__foot > *{text-align:left !important; white-space:normal}
   .ruler__foot > :nth-child(2){flex:1 1 100%}
+}
+
+/* ── stacked layout, phones and narrow windows ────────────────────────────
+   sits after the base rules on purpose. it used to sit above them, so .layers,
+   #layerList and .panel lost to the later base rules and the rail was a 138px box. */
+@media (max-width:900px){
+  body{overflow:auto}
+  /* the sheet grows with its rows here, or the rail is squeezed into what the map leaves */
+  .sheet{grid-template-columns:1fr; overflow:visible; flex:none}
+  .layers{overflow:visible; border-right:0; border-bottom:1.5px solid var(--ink); order:2}
+  #layerList{overflow:visible; flex:none}
+  /* the card sits straight under the ruler, above the layer list, so a tap on the map or
+     ruler brings map, ruler and card into one screen. it scrolls inside itself. */
+  .panel{order:-1; max-height:44vh; border-top:0; border-bottom:1.5px solid var(--ink)}
+  .panel .mini{min-height:44px; min-width:44px}
+  .draw{order:1; height:62vh; min-height:320px}
 }
 
 @media (prefers-reduced-motion:reduce){ *{transition:none !important} }

@@ -13,12 +13,12 @@
   <div class="head__id">
     <span class="brand">River to River</span>
     <h1>42nd Street</h1>
-    <span class="kicker" id="devline" hidden>Sheet 01 &middot; existing conditions &middot; <span id="stamp">&mdash;</span></span>
+    <span class="kicker" id="devline" hidden>Sheet 01 &middot; existing conditions &middot; <span id="stamp"></span></span>
   </div>
   <dl class="head__meta">
     <div><dt>Extent</dt><dd>Hudson to East River, 1.97 mi</dd></div>
-    <div><dt>Lots</dt><dd id="metaLots">—</dd></div>
-    <div><dt>Trees</dt><dd id="metaTrees">—</dd></div>
+    <div><dt>Lots</dt><dd id="metaLots"></dd></div>
+    <div><dt>Trees</dt><dd id="metaTrees"></dd></div>
     <div><dt>Sources</dt><dd>MapPLUTO &middot; NYC Parks &middot; OSM</dd></div>
   </dl>
 </header>
@@ -33,7 +33,8 @@
     </div>
     <div id="layerList"></div>
 
-    <div class="panel" id="readout" role="status" aria-live="polite" hidden></div>
+    <div class="panel" id="readout" role="region" aria-label="Station" hidden></div>
+    <p class="sr" id="said" aria-live="polite"></p>
   </aside>
 
   <!-- ══════════ the drawing ══════════ -->
@@ -41,9 +42,12 @@
     <div id="map"></div>
 
     <!-- the whole street, always visible, doubles as the navigator -->
-    <div class="ruler" id="ruler">
-      <svg id="rulerSvg" preserveAspectRatio="none"></svg>
+    <!-- also a slider: a press picks a station, arrow keys walk it 100 ft at a time -->
+    <div class="ruler" id="ruler" tabindex="0" role="slider" aria-orientation="horizontal"
+         aria-label="Station along 42nd Street, feet from the west end" aria-valuemin="0">
+      <svg id="rulerSvg" preserveAspectRatio="none" aria-hidden="true"></svg>
       <div class="ruler__window" id="rulerWin"></div>
+      <div class="ruler__mark" id="rulerMark" hidden></div>
     </div>
     <div class="ruler__foot">
       <span class="mono" id="rulerLeft">Hudson River</span>
@@ -57,6 +61,7 @@
 <div class="tip" id="tip"></div>
 
 <script src="data.js"></script>
+<script src="station.js"></script>
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.js"></script>
 <script src="scripts.js"></script>
 </body>

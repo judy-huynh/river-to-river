@@ -11,6 +11,9 @@ From the repo root:
     python3 scripts/bake/sidewalk.py --check    # re-derive and compare, writes nothing
     python3 scripts/bake/sidewalk.py            # re-derive and write window.SIDEWALK
 
+    python3 scripts/bake/owner_case.py --check  # owner names already re-cased, writes nothing
+    python3 scripts/bake/owner_case.py          # re-case the owner names in window.LOTS_POLY
+
 `--check` exits 0 when the re-derived set equals what is baked, 1 when it differs. Large sources
 download once to a `river-to-river` folder in the system temp directory (on macOS that is under
 `/var/folders`, not `/tmp`), never into the repo. Set `R2R_CACHE` to use another folder, for

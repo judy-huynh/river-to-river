@@ -82,9 +82,9 @@ Known weakness, kept so the set reproduces exactly: 6 of the 107 survivors are z
 rounding (from-station equals to-station). Four are source fragments under a foot long lying just
 past the west end of `LINE42`, which station at 0; the other two sit at stations 6,499 and 7,953.
 A bearing taken on a fragment that short is noise, so the filter does not mean much for them, and
-each counts as one segment in the unweighted median. The bake prints this count and the stations. Dropping them, and
-reading the heading at the midpoint like the clip does, would change the 107 and is left as a
-separate, documented data change.
+each counts as one segment in the unweighted median. The bake prints this count and the
+stations. Dropping them, and reading the heading at the midpoint like the clip does, would change
+the 107 and is left as a separate, documented data change.
 
 Reproduce with `python3 scripts/bake/sidewalk.py --check`, which re-derives the set from the
 source file and compares it with what is baked. The stationing library every bake script shares is
@@ -96,6 +96,48 @@ Two cautions that are printed on the sheet:
   removes. It is not on 42nd Street.
 - This is **gross concrete**. Sheds, stairs, newsstands and kiosks are not deducted, so every
   figure is an upper bound on walkable width, never a clear width.
+
+## 3a. Spatial step: the station card (added 19 Sep 2026)
+
+No new dataset. The card reads the five baked globals at one station, through one pure function,
+`stationProfile(ft)` in `plan/station.js`. That file has no DOM in it, so it loads in node, and
+`node scripts/check/station.js` re-runs the known-good check at 4,000 ft. A station comes from a
+press on the ruler, the arrow keys, the `?st=` link, or a click on the map. A map click is
+stationed by the same perpendicular projection as section 1, ported to the page from
+`scripts/bake/station.py` with the same constants, and rounded to the whole foot. A click that
+lands on no lot and lies farther from the centreline than the deepest lot drawn reaches is
+ignored: it is off the sheet, not a place on the street.
+
+1. **Sidewalk and roadway at a station** are the baked band that contains it, per side. Bands that
+   share an endpoint resolve to the one continuing east. Zero-length fragments (section 3) are
+   never used. Where no band contains the station the value is left empty and the card says it is
+   not measured; nothing is interpolated or carried over from a neighbour.
+2. **The cross-section bar** is drawn to scale from those widths. A part with no measurement is
+   drawn as a hatched blank of fixed size, and the caption then says only the measured parts are
+   to scale. Where no part is measured the whole bar is hatched and the caption says so.
+3. **Lots either side** are the lots that face the reader at that station. Every vertex of each
+   lot's outer boundary is projected onto `LINE42`, giving the boundary as station and offset
+   pairs. A perpendicular is raised at the station; for each lot on a side, the offset at which
+   its boundary first crosses that perpendicular is interpolated along the crossing edge. The lot
+   with the nearest crossing fronts the street there. Any other lot crossing within 15 ft of it
+   (`FRONT_TOL`, to absorb a jog in the building line) is listed with it. A lot standing behind
+   another, or the rear arm of an L-shaped lot, is not listed. Side is the baked side. This is
+   computed in the page from the lot's own coordinates, so it re-bases with the centreline.
+   Consequence, stated: four lots in the current 130 are never listed at any station because
+   another lot always stands between them and the street (500 West 43 Street, 574 and 576
+   9 Avenue, and the lot recorded only as "1 Avenue"). They still open from the map. Two flags
+   are read off each record so the list cannot be misread: a lot whose address does not name
+   42nd Street is marked as such (a corner lot addressed on its avenue still fronts the street),
+   and a landmarked lot (`lm`) is marked beside its unbuilt floor area, which section 4 says it
+   may never be able to use.
+4. **Trees nearby** are the trees whose station is within 200 ft of the card's, both sides,
+   measured along the street, not as a radius.
+5. **Caveats travel with the figures.** The card prints the gross-concrete caution and the
+   sidewalk source date from section 3, the unbuilt floor area formula from section 2 and the
+   special-district and landmark caution from section 4, with a link to this file, whichever
+   layers are switched on. The MapPLUTO, CSCL and Tree Points release dates are not recorded in
+   `data.js`, so the card names those sources without a date. Recording them belongs to the
+   bake of each set.
 
 ## 4. The lot rule, and what is being corrected
 
@@ -114,6 +156,18 @@ Known defects in the current data, being fixed in Phase 1:
 
 Unbuilt capacity is a **screen, not a promise**: most lots sit in special districts where the base
 FAR is not the governing rule, and landmarked lots carry floor area on paper that can never be used.
+
+### 4a. Owner names (added 19 Sep 2026)
+
+MapPLUTO publishes owner names in capitals. The first lot bake title-cased them word by word,
+which produced "Nyc", "Llc", "42Nd" and "People'S". `scripts/bake/owner_case.py` repairs the
+letters of the baked names and nothing else: a short list of whole words goes to capitals (NYC,
+NY, NJ, LLC, LP, MTA, REIT, II, III, USA), ordinals and the possessive go to lower case, and
+"of", "and", "the", "for", "at" go to lower case unless first. 78 of the 130 names changed; no
+lot changed owner. The step is idempotent and `--check` confirms the baked set is already
+re-cased. Truncated names are left as PLUTO has them. Against the current PLUTO release (26v2,
+read 19 Sep 2026) three baked lots name a different owner and one BBL is absent; that is a
+vintage difference for the Phase 1 lot bake to settle, not something this step touches.
 
 ## 5. Verified and ready to add
 

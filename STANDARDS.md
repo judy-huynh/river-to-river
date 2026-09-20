@@ -55,7 +55,8 @@ argument, and everything on the sheet either serves it or comes off.
 - **`METHODOLOGY.md` changes in the same commit** as any dataset or spatial step.
 - Lookups are pure functions. State lives in one place. No handler is bound twice.
 - Comments are one or two lines and say why, not what.
-- Before every commit: `node --check`, the data loads in node, both widths render (1440 and
-  390), minimum font size 16 renders, no console errors, no horizontal overflow.
+- Before every commit: `node --check`, the data loads in node, `node scripts/check/station.js`
+  passes, both widths render (1440 and 390), minimum font size 16 renders, no console errors,
+  no horizontal overflow.
 - `main` is live. Work happens on a branch and merges when the checks pass and the author has
   looked.
