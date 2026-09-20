@@ -51,6 +51,30 @@ Derived figures computed in the page, not typed:
 - **Tree gaps** = any run of more than 400 ft along the centreline with no tree on either side.
   Both sidewalks are merged, so a block with trees on one side only reads as having trees.
   Known limitation.
+- **The figure on each shut rail row** is computed when the page loads, from the same globals:
+  - *How many people are here?* The weekday 4 to 7pm total of the newest period that has one
+    (`PED_LAST` in `plan/station.js`, the same record the station card reads), with the period
+    beside it. The small line under it is that PM series against time from a zero baseline. The
+    counts are twice a year, so two consecutive periods more than `PED_GAP_MONTHS` (12) apart
+    are a hole in the series. The small line stops at a hole and starts again after it, and
+    also stops at any period with no PM figure, so nothing is drawn across time that was not
+    counted. The open row draws the series as bars to one scale and leaves a hatched blank at
+    the same hole.
+  - *Where can you stop?* The number of records in `BENCHES`. "None west of" and "none east of"
+    are the avenues flanking the westmost and eastmost bench. The stretches with no DOT bench are
+    the differences between consecutive bench stations, with both ends of the street included.
+  - *How fast does the bus move?* The street average at the chosen hour: miles run over hours
+    taken across every kept leg in both directions, weighted by buses measured (section 3c). The
+    slowest leg is the lowest single leg speed at that hour.
+  - *Who gets the ground?* The length-weighted average roadway width against the median sidewalk
+    width of section 3.
+  - *What could be built?* The count of drawn lots whose unbuilt floor area is above zero, out of
+    all drawn lots, and the count that are landmarked. It is a count and not a floor area total
+    on purpose: the drawn lot set is under revision (section 4), and a total summed over it would
+    not match the total section 4 states.
+  - *Street trees.* The number of records in `TREES` and the number of tree gaps as defined above. Where
+    the open row names a gap, each end is named by the avenue whose station is nearest to it.
+  A row appears only when its global is baked and non-empty.
 - **Roadway statistics** are length-weighted over the CSCL segments. The segments cover 9,451 ft
   of the 10,411 ft street; the missing stretch is one contiguous block and is not interpolated.
 

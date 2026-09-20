@@ -112,7 +112,7 @@ function stationProfile(ft,hour){
     bench, count, bus:hour==null?null:busAt(ft,hour), lots:{n,s}, biggest};
 }
 
-const api={AVES, TREE_REACH, COUNT_REACH, COUNT_SPAN, FRONT_TOL, REACH, LOT_BAND, crossing, LOT_BY_BBL, project, busAt, stationProfile};
+const api={AVES, TREE_REACH, COUNT_REACH, COUNT_SPAN, PED_LAST, between, FRONT_TOL, REACH, LOT_BAND, crossing, LOT_BY_BBL, project, busAt, stationProfile};
 window.STATION=api;
 if(typeof module!=='undefined'&&module.exports) module.exports=api;
 })();

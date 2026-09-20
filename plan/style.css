@@ -9,7 +9,7 @@
   --paper:#FCFAF5; --paper-2:#F4F0E6; --paper-3:#E9E4D6;
   --ink:#14120F; --ink-70:rgba(20,18,15,.72); --ink-50:rgba(20,18,15,.60); --ink-30:rgba(20,18,15,.30);
   /* 4.53:1 on paper. every uppercase label uses this. --ink-30 (1.98:1) is kept only for
-     switched-off layers and the switch knob, where looking inactive is the point. */
+     the knob of a switch that is off, where looking inactive is the point. */
   --ink-label:rgba(20,18,15,.58);
   --hair:rgba(20,18,15,.13); --hair-2:rgba(20,18,15,.22);
 
@@ -60,7 +60,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 /* grid items default to min-width:auto, so the map canvas was forcing this column
    wider than the viewport and dragging the ruler off the right edge with it */
 .sheet > *{min-width:0}
-/* ── layer stack ──────────────────────────────────────────────────────── */
+/* ── the rail of questions ────────────────────────────────────────────── */
 .layers{border-right:1.5px solid var(--ink); background:var(--paper);
   display:flex; flex-direction:column; min-height:0; overflow:hidden}
 #layerList{flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain;
@@ -68,40 +68,63 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .layers::-webkit-scrollbar{width:9px}
 .layers::-webkit-scrollbar-thumb{background:var(--hair-2)}
 
-.layers__head{display:flex; justify-content:space-between; align-items:center; gap:10px;
-  padding:12px 16px; border-bottom:1px solid var(--hair); position:sticky; top:0;
-  background:var(--paper); z-index:3}
-.layers__head span{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
-  text-transform:uppercase; color:var(--ink-label)}
+/* the three headings the questions sit under */
+.group{display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:44px;
+  padding:4px 16px; background:var(--paper-2); border-bottom:1px solid var(--hair)}
+.group h2{margin:0; font-family:var(--mono); font-size:var(--t-micro); font-weight:500;
+  letter-spacing:var(--track); text-transform:uppercase; color:var(--ink-label)}
 .mini{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.12em; text-transform:uppercase;
   background:none; border:1px solid var(--hair); color:var(--ink-50); padding:6px 10px;
   cursor:pointer; white-space:nowrap}
 .mini:hover{border-color:var(--ink); color:var(--ink)}
+.mini:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
 
+/* a row is two buttons: the switch, then the question with its answer at the right */
 .layer{border-bottom:1px solid var(--hair)}
-.layer__bar{display:grid; grid-template-columns:34px minmax(0,1fr) 14px; gap:12px;
-  align-items:start; padding:13px 16px; cursor:pointer; user-select:none; transition:background .12s}
-.layer__bar > span:nth-child(2){min-width:0}
+.layer__bar{display:grid; grid-template-columns:44px minmax(0,1fr); align-items:start;
+  padding:0 0 0 16px; transition:background .12s}
 .layer__bar:hover{background:var(--paper-2)}
-.layer__name{display:block; font-size:15px; font-weight:600; letter-spacing:-.012em; line-height:1.25}
+.layer__q{position:relative; display:grid; grid-template-columns:minmax(0,1fr) fit-content(46%) 14px;
+  gap:0 12px; align-items:start; min-width:0; min-height:44px; padding:12px 16px 12px 8px}
+.layer__q > *{min-width:0}
+.layer__q h3{margin:0; font:inherit}
+/* the button is the question. its hit area and focus ring cover the whole answer. */
+.layer__head{display:block; width:100%; padding:0; border:0; background:none; color:var(--ink);
+  font:inherit; font-size:15px; font-weight:600; letter-spacing:-.012em; line-height:1.25;
+  text-align:left; cursor:pointer; overflow-wrap:break-word}
+.layer__head::after{content:""; position:absolute; inset:0}
+.layer__head:focus-visible{outline:none}
+.layer__head:focus-visible::after, .sw:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+.group--foot{justify-content:flex-end; border-bottom:0}
+/* the plain line runs the full width under the question and its figure */
+.layer__sub{grid-column:1 / 3}
 .layer__count{display:block; font-family:var(--mono); font-size:var(--t-micro);
   letter-spacing:var(--track); color:var(--ink-50); margin-top:4px; line-height:1.4;
   overflow-wrap:break-word}
+.layer__fig{text-align:right}
+.layer__fig b{display:block; font-size:17px; font-weight:600; letter-spacing:-.02em; line-height:1.15;
+  font-variant-numeric:tabular-nums; overflow-wrap:break-word}
+.layer__fig small{display:block; font-family:var(--mono); font-size:var(--t-micro); color:var(--ink-50);
+  margin-top:4px; line-height:1.4; overflow-wrap:break-word}
+.spark{display:block; max-width:100%; margin-top:6px; overflow:visible}
+.spark polyline{fill:none; stroke:var(--ink); stroke-width:1.2; stroke-linejoin:round}
+.spark circle{fill:var(--ink)}
 .layer__caret{font-size:10px; color:var(--ink-label); transition:transform .18s;
   justify-self:end; margin-top:5px}
 .layer[data-open="true"] .layer__caret{transform:rotate(90deg)}
-.layer[data-on="false"] .layer__name,
-.layer[data-on="false"] .layer__count{color:var(--ink-30)}
 
-.sw{width:34px; height:19px; border:1.5px solid var(--ink); background:var(--paper);
-  position:relative; margin-top:2px; flex:0 0 auto}
-.sw::after{content:""; position:absolute; top:2px; left:2px; width:12px; height:11px;
+/* a 44px button. the drawn switch is the same 34 by 19 track and knob as before, inside it. */
+.sw{position:relative; width:44px; height:44px; padding:0; border:0; background:none; cursor:pointer}
+.sw::before{content:""; position:absolute; left:0; top:12px; width:34px; height:19px;
+  border:1.5px solid var(--ink); background:var(--paper)}
+.sw::after{content:""; position:absolute; top:15.5px; left:3.5px; width:12px; height:11px;
   background:var(--ink-30); transition:.16s}
-.layer[data-on="true"] .sw{background:var(--ink)}
-.layer[data-on="true"] .sw::after{left:17px; background:var(--paper)}
+.sw[aria-pressed="true"]::before{background:var(--ink)}
+.sw[aria-pressed="true"]::after{left:18.5px; background:var(--paper)}
 
+/* an open row reads whether or not it is drawn, so aria-expanded never lies */
 .layer__body{padding:2px 16px 18px; display:none}
-.layer[data-open="true"][data-on="true"] .layer__body{display:block}
+.layer[data-open="true"] .layer__body{display:block}
 
 /* one plain sentence at the top of every open layer */
 .says{font-size:var(--t-body); line-height:1.5; color:var(--ink-70); margin:0 0 14px}
@@ -109,7 +132,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 
 /* controls inside a layer */
 .ctl{display:flex; flex-direction:column; gap:6px; margin:0 0 14px}
-.ctl > span{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
+.ctl > span, .ctl > label{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
   text-transform:uppercase; color:var(--ink-label)}
 .ctl select{font:inherit; font-size:var(--t-body); padding:8px 10px; border:1px solid var(--hair-2);
   background:var(--paper); color:var(--ink); border-radius:0; width:100%}
@@ -131,7 +154,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 /* ── legend ───────────────────────────────────────────────────────────── */
 .key{margin:0}
 .key + .key{margin-top:16px}
-.key h5{margin:0 0 3px; font-size:var(--t-body); font-weight:600; letter-spacing:-.01em; color:var(--ink)}
+.key h4{margin:0 0 3px; font-size:var(--t-body); font-weight:600; letter-spacing:-.01em; color:var(--ink)}
 .key p{margin:0 0 8px; font-size:12.5px; line-height:1.45; color:var(--ink-50)}
 .key ul{list-style:none; margin:0; padding:0}
 .key li{display:flex; align-items:flex-start; gap:10px; padding:8px 0;
@@ -148,6 +171,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .key i.rule{height:0; border:0; border-top-style:solid; margin-top:8px}
 .key p a{color:var(--ink)}
 .flag + .key{margin-top:12px}
+.key--after{margin-top:16px}
 /* twenty-four bars, one an hour, heights to one scale. the rule across them is walking pace,
    the ink edge is the chosen hour. */
 .hours{position:relative; display:flex; align-items:flex-end; gap:1px; height:56px;
@@ -156,6 +180,11 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .hours i[data-now]{outline:1.5px solid var(--ink); outline-offset:-1px}
 .hours b{position:absolute; left:0; right:0; height:0; border-top:1px dashed var(--ink)}
 .hours__lab{display:flex; justify-content:space-between; margin-top:4px}
+/* the count series: plain ink bars, and a hatched slot where no count was taken */
+.hours--count i{background:var(--ink-50); border-top:0}
+.hours--count .hours__none{flex:2 1 0; height:100%;
+  background:repeating-linear-gradient(90deg,var(--hair-2) 0 3px,transparent 3px 6px)}
+.hours--count + .hours__lab{margin-bottom:6px}
 
 /* species carry no colour of their own, so instead of four identical green dots the
    row shows how common each one is. the bar is the same leaf green already in use. */
@@ -304,7 +333,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   /* the card sits straight under the ruler, above the layer list, so a tap on the map or
      ruler brings map, ruler and card into one screen. it scrolls inside itself. */
   .panel{order:-1; max-height:44vh; border-top:0; border-bottom:1.5px solid var(--ink)}
-  .panel .mini{min-height:44px; min-width:44px}
+  .panel .mini, .group .mini, .opt button{min-height:44px; min-width:44px}
   .draw{order:1; height:62vh; min-height:320px}
 }
 

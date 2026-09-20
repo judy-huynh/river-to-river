@@ -6,6 +6,8 @@
      TREES      NYC Parks Forestry Tree Points, current inventory
      ROAD       NYC CSCL street centerline, width and lane counts
      BUS        MTA Bus Route Segment Speeds, M42 by leg, hour and direction
+     BENCHES    NYC DOT Seating Locations on 42 Street
+     PED_COUNT  NYC DOT Bi-Annual Pedestrian Counts, the one location on 42 Street
    ═══════════════════════════════════════════════════════════════════════ */
 (() => {
 'use strict';
@@ -62,10 +64,13 @@ const COND={Excellent:'#1F7A3A',Good:'#2E9E4F',Fair:'#FFC24D',Poor:'#FF9E2C',Cri
 const CAP=[[0,'#EDE8DA'],[40000,'#FFC24D'],[160000,'#FF5A36'],[540000,'#E5006D']];
 const AGE=[[1890,'#0E2280'],[1930,'#4C7DFF'],[1970,'#FFC24D'],[2010,'#FF5A36']];
 
+const TREE_GAP_MIN=400;   /* feet with no tree before a stretch counts as a gap */
 const TREE_GAPS=(()=>{const out=[];let prev=0;
-  TREES.forEach(t=>{if(t.ft-prev>400) out.push([prev,t.ft]); prev=Math.max(prev,t.ft);});
-  if(LEN-prev>400) out.push([prev,LEN]); return out;})();
+  TREES.forEach(t=>{if(t.ft-prev>TREE_GAP_MIN) out.push([prev,t.ft]); prev=Math.max(prev,t.ft);});
+  if(LEN-prev>TREE_GAP_MIN) out.push([prev,LEN]); return out;})();
 const GAP_FEET=TREE_GAPS.reduce((s,[a,b])=>s+(b-a),0);
+/* the avenue whose station is closest to x, for naming where a stretch starts and ends */
+const nearAve=x=>window.STATION.AVES.reduce((m,v)=>Math.abs(v[0]-x)<Math.abs(m[0]-x)?v:m)[1];
 
 /* the walking surface, summarised once. gross concrete, not clear width. */
 const SW=window.SIDEWALK||[];
@@ -135,7 +140,38 @@ const busGeo=h=>({type:'FeatureCollection',features:BUS.filter(r=>r.h===h).map(r
 
 /* ── stationing ───────────────────────────────────────────────────────── */
 /* the lookups live in station.js so node can load and test them without a page */
-const {AVES, TREE_REACH, COUNT_REACH, REACH, LOT_BAND, LOT_BY_BBL, project, stationProfile}=window.STATION;
+const {AVES, TREE_REACH, COUNT_REACH, REACH, LOT_BAND, LOT_BY_BBL, PED_LAST, between, project, stationProfile}=window.STATION;
+
+/* the benches and the counter, summarised once. none is every stretch of the street between
+   one DOT bench and the next, ends included, longest first. */
+const BENCHES=[...(window.BENCHES||[])].sort((a,b)=>a.ft-b.ft), PED=window.PED_COUNT||null;
+const BENCH_STATS=BENCHES.length?{
+  west:between(BENCHES[0].ft).west, east:between(BENCHES[BENCHES.length-1].ft).east,
+  none:[0,...BENCHES.map(b=>b.ft),LEN].map((a,i,v)=>[a,v[i+1]]).filter(x=>x[1]>x[0]).sort((x,y)=>(y[1]-y[0])-(x[1]-x[0]))}:null;
+const PED_GAP_MONTHS=12;   /* the counts are twice a year: a longer wait between two periods is a hole */
+/* months between two 'yyyy-mm' periods, so the series can be drawn against time */
+const months=(a,b)=>{const [y,m]=a.split('-'), [Y,M]=b.split('-'); return (Y-y)*12+(M-m);};
+const PED_STATS=PED&&PED_LAST?(()=>{
+  const v=PED.periods.filter(p=>p.pm!=null);
+  /* the longest wait between two periods */
+  const hole=PED.periods.slice(1).map((p,i)=>[PED.periods[i].p,p.p]).reduce((x,y)=>months(...y)>months(...x)?y:x);
+  return {n:v.length, first:v[0], hi:v.reduce((x,y)=>y.pm>x.pm?y:x), lo:v.reduce((x,y)=>y.pm<x.pm?y:x),
+    hole:months(...hole)>PED_GAP_MONTHS?hole:null};
+})():null;
+/* the PM series as a line against time, from a zero baseline. a period with no figure breaks the
+   line, and so does a hole between two periods: nothing is drawn across time that was not counted. */
+const spark=(W,H)=>{
+  const P=PED.periods, span=months(P[0].p,P[P.length-1].p)||1, top=PED_STATS.hi.pm;
+  const xy=p=>[(1.5+months(P[0].p,p.p)/span*(W-3)).toFixed(1),(H-1.5-p.pm/top*(H-3)).toFixed(1)];
+  const runs=[[]]; P.forEach((p,i)=>{
+    if(p.pm==null||(i&&months(P[i-1].p,p.p)>PED_GAP_MONTHS)) runs.push([]);
+    if(p.pm!=null) runs[runs.length-1].push(xy(p)); });
+  const [lx,ly]=xy(PED_LAST);
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true" focusable="false">${
+    runs.filter(r=>r.length).map(r=>r.length>1?`<polyline points="${r.map(c=>c.join(',')).join(' ')}"/>`
+      :`<circle cx="${r[0][0]}" cy="${r[0][1]}" r=".8"/>`).join('')
+    }<circle cx="${lx}" cy="${ly}" r="1.5"/></svg>`;
+};
 
 /* ── map ──────────────────────────────────────────────────────────────── */
 mapboxgl.accessToken=TOKEN;
@@ -191,63 +227,119 @@ let _fitT; addEventListener('resize',()=>{clearTimeout(_fitT); _fitT=setTimeout(
 map.dragRotate.disable(); map.touchZoomRotate.disableRotation();
 
 /* ═══════════════════════════════════════════════════════════════════════
-   LAYERS. Drawing order, top of the list draws on top.
-   Every layer opens with one plain sentence before any key.
+   THE ROWS. Each is a question, grouped People, Movement, Built, in the order read.
+   fig is the answer shown while the row is shut: [figure, what it measures]. sub is one
+   plain line under the question. has is false when the row's data is not baked, and the
+   row is then left off the rail. Every row opens with one plain sentence before any key.
    ═══════════════════════════════════════════════════════════════════════ */
-const LAYERS=[
+const TREE_ROW=
   {
-    id:'trees', name:'Street trees', count:TREES.length+' standing today',
-    on:true, open:true, ids:['treeDots'], opacity:1,
+    id:'trees', group:'Built', short:'Trees', name:'Street trees', has:TREES.length>0,
+    get fig(){ return [commas(TREES.length),'standing']; },
+    get sub(){ return `${TREE_GAPS.length} stretch${TREE_GAPS.length===1?'':'es'} of over ${TREE_GAP_MIN} ft with none`; },
+    on:true, open:false, ids:['treeDots'], opacity:1,
     says:`Every tree the Parks Department currently records on this street. <b>The dot is the size of the trunk.</b>`,
     styles:[['plain','All the same'],['cond','How healthy they are']], style:'plain',
     extras:[['gaps','Show where there are none']], extraOn:{gaps:false},
     legend(){
       let h='';
       if(this.style==='plain'){
-        h+=`<div class="key"><h5>Trunk size</h5>
-          <p>Measured across the trunk. The biggest on the street is 28 inches.</p>
+        h+=`<div class="key"><h4>Trunk size</h4>
+          <p>Measured across the trunk. The biggest on the street is ${Math.max(...TREES.map(t=>t.dbh||0))} inches.</p>
           <div class="sizes">${[4,12,24].map(d=>
             `<figure><span style="width:${d*1.1}px;height:${d*1.1}px"></span><figcaption>${d}"</figcaption></figure>`).join('')}</div></div>`;
       } else {
         const rows=Object.entries(COND)
           .map(([k,v])=>[k,v,TREES.filter(t=>t.cond===k).length])
           .filter(r=>r[2]>0).sort((a,b)=>b[2]-a[2]);
-        h+=`<div class="key"><h5>Condition, as the city rates it</h5>
+        h+=`<div class="key"><h4>Condition, as the city rates it</h4>
           <p>${pct(TREES.filter(t=>t.cond==='Good'||t.cond==='Excellent').length,TREES.length)}% are good or better.</p><ul>${
           rows.map(([k,v,n])=>`<li><i class="dot" style="background:${v}"></i><span>${k}</span><b>${n}</b></li>`).join('')}</ul></div>`;
       }
       const sp=[...TREES.reduce((m,t)=>m.set(t.common,(m.get(t.common)||0)+1),new Map())]
         .sort((a,b)=>b[1]-a[1]).slice(0,4);
       const spTop=sp.length?sp[0][1]:1;
-      h+=`<div class="key key--rank"><h5>Most common species</h5>
+      h+=`<div class="key key--rank"><h4>Most common species</h4>
         <p>${new Set(TREES.map(t=>t.common)).size} species in all. Hover any tree on the map for its name.</p><ul>${
         sp.map(([s,c])=>`<li><div class="row"><span>${s}</span><b>${c}</b></div>`
           + `<i class="bar" style="width:${Math.max(3,Math.round(c/spTop*100))}%"></i></li>`).join('')}</ul></div>`;
       if(this.extraOn.gaps)
-        h+=`<p class="flag"><b>${commas(GAP_FEET)} feet has no tree at all</b>That is ${pct(GAP_FEET,LEN)}% of the street, in two stretches, and both are the famous ones: 8th through Times Square to 6th, and Madison through Grand Central to 3rd.</p>`;
+        h+=`<p class="flag"><b>${commas(GAP_FEET)} feet has no tree at all</b>That is ${pct(GAP_FEET,LEN)}% of the street, in ${TREE_GAPS.length} stretch${TREE_GAPS.length===1?'':'es'} of over ${TREE_GAP_MIN} ft: ${TREE_GAPS.map(g=>g.map(x=>'near '+aveShort(nearAve(x))).join(' to ')).join(', ')}.</p>`;
       return h;
+    }
+  };
+const LAYERS=[
+  {
+    id:'people', group:'People', short:'Count', name:'How many people are here?', has:!!PED_STATS, ruler:true,
+    get fig(){ return [commas(PED_LAST.pm), day(PED_LAST.p)]; },
+    /* the bake stops unless the source has exactly one location on 42 Street, so this is the whole set */
+    get sub(){ return `${PM_WIN} &middot; the city counts at one place on the street`; },
+    get chart(){ return spark(120,18); },
+    on:false, open:false, ids:['countDot'],
+    get says(){ return `NYC DOT counts people on foot at one place on 42nd Street, twice a year: ${PED.street}, ${PED.from} to ${PED.to}. <b>Each figure is one count day, both sidewalks.</b>`; },
+    legend(){
+      const S=PED_STATS, P=PED.periods, W=PED.windows||{};
+      const gone=S.hole?P.findIndex(p=>p.p===S.hole[1]):-1;
+      let o=`<div class="key"><h4>Latest count, ${day(PED_LAST.p)}</h4>
+        <p>A total over each window, not a peak hour and not a whole day.</p><ul>${
+        ['am','md','pm'].map(k=>`<li><span>${span(W[k])}</span><b>${PED_LAST[k]!=null?commas(PED_LAST[k]):'not counted'}</b></li>`).join('')}</ul></div>`;
+      o+=`<div class="key"><h4>Every period, ${PM_WIN}</h4>
+        <p>${S.n} count days, ${day(S.first.p)} to ${day(PED_LAST.p)}, to one scale from zero.${S.hole?` No count between ${day(S.hole[0])} and ${day(S.hole[1])}, drawn blank.`:''}</p>
+        <div class="hours hours--count" role="img" aria-label="${PM_WIN} count by period. ${P.map(p=>`${day(p.p)} ${p.pm!=null?commas(p.pm):'not counted'}`).join(', ')}.">${
+        P.map((p,i)=>(i===gone?'<i class="hours__none"></i>':'')
+          +`<i${p===PED_LAST?' data-now':''} style="height:${p.pm!=null?(p.pm/S.hi.pm*100).toFixed(1):0}%"></i>`).join('')}</div>
+        <div class="hours__lab"><span class="micro">${day(P[0].p)}</span><span class="micro">${day(P[P.length-1].p)}</span></div>
+        <ul><li><span>Highest, ${day(S.hi.p)}</span><b>${commas(S.hi.pm)}</b></li>
+        <li><span>Lowest, ${day(S.lo.p)}</span><b>${commas(S.lo.pm)}</b></li></ul></div>`;
+      o+=`<div class="opt"><button type="button" data-st="${PED.ft}">Stand at the counter, ${commas(PED.ft)} ft</button></div>`;
+      o+=`<p class="flag"><b>Counted on one block, on single days</b>The count is taken across both sidewalks on this block only, on a single weekday and the Saturday next to it. One day's weather or an event moves it, and it does not describe any other block of the street.</p>`;
+      o+=`<div class="key"><p>NYC DOT Bi-Annual Pedestrian Counts, location ${PED.loc}${srcDate('PED_COUNT')}. <a href="${METHOD}">Method</a></p></div>`;
+      return o;
     }
   },
   {
-    id:'bus', name:'How fast does the bus move', hour:true,
-    /* a getter: the collapsed line follows the hour slider */
-    get count(){ const r=BUS_STATS&&busSlowest(SEL.hour);
-      return r?`slowest leg ${r.mph} mph, ${hourSpan(SEL.hour)}`:'no speed baked'; },
+    id:'benches', group:'People', short:'Benches', name:'Where can you stop?', has:!!BENCH_STATS, ruler:true,
+    get fig(){ return [commas(BENCHES.length), `DOT bench${BENCHES.length===1?'':'es'}`]; },
+    get sub(){ return `none west of ${aveName(BENCH_STATS.west)} or east of ${aveName(BENCH_STATS.east)}`; },
+    on:false, open:false, ids:['benchDots'],
+    says:`Every bench NYC DOT records on 42 Street. <b>Only benches DOT placed are in the source.</b> Seating in parks and plazas, or put out by a building or a business improvement district, is not.`,
+    legend(){
+      const S=BENCH_STATS;
+      let o=`<div class="key"><h4>Each bench</h4><p>Pick one to stand at its station.</p></div>
+        <ul class="lotrows">${BENCHES.map(b=>`<li><button type="button" data-st="${b.ft}">`
+          +`<b>${b.side==='n'?'North':'South'} side, ${block(between(b.ft))}</b>`
+          +`<span>${commas(b.ft)} ft from the west end${b.installed?` &middot; installed ${day(b.installed)}`:''}</span>`
+          +`</button></li>`).join('')}</ul>`;
+      o+=`<div class="key key--after"><h4>Stretches with no DOT bench</h4>
+        <p>Measured along the street, either side, longest first.</p><ul>${
+        S.none.map(([a,b])=>`<li><span>${commas(a)} to ${commas(b)} ft</span><b>${commas(b-a)} ft</b></li>`).join('')}</ul></div>`;
+      o+=`<p class="flag"><b>${commas(S.none[0][1]-S.none[0][0])} ft with no DOT bench</b>That is ${pct(S.none[0][1]-S.none[0][0],LEN)}% of the street in one stretch. It is the length of street between DOT benches or a street end. Other places to sit are not in the source.</p>`;
+      o+=`<div class="key"><p>NYC DOT Seating Locations${srcDate('BENCHES')}. <a href="${METHOD}">Method</a></p></div>`;
+      return o;
+    }
+  },
+  {
+    id:'bus', group:'Movement', short:'Bus', name:'How fast does the bus move?', has:!!BUS_STATS, hour:true, ruler:true,
+    /* getters: the shut row follows the hour slider */
+    get fig(){ const v=busCorridor(SEL.hour);
+      return [v!=null?v.toFixed(2):'none', `${v!=null?'mph':'no buses measured'}, ${hourSpan(SEL.hour)}`]; },
+    get sub(){ const r=busSlowest(SEL.hour);
+      return `average over the measured legs &middot; `+(r?`slowest ${r.mph.toFixed(2)} mph &middot; `:'')+`walking ${WALK_MPH} mph`; },
     on:false, open:false, ids:['busCase','busLine','busNone'], opacity:1,
     says:BUS_STATS?`The M42 on each leg between two MTA timepoints, averaged over the weekdays of ${busMonth()}. <b>One bar is one leg.</b> The speed is the whole leg's, not a reading at any point inside it.`:'',
     legend(){
       if(!BUS_STATS) return '';
       const h=SEL.hour, S=BUS_STATS, rows=BUS.filter(r=>r.h===h);
-      let o=`<div class="key"><h5>Miles per hour</h5>
+      let o=`<div class="key"><h4>Miles per hour</h4>
         <p>Blended between these stops. Walking pace is taken as ${WALK_MPH} mph.</p><ul>${
         BUS_RAMP.map(([v,c],i)=>`<li><i style="background:${c}"></i><span>${v} mph${i===BUS_RAMP.length-1?' and over':''}</span><b>${i?`${i+1}&times; walking pace`:'walking pace'}</b></li>`).join('')}</ul></div>`;
-      o+=`<div class="key"><h5>The street by hour</h5>
+      o+=`<div class="key"><h4>The street by hour</h4>
         <p>All kept legs, both directions, weighted by buses measured. The line is ${WALK_MPH} mph.</p>
         <div class="hours" role="img" aria-label="Average speed by hour. ${S.avg.map(([k,v])=>`${hr(k)} ${v.toFixed(1)}`).join(', ')} miles per hour.">${
         S.avg.map(([k,v])=>`<i${k===h?' data-now':''} style="height:${(v/S.top*100).toFixed(1)}%;background:${busColour(v)}"></i>`).join('')}
         <b style="bottom:${(WALK_MPH/S.top*100).toFixed(1)}%"></b></div>
         <div class="hours__lab"><span class="micro">${hr(0)}</span><span class="micro">${hr(12)}</span><span class="micro">${hr(23)}</span></div></div>`;
-      o+=`<div class="key"><h5>Each leg, ${hourSpan(h)}</h5>
+      o+=`<div class="key"><h4>Each leg, ${hourSpan(h)}</h4>
         <p>Street average ${busCorridor(h).toFixed(2)} mph.</p><ul>${
         rows.map(r=>`<li><i style="background:${r.mph!=null?busColour(r.mph):'transparent'}"></i><span>${DIRS[r.dir]}, ${legName(r)}<br>${commas(r.b-r.a)} ft &middot; ${commas(r.trips)} buses</span><b>${r.mph!=null?r.mph.toFixed(2)+' mph':'no buses'}</b></li>`).join('')}</ul></div>`;
       o+=`<p class="flag"><b>Below walking pace in ${S.under} of ${S.avg.length} hours</b>The street average against ${WALK_MPH} mph. Its slowest hour is ${hourSpan(S.slowHour[0])} at ${S.slowHour[1].toFixed(2)} mph. The slowest single leg in any hour is ${S.slowLeg.mph.toFixed(2)} mph, ${DIRS[S.slowLeg.dir]} ${legName(S.slowLeg)}, ${hourSpan(S.slowLeg.h)}.</p>`;
@@ -260,13 +352,13 @@ const LAYERS=[
     }
   },
   {
-    id:'road', name:'Who gets the ground',
-    count: SW_STATS ? ROAD_STATS.avgW+' ft of roadway, '+SW_STATS.med+' ft of sidewalk'
-                    : ROAD_STATS.avgW+' ft wide on average',
+    id:'road', group:'Movement', short:'Ground', name:'Who gets the ground?', has:ROAD.features.length>0,
+    get fig(){ return [SW_STATS?`${ROAD_STATS.avgW} : ${SW_STATS.med}`:ROAD_STATS.avgW,'feet']; },
+    get sub(){ return SW_STATS?'average roadway to typical sidewalk, each side':'average roadway &middot; no sidewalk widths baked'; },
     on:false, open:false, ids:['roadLine','swLine'], opacity:.85,
     says:`The roadway and both sidewalks, drawn at their real widths on the same scale. <b>The comparison is the point.</b>`,
     legend(){
-      let h=`<div class="key"><h5>Drawn at real width</h5>
+      let h=`<div class="key"><h4>Drawn at real width</h4>
         <ul>
           <li><i class="rule" style="border-top-width:7px;border-top-color:#6E6A62"></i><span>Roadway</span><b>${ROAD_STATS.avgW} ft avg</b></li>`;
       if(SW_STATS) h+=`
@@ -274,7 +366,7 @@ const LAYERS=[
       h+=`</ul></div>
         <p class="flag"><b>Six lanes, and two of them do not move</b>On ${ROAD_STATS.share}% of the street it is four lanes for moving traffic and two more for cars that are parked.</p>`;
       if(SW_STATS){
-        h+=`<div class="key"><h5>The walking surface</h5>
+        h+=`<div class="key"><h4>The walking surface</h4>
           <p>Measured across ${SW_STATS.n} stretches of the street's own sidewalk.</p>
           <ul>
             <li><span>Narrowest</span><b>${SW_STATS.narrow.w} ft</b></li>
@@ -287,7 +379,10 @@ const LAYERS=[
     }
   },
   {
-    id:'lots', name:'Lots and what may be built', count:LOTS.features.length+' fronting the street',
+    id:'lots', group:'Built', short:'Lots', name:'What could be built?', has:LOTS.features.length>0,
+    /* a count of lots, not a floor area total: the lot set is under revision (METHODOLOGY 4) */
+    get fig(){ return [`${LOTS.features.filter(f=>f.properties.unbuilt>0).length} of ${LOTS.features.length}`,'lots']; },
+    get sub(){ return `have room left to build &middot; ${LOTS.features.filter(f=>f.properties.lm===1).length} landmarked`; },
     on:true, open:false, ids:['lotFill','lotLine','lmHatch'], opacity:.58,
     says:`Every property fronting 42nd Street, at its real boundary from the city tax map. <b>Click one to see who owns it.</b>`,
     styles:[['zoning','The rules that govern it'],['capacity','Room left to build'],
@@ -302,19 +397,19 @@ const LAYERS=[
             const far=FAR[k];
             return `<li><i style="background:${ZONE[k]}"></i><span>${k}${far?` &middot; up to ${far}&times;`:''}</span><b>${n} lot${n>1?'s':''}</b></li>`;
           }).join('');
-          return rows?`<div class="key"><h5>${h}</h5><p>${note}</p><ul>${rows}</ul></div>`:'';
+          return rows?`<div class="key"><h4>${h}</h4><p>${note}</p><ul>${rows}</ul></div>`:'';
         }).join('')
         + `<p class="flag"><b>What "up to 15&times;" means</b>You may build floor area up to fifteen times the size of the lot. On a 10,000 sq ft lot that is 150,000 sq ft of building, stacked however the rules allow.</p>`;
       }
       if(this.style==='capacity'){
-        return `<div class="key"><h5>Floor area allowed and never built</h5>
+        return `<div class="key"><h4>Floor area allowed and never built</h4>
           <p>The gap between what the rules permit and what is standing.</p><ul>${
           CAP.map(([v,c],i)=>`<li><i style="background:${c}"></i><span>${i===0?'nothing spare':commas(v)+'+ sq ft'}</span></li>`).join('')}</ul></div>
           <p class="flag"><b>Treat this as a screen, not a promise</b>Most of these lots sit in a special district where the base rule is not the rule that governs. ${LOTS.features.filter(f=>f.properties.lm===1).length} are landmarked and cannot be built on at all.</p>`;
       }
       if(this.style==='landmark'){
         const n=LOTS.features.filter(f=>f.properties.lm===1).length;
-        return `<div class="key"><h5>Designated landmarks</h5>
+        return `<div class="key"><h4>Designated landmarks</h4>
           <p>Whatever the zoning allows, these cannot grow.</p><ul>
           <li><i style="background:#14120F"></i><span>designated</span><b>${n} lots</b></li>
           <li><i style="background:#E9E4D6"></i><span>not designated</span><b>${LOTS.features.length-n} lots</b></li>
@@ -322,54 +417,81 @@ const LAYERS=[
           <p class="flag"><b>This is why the capacity figure is a screen, not a promise</b>A landmarked lot can carry unbuilt floor area on paper and never be able to use it.</p>`;
       }
       if(this.style==='age'){
-        return `<div class="key"><h5>Year the building went up</h5>
+        return `<div class="key"><h4>Year the building went up</h4>
           <p>The street rebuilt itself in patches, not all at once.</p><ul>${
           AGE.map(([y,c])=>`<li><i style="background:${c}"></i><span>${y}s</span></li>`).join('')}</ul></div>`;
       }
-      return `<div class="key"><h5>Boundaries only</h5><p>Every lot line, no fill.</p></div>`;
+      return `<div class="key"><h4>Boundaries only</h4><p>Every lot line, no fill.</p></div>`;
     }
-  }
-];
+  },
+  TREE_ROW
+].filter(L=>L.has);
+const row=id=>LAYERS.find(L=>L.id===id);
+/* what is drawn before any link or reader has changed it */
+const ON_START=LAYERS.filter(L=>L.on).map(L=>L.id).join(',');
 
 /* ── panel ────────────────────────────────────────────────────────────── */
 function buildPanel(){
-  const host=$('#layerList');
+  const host=$('#layerList'); let group=null;
   LAYERS.forEach(L=>{
-    const row=el('div','layer'); row.dataset.on=L.on; row.dataset.open=L.open;
+    if(L.group!==group){
+      group=L.group; host.append(el('div','group',`<h2>${L.group}</h2>`));
+    }
+    const r=el('div','layer'); r.dataset.on=L.on; r.dataset.open=L.open;
+    /* two real buttons side by side: the switch draws the row, the header opens it. the heading
+       holds the question alone, and the button's hit area is stretched over the answer beside it. */
     const bar=el('div','layer__bar',
-      `<span class="sw" role="switch" aria-checked="${L.on}" tabindex="0"></span>
-       <span><span class="layer__name">${L.name}</span><span class="layer__count">${L.count}</span></span>
-       <span class="layer__caret">&#9654;</span>`);
-    const sw=bar.querySelector('.sw');
-    sw.onclick=e=>{e.stopPropagation(); toggle(L,row,sw);};
-    sw.onkeydown=e=>{ if(e.key===' '||e.key==='Enter'){e.preventDefault(); e.stopPropagation(); toggle(L,row,sw);} };
-    bar.onclick=()=>{
-      const opening = row.dataset.open!=='true';
-      /* one legend open at a time, or the rail becomes a single unreadable column */
-      if(opening) LAYERS.forEach(o=>{ if(o._row && o._row!==row) o._row.dataset.open='false'; });
-      row.dataset.open = opening ? 'true' : 'false';
-      if(opening) requestAnimationFrame(()=>row.scrollIntoView({block:'nearest'}));
-    };
-    const body=el('div','layer__body');
-    row.append(bar,body); host.append(row);
-    L._row=row; L._body=body; renderBody(L);
+      `<button class="sw" type="button" aria-pressed="${L.on}" aria-label="Show on the map: ${L.name}"></button>
+       <div class="layer__q">
+         <h3><button class="layer__head" type="button" id="head-${L.id}" aria-expanded="${L.open}" aria-controls="body-${L.id}" aria-describedby="fig-${L.id} ans-${L.id}">${L.name}</button></h3>
+         <span class="layer__fig" id="fig-${L.id}"><b></b><small></small></span>
+         <span class="layer__caret" aria-hidden="true">&#9654;</span>
+         <span class="layer__sub" id="ans-${L.id}"><span class="layer__count"></span>${L.chart||''}</span></div>`);
+    const body=el('div','layer__body'); body.id='body-'+L.id;
+    body.setAttribute('role','region'); body.setAttribute('aria-labelledby','head-'+L.id);
+    r.append(bar,body); host.append(r);
+    L._row=r; L._body=body; L._sw=bar.querySelector('.sw'); L._head=bar.querySelector('.layer__head');
+    L._sw.onclick=()=>toggle(L);
+    L._head.onclick=()=>{ setOpen(L,!L.open); link(); };
+    headline(L); renderBody(L);
   });
-  $('#allOff').onclick=()=>LAYERS.forEach(L=>{ if(L.on) toggle(L,L._row,L._row.querySelector('.sw')); });
+  /* the one control that is not a row sits under the last of them, so it belongs to no group */
+  const foot=el('div','group group--foot'), off=el('button','mini','hide all from the map'); off.type='button';
+  off.onclick=()=>LAYERS.forEach(o=>{ if(o.on) toggle(o); });
+  foot.append(off); host.append(foot);
+  /* a bench or the counter picked in a legend is a station like any other */
+  host.addEventListener('click',e=>{ const b=e.target.closest('[data-st]'); if(b) select({st:+b.dataset.st,lot:null}); });
 }
 
+/* the answer on the shut row. called again whenever the figure can move. */
+function headline(L){
+  const [fig,cap]=L.fig;
+  L._row.querySelector('.layer__fig b').innerHTML=fig;
+  L._row.querySelector('.layer__fig small').innerHTML=cap;
+  L._row.querySelector('.layer__count').innerHTML=L.sub;
+}
+
+/* one row open at a time, or the rail becomes a single unreadable column */
+function setOpen(L,open){
+  if(open) LAYERS.forEach(o=>{ if(o!==L&&o.open) setOpen(o,false); });
+  L.open=open; L._row.dataset.open=open; L._head.setAttribute('aria-expanded',open);
+  if(open) requestAnimationFrame(()=>L._row.scrollIntoView({block:'nearest'}));
+}
+
+/* the controls are written once. only the legend is redrawn after that, so a select or a
+   chip being worked by keyboard is never replaced under the reader. */
 function renderBody(L){
   let h=`<p class="says">${L.says}</p>`;
   if(L.styles)
-    h+=`<div class="ctl"><span>Colour by</span><select data-style>${
+    h+=`<div class="ctl"><label for="style-${L.id}">${L.short}: colour by</label><select id="style-${L.id}">${
       L.styles.map(([v,t])=>`<option value="${v}"${v===L.style?' selected':''}>${t}</option>`).join('')}</select></div>`;
   if(L.opacity!==undefined)
-    h+=`<div class="ctl"><span>Opacity</span><div class="slider">
-      <input type="range" min="10" max="100" value="${Math.round(L.opacity*100)}" data-op>
-      <output>${Math.round(L.opacity*100)}%</output></div></div>`;
-  /* one hour slider for the whole sheet. the legend sits in its own box so it can
-     be redrawn under a slider that is mid-drag. */
+    h+=`<div class="ctl"><label for="op-${L.id}">${L.short}: opacity</label><div class="slider">
+      <input type="range" id="op-${L.id}" min="10" max="100" value="${Math.round(L.opacity*100)}">
+      <output for="op-${L.id}">${Math.round(L.opacity*100)}%</output></div></div>`;
+  /* one hour slider for the whole sheet */
   if(L.hour)
-    h+=`<div class="ctl ctl--hour"><label for="hourIn">Hour of day, weekdays</label>
+    h+=`<div class="ctl ctl--hour"><label for="hourIn">${L.short}: hour of day, weekdays</label>
       <output id="hourOut" for="hourIn">${hourSpan(SEL.hour)}</output>
       <input type="range" id="hourIn" min="0" max="23" step="1" value="${SEL.hour}" aria-valuetext="${hourSpan(SEL.hour)}"></div>`;
   h+=`<div data-legend>${L.legend()}</div>`;
@@ -378,35 +500,43 @@ function renderBody(L){
       `<button type="button" data-extra="${k}" aria-pressed="${!!L.extraOn[k]}">${t}</button>`).join('')}</div>`;
   L._body.innerHTML=h;
 
-  const op=L._body.querySelector('[data-op]');
+  const op=L._body.querySelector('#op-'+L.id);
   if(op) op.oninput=e=>{ L.opacity=+e.target.value/100;
-    L._body.querySelector('output').textContent=e.target.value+'%'; paint(L); };
+    L._body.querySelector('.slider output').textContent=e.target.value+'%'; paint(L); };
   const hourIn=L._body.querySelector('#hourIn');
   if(hourIn) hourIn.oninput=e=>setHour(+e.target.value);
-  const sel=L._body.querySelector('[data-style]');
-  if(sel) sel.onchange=e=>{ L.style=e.target.value; paint(L); renderBody(L); };
+  const sel=L._body.querySelector('#style-'+L.id);
+  if(sel) sel.onchange=e=>{ L.style=e.target.value; paint(L); redraw(L); };
   L._body.querySelectorAll('[data-extra]').forEach(b=>{
-    b.onclick=()=>{ L.extraOn[b.dataset.extra]=!L.extraOn[b.dataset.extra]; paint(L); renderBody(L); };
+    b.onclick=()=>{ const k=b.dataset.extra; L.extraOn[k]=!L.extraOn[k];
+      b.setAttribute('aria-pressed',L.extraOn[k]); paint(L); redraw(L); };
   });
 }
+/* the legend alone. if focus was on a station button inside it, it goes back to the same one. */
+function redraw(L){
+  const box=L._body.querySelector('[data-legend]'), a=document.activeElement;
+  const st=box.contains(a)&&a.dataset?a.dataset.st:null;
+  box.innerHTML=L.legend();
+  const f=st!=null&&box.querySelector(`[data-st="${st}"]`); if(f) f.focus();
+}
 
-function toggle(L,row,sw){
-  L.on=!L.on; row.dataset.on=L.on; if(sw) sw.setAttribute('aria-checked',L.on);
-  if(L.on && row.dataset.open!=='true') row.dataset.open='true';
+function toggle(L){
+  L.on=!L.on; L._row.dataset.on=L.on; L._sw.setAttribute('aria-pressed',L.on);
+  if(L.on&&!L.open) setOpen(L,true);
   paint(L);
-  /* the bus also draws on the ruler, and its hour is part of the link */
-  if(L.id==='bus'){ buildRuler(); link(); }
+  /* some rows also draw on the ruler, and the bus hour is part of the link */
+  if(L.ruler) buildRuler();
+  link();
 }
 
 /* the one place the hour changes: slider, link and boot all come through here */
 function setHour(h){
   SEL.hour=Math.max(0,Math.min(23,Math.round(h)));
-  const L=LAYERS.find(x=>x.id==='bus'); if(!L||!L._body) return;
+  const L=row('bus'); if(!L||!L._body) return;
   const inp=L._body.querySelector('#hourIn');
   if(inp){ inp.value=SEL.hour; inp.setAttribute('aria-valuetext',hourSpan(SEL.hour)); }
   L._body.querySelector('#hourOut').textContent=hourSpan(SEL.hour);
-  L._body.querySelector('[data-legend]').innerHTML=L.legend();
-  L._row.querySelector('.layer__count').textContent=L.count;
+  redraw(L); headline(L);
   if(MAP_OK&&map.getSource&&map.getSource('bus')) map.getSource('bus').setData(busGeo(SEL.hour));
   buildRuler(); link();
   /* an open station card follows the hour, without jumping back to its top */
@@ -528,6 +658,22 @@ map.on('style.load',()=>{
       'circle-radius':['interpolate',['linear'],['zoom'],
         13,['max',1.7,['*',.13,['get','dbh']]], 17,['max',4,['*',.55,['get','dbh']]]]}});
 
+  /* benches solid, the counter a ring: ink only, so neither borrows a data colour */
+  const dot=(id,src,paint)=>map.addLayer({id,type:'circle',source:src,slot:'top',layout:{visibility:'none'},
+    paint:{'circle-emissive-strength':1,...paint}});
+  if(BENCH_STATS){
+    map.addSource('benches',{type:'geojson',data:{type:'FeatureCollection',features:BENCHES.map(b=>({
+      type:'Feature',properties:{ft:b.ft, side:b.side, installed:b.installed||''},geometry:{type:'Point',coordinates:[b.lon,b.lat]}}))}});
+    dot('benchDots','benches',{'circle-color':'#14120F','circle-stroke-color':'#FCFAF5','circle-stroke-width':1.5,
+      'circle-radius':['interpolate',['linear'],['zoom'],13,3.5,17,8]});
+  }
+  if(PED_STATS){
+    map.addSource('counter',{type:'geojson',data:{type:'FeatureCollection',features:[
+      {type:'Feature',properties:{},geometry:{type:'Point',coordinates:[PED.lon,PED.lat]}}]}});
+    dot('countDot','counter',{'circle-color':'#FCFAF5','circle-stroke-color':'#14120F','circle-stroke-width':2.5,
+      'circle-radius':['interpolate',['linear'],['zoom'],13,4,17,9]});
+  }
+
   map.addSource('aves',{type:'geojson',data:{type:'FeatureCollection',features:AVES.map(([ft,name])=>({
     type:'Feature',properties:{name},geometry:{type:'Point',coordinates:at(ft)}}))}});
   map.addLayer({id:'aveLab',type:'symbol',source:'aves',slot:'top',
@@ -583,6 +729,18 @@ function wire(){
       showTip(e,`<b>${p.mph!=null?(+p.mph).toFixed(2)+' mph':'no buses measured'}</b><em>${DIRS[p.dir]}, ${p.name}</em>`
         +`<span>${hourSpan(SEL.hour)} &middot; ${commas(p.trips)} buses</span>`);});
     map.on('mouseleave','busLine',()=>tip.dataset.show='false');
+  }
+  /* both of these are also buttons in their row's legend, for tap and keyboard */
+  if(map.getLayer('benchDots')){
+    map.on('mousemove','benchDots',e=>{const p=e.features[0].properties;
+      showTip(e,`<b>DOT bench</b><em>${p.side==='n'?'north':'south'} side, ${block(between(p.ft))}</em>`
+        +`<span>${p.installed?'installed '+day(p.installed):commas(p.ft)+' ft'}</span>`);});
+    map.on('mouseleave','benchDots',()=>tip.dataset.show='false');
+  }
+  if(map.getLayer('countDot')){
+    map.on('mousemove','countDot',e=>showTip(e,`<b>${commas(PED_LAST.pm)} people</b><em>${PM_WIN}, one day in ${day(PED_LAST.p)}</em>`
+        +`<span>DOT count location ${PED.loc}</span>`));
+    map.on('mouseleave','countDot',()=>tip.dataset.show='false');
   }
   map.on('move',syncRuler);
 }
@@ -670,12 +828,16 @@ function select(next,boot){
   link();
 }
 /* the view is a link: ?st=4000 opens this card, &lot= opens the lot inside it, &hr=17 switches
-   the bus on at 5pm */
+   the bus on at 5pm, &q=benches is the open row, &on=lots,trees is what is drawn. on is only
+   written once the drawn set or the open row has moved from how the sheet starts. */
 function link(){
   const q=new URLSearchParams(location.search), open=SEL.st!=null;
   open?q.set('st',SEL.st):q.delete('st');
   SEL.lot&&open?q.set('lot',SEL.lot):q.delete('lot');
-  LAYERS.find(L=>L.id==='bus').on?q.set('hr',SEL.hour):q.delete('hr');
+  (row('bus')||{}).on?q.set('hr',SEL.hour):q.delete('hr');
+  const o=LAYERS.find(L=>L.open), on=LAYERS.filter(L=>L.on).map(L=>L.id).join(',');
+  o?q.set('q',o.id):q.delete('q');
+  o||on!==ON_START?q.set('on',on):q.delete('on');
   const qs=q.toString();
   try{ history.replaceState(null,'',location.pathname+(qs?'?'+qs:'')+location.hash); }catch(e){}
 }
@@ -804,13 +966,17 @@ function buildRuler(){
 
   /* the bus at the chosen hour, either side of the axis as on the street: westbound above,
      eastbound below. one bar per leg at true length. where no leg is kept, a dashed blank. */
-  if(BUS_STATS&&LAYERS.find(L=>L.id==='bus').on){
+  if(BUS_STATS&&row('bus').on){
     const Y={W:17,E:33};
     BUS.filter(r=>r.h===SEL.hour).forEach(r=>add('rect',{x:X(r.a)+.5,y:Y[r.dir],width:Math.max(1,X(r.b)-X(r.a)-1),height:4,
       fill:r.mph!=null?busColour(r.mph):'none',stroke:'#14120F','stroke-width':.6}));
     Object.entries(BUS_STATS.blank).forEach(([d,list])=>list.forEach(([a,b])=>
       add('line',{x1:X(a),x2:X(b),y1:Y[d]+2,y2:Y[d]+2,stroke:'#14120F','stroke-opacity':.5,'stroke-width':.8,'stroke-dasharray':'2 3'})));
   }
+
+  /* on the axis, while their rows are on: each bench solid, the counter a ring, as on the map */
+  if((row('benches')||{}).on) BENCHES.forEach(b=>add('circle',{cx:X(b.ft),cy:27,r:3,fill:'#14120F'}));
+  if((row('people')||{}).on) add('circle',{cx:X(PED.ft),cy:27,r:4,fill:'#FCFAF5',stroke:'#14120F','stroke-width':1.5});
 
   /* avenues, decluttered left to right: a label is drawn only if it clears the
      last one drawn, so nothing ever collides no matter how narrow the window */
@@ -901,12 +1067,23 @@ let VIEW=[0,LEN];
 $('#metaLots').textContent=LOTS.features.length+' lots';
 $('#metaTrees').textContent=TREES.length+' trees';
 $('#ruler').setAttribute('aria-valuemax',LEN);
-(()=>{ /* ?hr=17 switches the bus on at that hour with its legend open */
-  const v=parseInt(new URLSearchParams(location.search).get('hr'),10);
-  if(!BUS_STATS||!(v>=0&&v<=23)) return;
-  SEL.hour=v; LAYERS.forEach(L=>{ L.open=L.id==='bus'; if(L.open) L.on=true; });
+(()=>{ /* ?on=lots,trees is exactly what is drawn. ?hr=17 switches the bus on at that hour.
+     ?q=benches opens that row, and in a hand-typed link with no on it draws it too.
+     with no q the bus row is the one opened. */
+  const qs=new URLSearchParams(location.search), v=parseInt(qs.get('hr'),10);
+  const timed=BUS_STATS&&v>=0&&v<=23, want=row(qs.get('q'))||(timed?row('bus'):null);
+  if(qs.has('on')){ const ids=qs.get('on').split(','); LAYERS.forEach(L=>{ L.on=ids.includes(L.id); }); }
+  if(timed){ SEL.hour=v; row('bus').on=true; }
+  if(want){ LAYERS.forEach(L=>{ L.open=L===want; }); if(!qs.has('on')) want.on=true; }
 })();
 buildPanel(); buildRuler();
+(()=>{ /* a row opened by the link is brought to the top of the rail. only the rail is scrolled,
+     never the page, so a stacked layout stays where the station link puts it. */
+  const L=LAYERS.find(o=>o.open), rail=$('#layerList'); if(!L||!rail) return;
+  const go=()=>requestAnimationFrame(()=>{ if(rail.scrollHeight>rail.clientHeight)
+    rail.scrollTop+=L._row.getBoundingClientRect().top-rail.getBoundingClientRect().top; });
+  if(document.readyState==='complete') go(); else addEventListener('load',go,{once:true});
+})();
 (()=>{ /* ?st=4000 opens the card at 4,000 ft. ?lot=<bbl> alone stands at that lot. */
   const q=new URLSearchParams(location.search), lot=q.get('lot');
   const p=lot&&LOT_BY_BBL.get(lot), k=p&&LOT_BAND.get(p.bbl);
