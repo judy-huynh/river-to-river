@@ -102,7 +102,7 @@ fill the sheet, and the foot of the sheet says so and gives the screen's width.
 |---|---|---|
 | `LINE42` | OpenStreetMap via Overpass | Snapped centreline, stationed in feet |
 | `AVES` | NYC Street Centerline (CSCL) `inkn-q76z` | Where 18 cross streets meet the centreline, stationed; 14 are the avenues the ruler ticks. See section 1a |
-| `LOTS_POLY`, `LOTS_OUT` | NYC MapPLUTO (Dept of City Planning) | Tax lots near the centreline with owner, zoning, floor area built and allowed, less the lots addressed on another numbered street, which are kept in `LOTS_OUT` and not drawn. **Under revision, see section 4** |
+| `LOTS_POLY`, `LOTS_OUT` | NYC MapPLUTO (Dept of City Planning) | Tax lots near the centreline with owner, zoning, floor area built and allowed, split by the frontage rule: a lot with a boundary vertex within 60 ft of the centreline is in `LOTS_POLY`, the rest of the 130-lot pool is kept in `LOTS_OUT` and not drawn. See section 4 |
 | `TREES` | NYC Parks Forestry Tree Points | 281 street trees, stationed, with species, trunk diameter, condition |
 | `ROAD` | NYC CSCL street centerline (DoITT/OTI) | 26 segments with roadway width, moving lanes, parking lanes |
 | `SIDEWALK` | Sidewalk Widths NYC (Meli Harvey), derived from the NYC planimetric sidewalk polygons `vfx9-tbb6` | See section 3 |
@@ -149,10 +149,10 @@ Derived figures computed in the page, not typed:
     metered face: the merged length of the faces on each side over twice the street length
     (section 3e). The row words it as a share of the length of the two sides, not of the curb,
     because that length includes every avenue crossing and the stretch past 1st Avenue.
-  - *What could be built?* The count of drawn lots whose unbuilt floor area is above zero, out of
-    all drawn lots, and the count that are landmarked. It is a count and not a floor area total
-    on purpose: the drawn lot set is under revision (section 4), and a total summed over it would
-    not match the total section 4 states.
+  - *What could be built?* The sum of unbuilt floor area over the drawn lots, in millions of
+    sq ft to one decimal, captioned as floor area on paper. It matches the total section 4 states
+    for the frontage set. The row's description gives the full figure and the part of it on
+    landmarked lots.
   - *Street trees.* The number of records in `TREES` and the number of tree gaps as defined above. Where
     the open row names a gap, each end is named by the avenue whose station is nearest to it.
   A row appears only when its global is baked and non-empty.
@@ -233,13 +233,13 @@ ignored: it is off the sheet, not a place on the street.
    (`FRONT_TOL`, to absorb a jog in the building line) is listed with it. A lot standing behind
    another, or the rear arm of an L-shaped lot, is not listed. Side is the baked side. This is
    computed in the page from the lot's own coordinates, so it re-bases with the centreline.
-   Consequence, stated: three lots in the current 120 are never listed at any station because
-   another lot always stands between them and the street (574 and 576 9 Avenue, and the lot
-   recorded only as "1 Avenue"). They still open from the map. The list is recomputed by
+   Consequence, stated: one lot in the current 124 is never listed at any station because
+   another lot always stands between it and the street (the lot recorded only as "1 Avenue").
+   It still opens from the map. The list is recomputed by
    `node scripts/check/station.js --lots`. The same test is run once more over the drawn lots
-   and the lots the lot rule took out (section 4) together; a taken-out lot that fronts the
-   station is named under that side's list with the reason it is outside the set, and is never
-   counted. Two flags
+   and the lots outside the frontage rule (section 4) together; where one of those is the
+   nearest lot to the street at the station, it is named under that side's list with its measured
+   distance, and is never counted. Two flags
    are read off each record so the list cannot be misread: a lot whose address does not name
    42nd Street is marked as such (a corner lot addressed on its avenue still fronts the street),
    and a landmarked lot (`lm`) is marked beside its unbuilt floor area, which section 4 says it
@@ -579,87 +579,122 @@ that crashes on an avenue inside an intersection are counted. Checked in
 `--check` re-derives the set up to the baked last day. The police amend old reports, and an
 amended report shows as a difference. Reproduce with `python3 scripts/bake/crashes.py --check`.
 
-## 4. The lot rule, and what is being corrected
+## 4. The lot rule: frontage
 
-The rule, settled 19 Sep 2026: **a lot is in the set if it is addressed on 42nd Street.** No
-exceptions in either direction, including when it weakens a finding.
+The rule, set 20 Sep 2026: **a lot is in the set if any vertex of its boundary lies within 60 ft
+of the `LINE42` centreline.** The address is not read. The rule applies in both directions,
+including when it weakens a finding.
 
-### Applied to the plan sheet (20 Sep 2026)
+**Why 60 ft.** The right of way of 42nd Street is about 100 ft wide: a 55 ft roadway (`ROAD`,
+section 2) and two walks of about 20 and 25 ft. The street line, where private lots begin, is
+therefore about 50 ft from the centreline, and 60 ft leaves 10 ft of tolerance for a centreline
+that does not run exactly down the middle. The run bears this out: the nearest boundary vertex of
+the lots in the set is 0.1 to 56.4 ft from the centreline, median 45.8 ft, and the nearest lot
+outside it is at 61.1 ft. Any threshold from 57 to 61 ft gives the same 124 lots.
 
-`scripts/bake/lot_rule.py` applies the rule to `window.LOTS_POLY`. The address is normalised
-first: capitals, single spaces, and the ordinal suffix stripped, so "42Nd", "42ND" and "42" all
-read as 42. East and West both count. Each lot then falls in one of three classes:
+**Why frontage replaced the address.** The rule of 19 Sep 2026 was the mailing address: a lot
+addressed on another numbered street left the set. Measured against the centreline, that rule
+removed nine lots that front 42nd Street and kept five that do not come within 60 ft of it
+(tables below). A through-block lot is addressed by PLUTO on one of its two streets, and which one
+is a matter of record keeping. Frontage is measured from the geometry the sheet already draws.
 
-| Class | Reads as | Lots | Unbuilt floor area, sq ft | What happens |
+### The pool and the run
+
+The pool is `scripts/bake/source/lots_pool.geojson`: the 130 MapPLUTO lots that were baked near
+the centreline before any rule was applied, recovered from the repository history
+(`git show 254424a^:plan/data.js`, `window.LOTS_POLY`) and stored as a source snapshot so the
+step can be re-run. The owner names in it are already re-cased (section 4a).
+`scripts/bake/lot_rule.py` projects every vertex of every outer ring onto `LINE42`
+(`station.project`, section 1), takes the smallest offset as the lot's distance, and writes:
+
+- `window.LOTS_POLY`: the lots at 60 ft or less, in pool order.
+- `window.LOTS_OUT`: the rest, each kept whole with its measured distance (`off`, ft) and the
+  reason in words (`why`). Not drawn, not counted.
+- `window.LOTS_META`: the threshold (`front_ft`) and the pool size (`pool`), which the page reads
+  so its description of the rule quotes the run.
+
+The script prints every lot, in and out, with its measured distance, lists the lots within 10 ft
+of the threshold either way, and asserts that Grand Central Terminal (BBL 1012800001, 46.8 ft) is
+in. Run 20 Sep 2026:
+
+| Set | Lots | With unbuilt floor area | Landmarked | Unbuilt floor area, sq ft |
 |---|---|---|---|---|
-| on 42 | East or West 42 Street | 71 | 4,652,801 | Stays |
-| other numbered street | East or West 41 or 43 Street | 10 | 1,219,329 | Leaves |
-| no numbered street | An avenue, Broadway, Times Square, a place, or no house number | 49 | 10,897,681 | Stays for now, see below |
+| Pool, no rule | 130 | 65 | 16 | 16,769,811 |
+| Address rule, 19 Sep | 120 | 59 | 15 | 15,550,482 |
+| Frontage rule, 20 Sep | 124 | 61 | 16 | 16,571,834 |
 
-Before: 130 lots, 65 with unbuilt floor area above zero, 16 landmarked, 16,769,811 sq ft unbuilt.
-After: 120 lots, 59 with unbuilt floor area above zero, 15 landmarked, 15,550,482 sq ft unbuilt.
-Grand Central Terminal (BBL 1012800001, "89 East 42Nd Street" in PLUTO) reads as on 42 and stays,
-as do the three other lots PLUTO spells "42Nd". The ten that left:
+5,560,484 sq ft of the 16,571,834 is on the 16 landmarked lots.
 
-| BBL | Address | Station, ft | Side | Unbuilt, sq ft | Landmarked |
-|---|---|---|---|---|---|
-| 1010700001 | 563 West 41 Street | 1,084 | south | 162,904 | no |
-| 1010700005 | 521 West 41 Street | 1,292 | south | 502,270 | no |
-| 1010710042 | 520 West 43 Street | 1,487 | north | 0 | no |
-| 1010717501 | 500 West 43 Street | 1,734 | north | 0 | no |
-| 1010510029 | 420 West 41 Street | 2,552 | south | 127,070 | no |
-| 1010330001 | 360 West 43 Street | 2,881 | north | 0 | no |
-| 1010330049 | 332 West 43 Street | 3,140 | north | 162,612 | no |
-| 1010140039 | 214 West 43 Street | 4,230 | north | 156,660 | no |
-| 1010130042 | 221 West 41 Street | 4,232 | south | 0 | no |
-| 1013350005 | 320 East 43 Street | 9,442 | north | 107,813 | yes |
+### Lots that moved
 
-The ten are not deleted. Each is kept whole, geometry included, in `window.LOTS_OUT` with the
-reason it left, so the step can be re-run, checked (`--check`) and reversed. The pool the script
-reads is always `LOTS_POLY` plus `LOTS_OUT`. The ten are not drawn and not counted, and every
-lot figure on the sheet is computed from the 120. No shed permit record (section 3f) joins to a
-lot that left.
+Nine lots the address rule had removed are back in. Each is a through-block lot with a boundary
+on the 42nd Street street line, 38.7 to 48.9 ft from the centreline, the same as its neighbours.
+Together they carry 1,219,329 sq ft of unbuilt floor area.
 
-**What the step does to the drawing, stated.** The rule is about the address, not the frontage.
-Projecting every vertex of the ten onto `LINE42` shows nine of them have an edge on the 42nd
-Street building line (nearest edge 39 to 49 ft from the centreline, the same as the lots that
-stay); they are through-block lots PLUTO addresses on the far street. Only 500 West 43 Street
-(nearest edge 77 ft) stands behind another lot. So the sheet no longer draws every lot that
-fronts the street. Its lot layer is labelled as the set actually drawn: the number of lots
-addressed on 42nd Street, the number addressed on an avenue or a named street or place (the
-third class above, still inside pending the author's ruling below), and the number left out with
-the street numbers they name. The page counts all three from the records with the same address
-test as the bake, and reads the left-out lots from `LOTS_OUT`. Where each of the nine fronts, and for how many feet of that
-stretch no drawn lot is listed on the same side (`node scripts/check/station.js --lots`, run
-20 Sep 2026):
+| BBL | Address | Station, ft | Side | Nearest vertex, ft | Unbuilt, sq ft | Landmarked |
+|---|---|---|---|---|---|---|
+| 1010700001 | 563 West 41 Street | 1,084 | south | 48.6 | 162,904 | no |
+| 1010700005 | 521 West 41 Street | 1,292 | south | 48.2 | 502,270 | no |
+| 1010710042 | 520 West 43 Street | 1,487 | north | 48.7 | 0 | no |
+| 1010510029 | 420 West 41 Street | 2,552 | south | 45.7 | 127,070 | no |
+| 1010330001 | 360 West 43 Street | 2,881 | north | 48.9 | 0 | no |
+| 1010330049 | 332 West 43 Street | 3,140 | north | 47.3 | 162,612 | no |
+| 1010140039 | 214 West 43 Street | 4,230 | north | 44.6 | 156,660 | no |
+| 1010130042 | 221 West 41 Street | 4,232 | south | 38.7 | 0 | no |
+| 1013350005 | 320 East 43 Street | 9,442 | north | 40.3 | 107,813 | yes |
 
-| Address | Side | Fronts, ft | Feet with no drawn lot on that side |
+Six lots of the pool are out. Five of them were in under the address rule, with 197,977 sq ft of
+unbuilt floor area between them. 500 West 43 Street was out under both rules.
+
+| BBL | Address | Station, ft | Side | Nearest vertex, ft | Unbuilt, sq ft | Under the address rule |
+|---|---|---|---|---|---|---|
+| 1010717501 | 500 West 43 Street | 1,734 | north | 76.7 | 0 | out |
+| 1010320063 | 574 9 Avenue | 2,818 | south | 103.9 | 8,781 | in |
+| 1010320162 | 576 9 Avenue | 2,831 | south | 84.6 | 7,696 | in |
+| 1013340037 | 328 East 42 Street | 9,599 | south | 61.2 | 0 | in |
+| 1013340017 | Tudor City Place | 9,669 | south | 61.1 | 156,500 | in |
+| 1013540011 | 421 East 42 Street | 10,254 | north | 76.0 | 25,000 | in |
+
+**Two near calls, stated.** 328 East 42 Street and the south-side Tudor City Place lot are 1.2 and
+1.1 ft past the threshold, and one of them is addressed on 42nd Street. Between 2nd and 1st Avenue
+the lot lines on the two sides stand about 56 ft (north) and 61 ft (south) from the centreline,
+about 117 ft apart, so the street is wider there than the 100 ft the threshold assumes. The
+north-side lots at that spot are in at 56.0 and 56.4 ft and the south-side lots are out. A
+threshold of 62 ft would bring both south-side lots in and add 156,500 sq ft. The rule is applied
+as written and the two are listed here so the choice can be revisited.
+
+**What the step does to the drawing.** Where a lot outside the set is the nearest lot to the
+street, the map draws nothing and the station card names the lot, gives its measured distance and
+links here. Where, and for how many feet no drawn lot is listed on the same side
+(`node scripts/check/station.js --lots`, run 20 Sep 2026):
+
+| Address | Side | Nearest lot from, ft | Feet with no drawn lot on that side |
 |---|---|---|---|
-| 563 West 41 Street | south | 1,000 to 1,132 | 133 |
-| 521 West 41 Street | south | 1,133 to 1,459 | 132 |
-| 520 West 43 Street | north | 1,397 to 1,472 | 74 |
-| 420 West 41 Street | south | 2,520 to 2,571 | 51 |
-| 360 West 43 Street | north | 2,790 to 2,907 | 117 |
-| 332 West 43 Street | north | 3,094 to 3,191 | 81 |
-| 221 West 41 Street | south | 4,192 to 4,270 | 23 |
-| 214 West 43 Street | north | 4,271 to 4,289 | 17 |
-| 320 East 43 Street | north | 9,329 to 9,531 | 201 |
+| 328 East 42 Street | south | 9,543 to 9,641 | 98 |
+| Tudor City Place | south | 9,641 to 9,731 | 91 |
+| 421 East 42 Street | north | 10,239 to 10,279 | 0 |
 
-The two longest holes are 563 West 41 Street and 320 East 43 Street, the one landmarked lot of
-the ten. So a hole is not read as missing data, the station card reads `LOTS_OUT`: at any station
-one of the nine fronts, the card names it under that side's list, gives the reason it left
-(`why`) and links here. It is the only place the page reads `LOTS_OUT` besides the count in the
-layer's description, and neither adds a taken-out lot to any figure. The map still draws nothing
-there.
+500 West 43 Street, 574 9 Avenue and 576 9 Avenue stand behind a drawn lot at every station and
+are never named on a card. The station card and the count in the lot row's description are the
+only places the page reads `LOTS_OUT`, and neither adds a lot outside the set to any figure.
 
-**Open, for the author.** Read literally, the rule would also take out the 49 lots in the third
-class, leaving 71. Those 49 are the corner and through lots that front 42nd Street under another
-address, among them 476 5 Avenue, 395 Lexington Avenue, 641 8 Avenue, 1475 Broadway and the
-Tudor City lots, and they hold 10,897,681 of the 15,550,482 sq ft still on the sheet. This step
-leaves them in because the defect recorded here was the ten lots on 41st and 43rd Street, and
-removing 49 more is a judgement about the rule, not a repair. `python3 scripts/bake/lot_rule.py
---strict` reports the literal reading and writes nothing, since the check suite and the page
-expect only numbered-street lots in `LOTS_OUT`; the script lists all 49 on every run.
+### The figure on the lot row
+
+The row "What could be built?" shows the sum of `unbuilt` over the drawn lots, computed by the
+page from `LOTS_POLY`: 16,571,834 sq ft on 61 of the 124 lots, shown as 16.6m and captioned as
+floor area on paper. The row's description gives the full figure, the count of lots in the set
+and in the pool, the threshold read from `LOTS_META`, and the part of the total on landmarked
+lots. `unbuilt` is the per-lot figure defined in section 2: lot area times the allowed floor area ratio,
+less the floor area built.
+
+Unbuilt floor area is a screen. Most lots sit in special districts where the base floor area
+ratio is not the governing rule, and landmarked lots carry floor area on paper that they may never
+be able to use. The page states both beside the figure.
+
+`node scripts/check/station.js` derives the nearest vertex a second time, in the page's own
+projection, and asserts that every drawn lot is within the baked threshold, every lot in
+`LOTS_OUT` is beyond it with its `off` correct to 0.1 ft, that the two sets add up to the pool,
+and that Grand Central Terminal is drawn. Reproduce with `python3 scripts/bake/lot_rule.py --check`.
 
 Still to be corrected in the parked analysis set, which is not the plan set:
 
@@ -669,10 +704,7 @@ Still to be corrected in the parked analysis set, which is not the plan set:
 - With Grand Central included in that set, "88% of unbuilt capacity sits outside the four hubs"
   becomes 55%, total unbuilt capacity moves from 3.4m to 5.4m sq ft, and the share surviving
   special-district and landmark checks moves from 10% to 6%. None of the three sets (82, 86, or
-  the 120 on the plan sheet) is yet the same set.
-
-Unbuilt capacity is a **screen, not a promise**: most lots sit in special districts where the base
-FAR is not the governing rule, and landmarked lots carry floor area on paper that can never be used.
+  the 124 on the plan sheet) is yet the same set.
 
 ### 4a. Owner names (added 19 Sep 2026)
 
@@ -718,11 +750,13 @@ or data.ny.gov resource IDs.
 - **No truck percentage exists** for 42nd Street in any machine-readable source. The claim is not made.
 - **"Zero plazas" is false.** Times Square Plaza abuts the roadbed. The accurate statement is zero
   plazas addressed on 42nd Street.
-- **The lot layer is not every lot that fronts the street, and not only lots addressed on it.**
-  It is the lots addressed on 42nd Street plus the lots with no numbered-street address (avenues,
-  Broadway, places), which stay pending the author's ruling in section 4. The layer's label gives
-  both counts. Nine through-block lots addressed on 41st and 43rd Street front it and are not drawn,
-  one of them landmarked; section 4 lists where. The station card names them; the map does not.
+- **The lot layer is set by a distance, and two lots fall just outside it.** It is the 124 lots
+  with a boundary vertex within 60 ft of the centreline (section 4). 328 East 42 Street and the
+  south-side Tudor City Place lot are 61.2 and 61.1 ft out and are not drawn, which leaves the
+  south side between 9,543 and 9,731 ft with no drawn lot. The station card names them there.
+- **The 16.6m sq ft on the lot row is floor area on paper.** It is the base zoning arithmetic
+  summed over the set. It takes no account of special district rules, and 5,560,484 sq ft of it
+  is on landmarked lots.
 - Injury counts have no denominator. The data says how many people were hurt, not how dangerous
   the street is per person walking it.
 

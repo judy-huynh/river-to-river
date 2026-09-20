@@ -524,15 +524,15 @@ const LAYERS=[
   },
   {
     id:'lots', group:'Built', short:'Lots', name:'What could be built?', has:LOTS.features.length>0,
-    /* a count of lots, not a floor area total: the lot set is under revision (METHODOLOGY 4) */
-    get fig(){ return [`${LOTS.features.filter(f=>f.properties.unbuilt>0).length} of ${LOTS.features.length}`,'lots']; },
-    get sub(){ return `have room left to build &middot; ${LOTS.features.filter(f=>f.properties.lm===1).length} landmarked`; },
+    /* the sum of unbuilt floor area over the drawn lots, in millions of sq ft (METHODOLOGY 2, 4) */
+    get fig(){ return [`${(LOT_STATS.unbuilt/1e6).toFixed(1)}m`,'sq ft on paper']; },
+    get sub(){ return `floor area allowed and not built &middot; most of it cannot be used`; },
     on:true, open:false, ids:['lotFill','lotLine','lmHatch'], opacity:.58,
     /* the set as it is drawn, every count from the records (METHODOLOGY 4) */
-    get says(){ const all=LOTS.features.length, on=LOTS.features.filter(f=>streetNo(f.properties.addr)==='42').length;
-      const out=window.LOTS_OUT||[], nos=[...new Set(out.map(f=>streetNo(f.properties.addr)).filter(Boolean))].sort((a,b)=>a-b);
-      return `${all} lots along the street, at their boundary from the city tax map (MapPLUTO). ${on} are addressed on 42nd Street, East or West. ${all-on} are addressed on an avenue or a named street or place.`
-        +(out.length?` ${out.length} lot${out.length===1?'':'s'} addressed on ${nos.join(' or ')} Street ${out.length===1?'is':'are'} left out. <a href="${METHOD}#4-the-lot-rule-and-what-is-being-corrected">Method</a>.`:'')
+    get says(){ const S=LOT_STATS, M=window.LOTS_META, out=(window.LOTS_OUT||[]).length;
+      return `${S.all} lots front the street, at their boundary from the city tax map (MapPLUTO).`
+        +(M?` A lot is in the set when its boundary comes within ${M.front_ft} ft of the middle of the street, whatever its address. ${S.on} are addressed on 42nd Street and ${S.all-S.on} on an avenue or another street. ${out} of the ${M.pool} lots nearby ${out===1?'is':'are'} left out. <a href="${METHOD}#4-the-lot-rule-frontage">Method</a>.`:'')
+        +` ${commas(S.unbuilt)} sq ft of floor area is allowed and not built, on ${S.room} of the ${S.all} lots. That is floor area on paper: most of these lots sit in a special district where the base rule is not the rule that governs, and ${commas(S.lmUnbuilt)} sq ft of it is on the ${S.lm} landmarked lots.`
         +` <b class="scr">Click one to see who owns it.</b>`; },
     styles:[['zoning','The rules that govern it'],['capacity','Room left to build'],
       ['landmark','What cannot be touched'],['age','When it was built'],['plain','Outline only']],
@@ -944,8 +944,12 @@ const SEL={st:null, lot:null, hour:HOUR_START};
 const AVE_FULL={Mad:'Madison',Lex:'Lexington'};
 const aveShort=n=>AVE_FULL[n]||n;
 const aveName=n=>aveShort(n)+' Avenue';
-/* the numbered street an address names, as the lot rule reads it (scripts/bake/lot_rule.py) */
+/* the numbered street an address names. a label only: the lot rule is frontage (METHODOLOGY 4) */
 const streetNo=a=>((a||'').toUpperCase().replace(/\s+/g,' ').trim().replace(/\b(\d+)(ST|ND|RD|TH)\b/g,'$1').match(/^(?:[0-9][0-9A-Z-]* )?(?:EAST|WEST|E|W) (\d+) (?:STREET|ST)$/)||[])[1];
+/* the lot row's figures, all from the drawn lots. on is the lots addressed on 42nd Street. */
+const LOT_STATS=(()=>{ const P=LOTS.features.map(f=>f.properties), sum=l=>l.reduce((t,p)=>t+(p.unbuilt||0),0), lm=P.filter(p=>p.lm===1);
+  return {all:P.length, room:P.filter(p=>p.unbuilt>0).length, on:P.filter(p=>streetNo(p.addr)==='42').length,
+    lm:lm.length, unbuilt:sum(P), lmUnbuilt:sum(lm)}; })();
 const feet=v=>v==null?'not measured here':v+' ft';
 /* '2026-05-20' to '20 May 2026', '2026-05' to 'May 2026'. no Date object, so no timezone slip. */
 const day=iso=>{const [y,m,d]=iso.split('-'); return (d?+d+' ':'')+MON[m-1]+' '+y;};
@@ -1069,7 +1073,7 @@ function stationHTML(P){
     return t.length?`<span class="num">${t.join(' &middot; ')}</span>`:'';};
   const none=parts.every(x=>x[1]==null);
   /* a lot the rule took out that fronts here is named, so a gap is not read as a data hole */
-  const outList=out=>out.map(p=>`<p class="none">${p.addr} fronts here. It is ${p.why} and is outside the lot set. <a href="${METHOD}#4-the-lot-rule-and-what-is-being-corrected">Method</a></p>`).join('');
+  const outList=out=>out.map(p=>`<p class="none">${p.addr} is the nearest lot here. It is outside the lot set because ${p.why}, and the set takes lots within ${window.LOTS_META.front_ft} ft. <a href="${METHOD}#4-the-lot-rule-frontage">Method</a></p>`).join('');
   const lotList=(side,list,out)=>`<h4 class="micro">${side} side &middot; ${list.length} lot${list.length===1?'':'s'}</h4>`
     +(list.length?`<ul class="lotrows">${list.map(p=>
       `<li><button type="button" data-lot="${p.bbl}">`

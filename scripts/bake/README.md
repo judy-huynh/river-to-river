@@ -15,7 +15,7 @@ From the repo root:
     python3 scripts/bake/owner_case.py          # re-case the owner names in window.LOTS_POLY
 
     python3 scripts/bake/lot_rule.py --check    # the lot rule already applied, writes nothing
-    python3 scripts/bake/lot_rule.py            # lots addressed on another numbered street move to window.LOTS_OUT, the station card names them
+    python3 scripts/bake/lot_rule.py            # frontage test over source/lots_pool.geojson into window.LOTS_POLY, window.LOTS_OUT, window.LOTS_META
 
     python3 scripts/bake/aves.py --check        # where the cross streets meet the centreline, writes nothing
     python3 scripts/bake/aves.py                # re-derive and write window.AVES
@@ -47,7 +47,8 @@ From the repo root:
 
 `--check` exits 0 when the re-derived set equals what is baked, 1 when it differs. The shed permits
 and the crashes come from sources that change daily, so their check re-derives the set as of the
-baked day: a difference there means the source has moved and the set wants re-baking. Large sources
+baked day: a difference there means the source has moved and the set wants re-baking. `lot_rule.py` reads no network source: its pool is the snapshot `source/lots_pool.geojson`,
+the 130 MapPLUTO lots baked before any rule was applied. Large sources
 download once to a `river-to-river` folder in the system temp directory (on macOS that is under
 `/var/folders`, not `/tmp`), never into the repo. Set `R2R_CACHE` to use another folder, for
 example one that already holds the file: `R2R_CACHE=/tmp/claude-501 python3 scripts/bake/sidewalk.py --check`.

@@ -57,9 +57,11 @@ decisions the author has not made yet.
   42nd Street, and the 42nd Street Ferry once ran from East 42nd Street across to Williamsburg, so
   the street was built river to river and boat to boat. Changing the extent re-bases every
   measurement in the repo.
-- **The lot rule is the address.** If a lot is addressed on 42nd Street it is in the set. Grand
-  Central Terminal, 89 East 42nd Street, is in. Lots addressed on 41st and 43rd are out. The rule
-  applies in both directions with no exceptions, including when it weakens a finding.
+- **The lot rule is frontage** (changed 20 Sep 2026; it was the address). A lot is in the set if
+  any vertex of its boundary lies within 60 ft of the centreline, whatever its address. Grand
+  Central Terminal is in. Measured, the address rule had removed nine through-block lots that
+  front the street and kept five that do not. The rule applies in both directions with no
+  exceptions, including when it weakens a finding. `METHODOLOGY.md` section 4 has the counts.
 - **The instrument diagnoses and then prices one trade.** It does not propose a design. It ends on
   a single quantified claim: this much capacity exists, this is what it is worth, this is how much
   public space it could buy. The reader draws the conclusion.
