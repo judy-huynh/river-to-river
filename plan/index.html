@@ -15,7 +15,7 @@
     <p class="head__subject">42nd Street, Manhattan</p>
     <span class="kicker" id="devline" hidden>Sheet 01 &middot; existing conditions &middot; <span id="stamp"></span></span>
   </div>
-  <dl class="head__meta">
+  <dl class="head__meta" id="headMeta">
     <div><dt>Extent</dt><dd id="metaExtent">Hudson to East River</dd></div>
     <div><dt>Lots</dt><dd id="metaLots"></dd></div>
     <div><dt>Trees</dt><dd id="metaTrees"></dd></div>
@@ -49,6 +49,7 @@
   <aside class="layers" id="layers" aria-label="Questions about the street">
     <div id="layerList"></div>
 
+    <!-- the station card. wide, it floats over the map, bottom right. stacked, it sits under the ruler. -->
     <div class="panel" id="readout" role="region" aria-label="Station" hidden></div>
     <p class="sr" id="said" aria-live="polite"></p>
   </aside>
@@ -90,6 +91,9 @@
   </section>
 
 </main>
+
+<!-- on a narrow screen scripts.js moves the meta list here, out of the title block -->
+<footer class="foot" id="pageFoot"></footer>
 
 <div class="tip" id="tip"></div>
 

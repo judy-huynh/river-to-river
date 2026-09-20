@@ -278,21 +278,31 @@ let userMoved=false;
    lon/lat box of a diagonal line, so it was limited by the map's height and the street shrank
    to a speck on a short window. turned to the bearing the street is one thin horizontal line,
    so the zoom comes from its length and the width left inside the side padding. */
-const streetView=()=>{
-  const a=at(0), b=at(LEN), R=Math.PI/180, lat=(a[1]+b[1])/2;
+const streetFit=width=>{
+  const a=at(0), b=at(LEN), R=Math.PI/180, lat=(a[1]+b[1])/2, EARTH=6378137;
   const dx=(b[0]-a[0])*R*Math.cos(lat*R), dy=(b[1]-a[1])*R;
-  const metres=6378137*Math.hypot(dx,dy);                       /* end to end, flat at this latitude */
-  const px=Math.max(120,map.getContainer().clientWidth-FIT.padding.left-FIT.padding.right);
-  const zoom=Math.log2(2*Math.PI*6378137*Math.cos(lat*R)*px/(512*metres));
-  return {center:[(a[0]+b[0])/2,lat], zoom:Math.min(FIT.maxZoom,zoom), bearing:BEARING};
+  const metres=EARTH*Math.hypot(dx,dy);                         /* end to end, flat at this latitude */
+  const px=Math.max(120,width-FIT.padding.left-FIT.padding.right);
+  const round=2*Math.PI*EARTH*Math.cos(lat*R);                  /* the parallel here, in metres */
+  const zoom=Math.min(FIT.maxZoom,Math.log2(round*px/(512*metres)));
+  /* the street's two ends in that view, as shares of the width: its run across the screen at the
+     map's bearing, in px at that zoom, centred. the ruler is set out between the same shares. */
+  const B=BEARING*R, run=EARTH*(dx*Math.cos(B)-dy*Math.sin(B))*512*2**zoom/round;
+  return {center:[(a[0]+b[0])/2,lat], zoom, lo:(width-run)/2/width, hi:(width+run)/2/width};
 };
+const streetView=()=>{ const {center,zoom}=streetFit(map.getContainer().clientWidth);
+  return {center, zoom, bearing:BEARING}; };
+/* where the street's ends sit across the ruler, as shares of its width, and a station's share.
+   buildRuler sets it from streetFit, so ruler and opening map are in register. */
+let SCALE={lo:0,hi:1};
+const share=ft=>SCALE.lo+ft/LEN*(SCALE.hi-SCALE.lo);
 /* only the reader's own hand counts. the fit itself fires zoomstart, with no originalEvent. */
 map.on('dragstart',()=>{userMoved=true;}); map.on('zoomstart',e=>{ if(e.originalEvent) userMoved=true; });
 /* the canvas is always matched to its box. the street is only fitted again while the reader
    has not moved the map. */
 const refit=()=>{ if(!MAP_OK) return;
   try{ map.resize(); if(!userMoved) map.jumpTo(streetView()); }catch(e){} };
-map.on('load',refit);
+map.on('load',refit); map.on('load',()=>clearPin());
 let _fitT; addEventListener('resize',()=>{clearTimeout(_fitT); _fitT=setTimeout(refit,160);});
 map.dragRotate.disable(); map.touchZoomRotate.disableRotation();
 
@@ -1003,6 +1013,7 @@ function restSlider(){
   r.setAttribute('aria-valuetext','No station picked');
 }
 let pin=null;
+const STACKED=matchMedia('(max-width:899px)');   /* the same width style.css stacks the sheet at */
 function select(next,boot){
   Object.assign(SEL,next);
   if(SEL.st!=null) SEL.st=Math.max(0,Math.min(LEN,Math.round(SEL.st)));
@@ -1012,7 +1023,7 @@ function select(next,boot){
   panel.hidden=!open; mark.hidden=!open;
   if(open){
     const P=stationProfile(SEL.st,SEL.hour);
-    mark.style.left=(SEL.st/LEN*100)+'%';
+    mark.style.left=(share(SEL.st)*100)+'%';
     ruler.setAttribute('aria-valuenow',SEL.st);
     ruler.setAttribute('aria-valuetext',`${commas(SEL.st)} ft from the west end. ${where(P)}`);
     const lot=SEL.lot&&LOT_BY_BBL.get(SEL.lot);
@@ -1025,11 +1036,13 @@ function select(next,boot){
     /* the rail is taller than the window, and stacked the card sits below the ruler:
        either way it must be brought into view or it updates out of sight */
     panel.scrollTop=0;
-    /* not on the boot call: the layout has not settled and the page lands past the card */
-    if(!boot) panel.scrollIntoView({block:'nearest'});
+    /* not on the boot call: the layout has not settled and the page lands past the card.
+       wide, the card floats inside the map and is already in view. */
+    if(!boot&&STACKED.matches) panel.scrollIntoView({block:'nearest'});
     if(MAP_OK){
       if(!pin) pin=new mapboxgl.Marker({element:el('div','pin'),anchor:'center'});
       pin.setLngLat(at(SEL.st)).addTo(map);
+      if(!boot) clearPin();
     }
   } else {
     panel.innerHTML=''; $('#said').textContent=''; restSlider();
@@ -1143,14 +1156,48 @@ $('#readout').addEventListener('click',e=>{
   const f=('back' in b.dataset&&from&&$(`#readout [data-lot="${from}"]`))||$('#readout button');
   if(f) f.focus();
 });
+/* the floating card never sits on the station it describes. when the pin would fall under the
+   card, the map is moved so the station stands in the middle of the part the card leaves open. */
+const PIN_ROOM=24;   /* px kept between the pin and the card's edge */
+function clearPin(){
+  if(!MAP_OK||STACKED.matches||SEL.st==null) return;
+  requestAnimationFrame(()=>{ if(SEL.st==null) return;
+    const c=$('#readout').getBoundingClientRect(), m=map.getContainer().getBoundingClientRect(), p=map.project(at(SEL.st));
+    if(!c.width||m.left+p.x<c.left-PIN_ROOM||m.top+p.y<c.top-PIN_ROOM) return;
+    userMoved=true;
+    map.easeTo({center:at(SEL.st), offset:[-(m.right-c.left)/2,0], bearing:BEARING, duration:300}); });
+}
+/* wide, the card floats inside the map's box. style.css is told where that box sits in the sheet
+   and how far down the zoom control comes, so the card never covers the control or the first screen. */
+function placeCard(){
+  const sheet=$('.sheet'), m=$('#map'); if(!sheet||!m) return;
+  const S=sheet.getBoundingClientRect(), M=m.getBoundingClientRect();
+  const ctl=m.querySelector('.mapboxgl-ctrl-top-right .mapboxgl-ctrl-group');
+  const px=(k,v)=>sheet.style.setProperty(k,Math.max(0,Math.round(v))+'px');
+  px('--map-top',M.top-S.top); px('--map-bot',S.bottom-M.bottom);
+  px('--map-clear',ctl?ctl.getBoundingClientRect().bottom-M.top:0);
+}
+if(window.ResizeObserver){ const ro=new ResizeObserver(placeCard); ro.observe($('#map')); ro.observe($('.sheet')); }
+addEventListener('resize',placeCard); placeCard();
+/* narrow, the title block keeps the title and the subject line: the meta list goes to the foot of
+   the page. the node is moved, so reading order is what is seen. paper always has it in the title block. */
+const NARROW_HEAD=matchMedia('(max-width:620px)');
+function placeMeta(){ const meta=$('#headMeta');
+  if(NARROW_HEAD.matches&&!PRINTING) $('#pageFoot').append(meta); else $('.head__tools').before(meta); }
+NARROW_HEAD.addEventListener('change',placeMeta);
 function closeCard(){ select({st:null,lot:null}); $('#ruler').focus(); }
-$('#readout').addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); closeCard(); } });
+/* Escape in the card shuts the card only. stopped here, or the first screen's handler shuts that too and takes the focus. */
+$('#readout').addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeCard(); } });
 
 /* ── ruler ────────────────────────────────────────────────────────────── */
 const NS='http://www.w3.org/2000/svg';
 /* the evidence the ruler carries, top to bottom. each band has a caption and a bar drawn to the
-   street's own scale. wide marks a band left off a narrow ruler, which shows fewer bands, never
-   thinner ones. ink and the colours already on the sheet, nothing new. */
+   street's own scale. keep is the order bands are held on to when the ruler runs out of height:
+   it shows fewer bands, never smaller type. wide marks a band left off a narrow ruler. bar is
+   the bar's height. joins lets a band's caption share the line of the band above when both fit.
+   ink and the colours already on the sheet, nothing new. */
+const RULER_MAX=128, RULER_MAX_SHORT=96, SHORT_WINDOW=720;   /* px. the ruler's ceiling, and on a window under 720px high */
+const RULER_KEEP=2;   /* the DOT tier and the bus are drawn whatever the height comes to */
 /* colours are read from the tokens in style.css, so the sheet has one source for them */
 const token=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const INK=token('--ink'), PAPER=token('--paper'), LABEL=token('--ink-label'), LEAF=token('--leaf'), ALARM=token('--alarm');
@@ -1160,14 +1207,14 @@ const TIER_INK={1:'--ink-70',2:'--ink-30',3:'--hair-2',4:'--hair'};
 const tierFill=rank=>({fill:TIER_INK[rank]?token(TIER_INK[rank]):'none',stroke:INK,'stroke-width':.6});
 const blankLine=(add,X,a,b,y)=>add('line',{x1:X(a),x2:X(b),y1:y,y2:y,stroke:INK,'stroke-opacity':.5,'stroke-width':.8,'stroke-dasharray':'2 3'});
 const RULER_BANDS=[
-  { id:'tier', has:!!TIER_STATS,
+  { id:'tier', has:!!TIER_STATS, keep:1,
     /* a tier is the plan's rank for a segment. the caption never calls it demand or a count. */
     caption:()=>[t=>`${t.tier}, tier ${t.rank} of ${TIER_META.length}`, t=>`${t.rank} ${t.tier}`].map(say=>
       [{t:'DOT pedestrian priority tier'}, ...TIER_STATS.on.map(t=>({sw:tierFill(t.rank), t:say(t)}))]),
     draw(add,X,y,h){
       TIER_STATS.runs.forEach(([a,b,rank])=>add('rect',{x:X(a)+.5,y,width:Math.max(1,X(b)-X(a)-1),height:h,...tierFill(rank)}));
       TIER_STATS.blank.forEach(([a,b])=>blankLine(add,X,a,b,y+h/2)); } },
-  { id:'bus', has:!!BUS_STATS,
+  { id:'bus', has:!!BUS_STATS, keep:2, bar:10,
     /* every stop of the ramp is keyed, and the name says a speed is a leg's average, so the band
        reads with the bus row shut */
     caption:()=>{ const R=BUS_RAMP, n=R.length-1, bar=c=>({fill:c,stroke:INK,'stroke-width':.6}),
@@ -1180,19 +1227,19 @@ const RULER_BANDS=[
       BUS.filter(r=>r.h===SEL.hour).forEach(r=>add('rect',{x:X(r.a)+.5,y:Y[r.dir],width:Math.max(1,X(r.b)-X(r.a)-1),height:bh,
         fill:r.mph!=null?busColour(r.mph):'none',stroke:INK,'stroke-width':.6}));
       Object.entries(BUS_STATS.blank).forEach(([d,list])=>list.forEach(([a,b])=>blankLine(add,X,a,b,Y[d]+bh/2))); } },
-  { id:'trees', has:TREES.length>0, wide:true,
-    caption:()=>[[{t:'Street trees'},{sw:{fill:ALARM,'fill-opacity':.45}, t:`over ${TREE_GAP_MIN} ft with none`}]],
+  { id:'trees', has:TREES.length>0, wide:true, keep:4,
+    caption:()=>[[{sw:{fill:LEAF,'fill-opacity':.9}, t:'Street trees'},{sw:{fill:ALARM,'fill-opacity':.45}, t:`over ${TREE_GAP_MIN} ft with none`}]],
     draw(add,X,y,h){
       TREE_GAPS.forEach(([a,b])=>add('rect',{x:X(a),y,width:X(b)-X(a),height:h,fill:ALARM,'fill-opacity':.45}));
       TREES.forEach(t=>add('rect',{x:X(t.ft),y,width:1,height:h,fill:LEAF,'fill-opacity':.9})); } },
-  { id:'marks', has:!!(BENCH_STATS||PED_STATS||SHED_STATS),
+  { id:'marks', has:!!(BENCH_STATS||PED_STATS||SHED_STATS), keep:3, joins:true,
     /* each bench solid, the counter a ring, as on the map. a building with a shed permit in
        force is a narrow bar at its station, never a length: narrow so it clears the counter's ring */
     caption:()=>[[...(SHED_STATS?[{sw:{fill:INK}, t:`shed permit in force, ${SHED_STATS.live.length} building${SHED_STATS.live.length===1?'':'s'}`}]:[]),
       ...(BENCH_STATS?[{dot:{fill:INK}, t:`DOT bench${BENCHES.length===1?'':'es'}`}]:[]),
       ...(PED_STATS?[{dot:{fill:PAPER,stroke:INK,'stroke-width':1.5}, ring:true, t:'DOT pedestrian counter'}]:[])]],
     draw(add,X,y,h){ const cy=y+h/2;
-      add('line',{x1:0,x2:X(LEN),y1:cy,y2:cy,stroke:INK,'stroke-opacity':.13,'stroke-width':1});
+      add('line',{x1:X(0),x2:X(LEN),y1:cy,y2:cy,stroke:INK,'stroke-opacity':.13,'stroke-width':1});
       if(SHED_STATS) SHED_STATS.live.forEach(x=>add('rect',{x:X(x.ft)-1.5,y,width:3,height:h,fill:INK}));
       if(BENCH_STATS) BENCHES.forEach(b=>add('circle',{cx:X(b.ft),cy,r:3,fill:INK}));
       if(PED_STATS) add('circle',{cx:X(PED.ft),cy,r:4,fill:PAPER,stroke:INK,'stroke-width':1.5}); } }
@@ -1201,7 +1248,10 @@ const RULER_BANDS=[
 /* drawn to the ruler's own width, or to a width handed in when the sheet is about to print */
 function buildRuler(force){
   const host=$('#ruler'), svg=$('#rulerSvg');
-  const W=force>0?force:Math.max(320,Math.round(host.clientWidth||960)), X=ft=>ft/LEN*W;
+  /* the street's ends sit where the fitted map draws them. paper keeps the screen's shares. */
+  const SCREEN=Math.max(320,Math.round(host.clientWidth||960)), W=force>0?force:SCREEN;
+  const fit=streetFit(SCREEN); SCALE={lo:fit.lo,hi:fit.hi};
+  const X=ft=>share(ft)*W;
   svg.innerHTML='';
   const add=(n,a)=>{const e=document.createElementNS(NS,n); for(const k in a) e.setAttribute(k,a[k]); svg.appendChild(e); return e;};
   const MONO='ui-monospace,SFMono-Regular,Menlo,monospace';
@@ -1220,18 +1270,19 @@ function buildRuler(force){
      taller than asked for, and every row below is set out from it. */
   const PX=11, LH=(()=>{ const {node}=label('Xg',PX); let h=0; try{ h=node.getBBox().height; }catch(e){}
     node.remove(); return Math.ceil(Math.max(h,PX*1.2)); })();
-  const BAR=10, GAP=6, PAD=2;   /* PAD keeps a descender off the bar under it */
+  const BAR=8, GAP=3, PAD=1;   /* PAD keeps a descender off the bar under it */
   /* a narrow ruler shows fewer bands rather than smaller ones */
   const NARROW=W<620;
-  const bands=RULER_BANDS.filter(B=>B.has&&!(NARROW&&B.wide));
+  let bands=RULER_BANDS.filter(B=>B.has&&!(NARROW&&B.wide));
   /* a caption is a run of parts, left to right: words, with a swatch, dot or ring before them
      when they are a key. a band offers its caption long and then shorter, and the first that
      fits the ruler on one line is drawn. if none fits, the shortest is wrapped onto more lines
      and the ruler grows, so a key is never dropped or left half said. */
   const MARK=15, SEP=12;
   const sized=parts=>parts.map(p=>{ const {node,w}=label(p.t,PX); node.remove(); return {...p,w:(p.sw||p.dot?MARK:0)+w}; });
+  const wide=f=>f.reduce((x,p)=>x+p.w+SEP,4-SEP);
   const lines=forms=>{
-    const all=forms.map(sized), one=all.find(f=>f.reduce((x,p)=>x+p.w+SEP,4-SEP)<=W-4);
+    const all=forms.map(sized), one=all.find(f=>wide(f)<=W-4);
     if(one) return [one];
     const out=[[]]; let x=4;
     all[all.length-1].forEach(p=>{ const row=out[out.length-1];
@@ -1241,6 +1292,7 @@ function buildRuler(force){
   const caption=(rows,y)=>rows.forEach((parts,k)=>{
     let x=4; const top=y+k*LH, mid=top+LH/2;
     parts.forEach(p=>{
+      if(p.gap){ x+=p.gap; return; }
       const {node}=label(p.t,PX), mark=p.sw||p.dot?MARK:0;
       if(p.sw) add('rect',{x,y:mid-4,width:10,height:8,...p.sw});
       if(p.dot) add('circle',{cx:x+5,cy:mid,r:p.ring?4:3,...p.dot});
@@ -1248,14 +1300,26 @@ function buildRuler(force){
       x+=p.w+SEP;
     });
   });
-  /* rows from the top: hub names, then a caption and a bar per band, then the axis and avenues */
-  const top=NARROW?4:LH+4;
-  let y=top;
-  const set=bands.map(B=>{ const rows=lines(B.caption()), at=y; y+=rows.length*LH+PAD+BAR+GAP; return {B,rows,y:at}; });
-  const axis=y+8, H=axis+8+LH+4;
+  /* rows from the top: hub names, then a caption and a bar per band, then the axis and avenues.
+     a band that joins has no caption row of its own: its key runs on in the line above, and its
+     bar sits under that band's bar. */
+  const top=NARROW?4:LH+1;
+  const layout=list=>{ let y=top; const set=[];
+    list.forEach(B=>{ const rows=lines(B.caption()), h=B.bar||BAR, last=set[set.length-1];
+      if(B.joins&&last&&rows.length===1&&last.rows.length===1&&wide(last.rows[0])+2*SEP+wide(rows[0])<=W-4){
+        last.rows[0]=[...last.rows[0],{gap:SEP},...rows[0]]; y-=GAP-2;
+        set.push({B,rows:[],bar:y,h}); y+=h+GAP; return; }
+      set.push({B,rows,y,bar:y+rows.length*LH+PAD,h}); y+=rows.length*LH+PAD+h+GAP; });
+    const axis=y+3; return {set,axis,H:axis+5+LH+1}; };
+  /* over the ceiling, the band held least goes, down to the ones always drawn */
+  const ceiling=!force&&innerHeight<SHORT_WINDOW?RULER_MAX_SHORT:RULER_MAX;
+  let laid=layout(bands);
+  while(laid.H>ceiling&&bands.length>RULER_KEEP){
+    const drop=bands.reduce((x,B)=>B.keep>x.keep?B:x); bands=bands.filter(B=>B!==drop); laid=layout(bands); }
+  const {set,axis,H}=laid;
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`); host.style.height=H+'px';
   /* the station mark is ruled through the bars and the axis only, never through a caption */
-  const inked=[...set.map(({rows,y})=>[y+rows.length*LH+PAD-1,y+rows.length*LH+PAD+BAR+1]),[axis-6,axis+6]];
+  const inked=[...set.map(({bar,h})=>[bar-1,bar+h+1]),[axis-5,axis+5]];
   host.style.setProperty('--mark-dot',(axis-4)+'px');   /* its dot rides the axis, clear of the hub names */
   host.style.setProperty('--mark-rule',`linear-gradient(to bottom,${inked.map(([a,b])=>
     `transparent ${a}px,currentColor ${a}px,currentColor ${b}px,transparent ${b}px`).join(',')})`);
@@ -1269,16 +1333,16 @@ function buildRuler(force){
     const x=X(a), w=X(b)-X(a);
     add('rect',{x,y:0,width:w,height:H,fill:INK,'fill-opacity':.06});
     if(NARROW) return;
-    const {node,w:tw}=label(name.toUpperCase(),10,.4);
+    const {node,w:tw}=label(name.toUpperCase(),PX,.4);
     const half=tw/2, cx=Math.min(Math.max(x+w/2,half+3),W-half-3);
     if(tw<=W-6 && cx-half > hubRight+8){
-      node.setAttribute('x',cx); node.setAttribute('y',LH-1);
+      node.setAttribute('x',cx); node.setAttribute('y',top-3);
       node.setAttribute('text-anchor','middle'); node.setAttribute('fill','rgba(20,18,15,.5)');
       hubRight=cx+half;
     } else node.remove();
   });
 
-  set.forEach(({B,rows,y})=>{ caption(rows,y); B.draw(add,X,y+rows.length*LH+PAD,BAR); });
+  set.forEach(({B,rows,y,bar,h})=>{ caption(rows,y); B.draw(add,X,bar,h); });
 
   add('line',{x1:0,x2:W,y1:axis,y2:axis,stroke:INK,'stroke-opacity':.3,'stroke-width':.8});
   /* avenues, decluttered left to right: a label is drawn only if it clears the
@@ -1286,7 +1350,7 @@ function buildRuler(force){
   let lastRight=-1e9;
   AVES.forEach(([ft,name])=>{
     const x=X(ft);
-    add('line',{x1:x,x2:x,y1:axis-5,y2:axis+5,stroke:INK,'stroke-opacity':.35,'stroke-width':.8});
+    add('line',{x1:x,x2:x,y1:axis-4,y2:axis+4,stroke:INK,'stroke-opacity':.35,'stroke-width':.8});
     const {node,w:tw}=label(name,PX);
     const half=tw/2;
     let tx=x, anchor='middle';
@@ -1295,7 +1359,7 @@ function buildRuler(force){
     else if(x+half>W-6){ tx=W-6; anchor='end'; }
     const left = anchor==='start' ? tx : anchor==='end' ? tx-tw : x-half;
     if(left > lastRight+7){
-      node.setAttribute('x',tx); node.setAttribute('y',axis+6+LH-3);
+      node.setAttribute('x',tx); node.setAttribute('y',axis+5+LH-3);
       node.setAttribute('text-anchor',anchor); node.setAttribute('fill',LABEL);
       lastRight=left+tw;
     } else node.remove();
@@ -1309,6 +1373,9 @@ function buildRuler(force){
     if(bb.width && (bb.x < 1 || bb.x + bb.width > W - 1)) t.remove();
   });
   RULER_GEO={W,inked,axis}; printMark();
+  /* the scale may have moved with the width: the mark and the window follow it */
+  if(SEL.st!=null) $('#rulerMark').style.left=(share(SEL.st)*100)+'%';
+  try{ syncRuler(); }catch(e){}
 }
 /* the station mark again, inside the drawing, shown only in print. paper scales the svg whole,
    and the mark on screen is ruled in screen px, so it would not land on the bars. */
@@ -1316,7 +1383,7 @@ let RULER_GEO=null;
 function printMark(){
   const svg=$('#rulerSvg'); svg.querySelectorAll('.pmark').forEach(n=>n.remove());
   if(SEL.st==null||!RULER_GEO) return;
-  const {W,inked,axis}=RULER_GEO, x=SEL.st/LEN*W;
+  const {W,inked,axis}=RULER_GEO, x=share(SEL.st)*W;
   const add=(n,a)=>{const e=document.createElementNS(NS,n); e.setAttribute('class','pmark');
     for(const k in a) e.setAttribute(k,a[k]); svg.appendChild(e);};
   inked.forEach(([a,b])=>add('line',{x1:x,x2:x,y1:a,y2:b,stroke:INK,'stroke-width':1.5}));
@@ -1327,17 +1394,18 @@ function printMark(){
 let _rulerT; addEventListener('resize',()=>{clearTimeout(_rulerT); _rulerT=setTimeout(buildRuler,120);});
 
 function syncRuler(){
-  const b=map.getBounds();
-  const near=(lng,lat)=>{let best=0,bd=1e9;
-    for(let f=0;f<=LEN;f+=120){const p=at(f),d=Math.hypot(p[0]-lng,p[1]-lat); if(d<bd){bd=d;best=f;}}
-    return best;};
-  const a=near(b.getWest(),b.getNorth()), c=near(b.getEast(),b.getSouth());
-  const lo=Math.max(0,Math.min(a,c)), hi=Math.min(LEN,Math.max(a,c));
+  /* the map is held at the street's bearing, so the street runs across it: the stations at the
+     map's left and right edges follow from where its two ends are drawn. they run past 0 and LEN
+     when the map shows more than the street, and the window then runs to the ruler's edge. */
+  let a=0, c=LEN;
+  if(MAP_OK){ const p=map.project(at(0)), q=map.project(at(LEN)), w=map.getContainer().clientWidth;
+    if(q.x!==p.x){ a=(0-p.x)/(q.x-p.x)*LEN; c=(w-p.x)/(q.x-p.x)*LEN; } }
+  const on=ft=>Math.max(0,Math.min(LEN,ft)), lo=on(Math.min(a,c)), hi=on(Math.max(a,c));
   VIEW=[lo,hi];
   if(SEL.st==null) restSlider();
-  const win=$('#rulerWin');
-  win.style.left=(lo/LEN*100)+'%';
-  win.style.width=Math.max(.5,(hi-lo)/LEN*100)+'%';
+  const win=$('#rulerWin'), edge=ft=>Math.max(0,Math.min(1,share(ft)));
+  win.style.left=(edge(a)*100)+'%';
+  win.style.width=Math.max(.5,(edge(c)-edge(a))*100)+'%';
   const mid=(lo+hi)/2, ave=AVES.reduce((x,y)=>Math.abs(y[0]-mid)<Math.abs(x[0]-mid)?y:x);
   /* says it is the map, so it is not read as the place of the open station card */
   $('#rulerMid').textContent = 'map view '+(mid<120?'at the Hudson' : mid>LEN-120?'at the East River'
@@ -1347,7 +1415,7 @@ let VIEW=[0,LEN];
 (function drag(){
   const r=$('#ruler'); let down=false,cap=false,sx=0;
   const ftAt=e=>{const box=r.getBoundingClientRect();
-    return Math.max(0,Math.min(LEN,(e.clientX-box.left)/box.width*LEN));};
+    return Math.max(0,Math.min(LEN,((e.clientX-box.left)/box.width-SCALE.lo)/(SCALE.hi-SCALE.lo)*LEN));};
   const go=e=>{ userMoved=true; map.easeTo({center:at(ftAt(e)),duration:down&&cap?0:600,bearing:BEARING}); };
   r.addEventListener('pointerdown',e=>{down=true;cap=false;sx=e.clientX;go(e);});
   r.addEventListener('pointermove',e=>{ if(!down) return;
@@ -1434,8 +1502,8 @@ function printFoot(){
   const base=basemapCredit(); $('#printBaseText').textContent=base; $('#printBase').hidden=!base;
 }
 /* the ruler is set out for the sheet's width, then scaled */
-addEventListener('beforeprint',()=>{ PRINTING=true; snapshot(); printFoot(); buildRuler(PRINT_W); });
-addEventListener('afterprint',()=>{ PRINTING=false; buildRuler(); refit(); });
+addEventListener('beforeprint',()=>{ PRINTING=true; placeMeta(); snapshot(); printFoot(); buildRuler(PRINT_W); });
+addEventListener('afterprint',()=>{ PRINTING=false; placeMeta(); buildRuler(); refit(); });
 (()=>{ /* the button's own words change, so the confirmation is never colour alone */
   const b=$('#copyLink'), REST=b.textContent; let t;
   /* as wide as its longest label, measured as drawn, so the tools do not shift when it answers */
@@ -1484,7 +1552,7 @@ $('#ruler').setAttribute('aria-valuemax',LEN);
   (qs.get('by')||'').split(',').forEach(x=>{ const [id,v]=x.split('.'), L=row(id);
     if(L&&L.styles&&L.styles.some(o=>o[0]===v)) L.style=v; });
 })();
-buildPanel(); buildRuler();
+placeMeta(); buildPanel(); buildRuler();
 (()=>{ /* the first screen. shut once, it stays shut on this browser. ?intro=1 opens it again,
      and so does the button in the title block. storage can be blocked, so it is only tried. */
   const card=$('#intro'), KEY='r2r.intro'; if(!card) return;
@@ -1515,7 +1583,7 @@ buildPanel(); buildRuler();
   if(Number.isFinite(st)) select({st, lot:p?lot:null},true); else restSlider();
   /* stacked, the card sits under the map: once the layout has settled, put the ruler at the
      top so the mark and the card share the first screen */
-  if(Number.isFinite(st)&&matchMedia('(max-width:900px)').matches){
+  if(Number.isFinite(st)&&STACKED.matches){
     const go=()=>requestAnimationFrame(()=>$('#ruler').scrollIntoView({block:'start'}));
     if(document.readyState==='complete') go(); else addEventListener('load',go,{once:true});
   }

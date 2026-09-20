@@ -93,8 +93,10 @@ fill the sheet, and the foot of the sheet says so and gives the screen's width.
 3. **What it does not cover.** The scale is measured along the street. Web Mercator stretches
    distance with latitude, and over a map this small the difference across the picture is far
    below the width of the bar's own line.
-4. **The ruler** under the map is not at the map's scale. It always shows the whole street, river
-   to river, and the map may be zoomed in.
+4. **The ruler** under the map always shows the whole street, river to river. At the opening view
+   it is at the map's scale and in register with it (section 3d, ruler and map in register). Once the map
+   is zoomed or moved it is not, and the window drawn on the ruler shows which part of the street
+   the map holds.
 
 ## 2. What is on the sheet today
 
@@ -411,11 +413,18 @@ scale, drawn whether or not any rail row is on: the priority tier (consecutive s
 tier merged into runs, ink at two strengths, captioned "DOT pedestrian priority tier"), the M42
 speed at the hour the slider is on (section 3c, one bar per leg, westbound above eastbound, dashed
 where no leg is kept), street trees with the stretches of over 400 ft with none, and the DOT
-benches (solid) with the pedestrian counter (ring). The ruler's height is computed from the bands
-drawn and from the label height measured in the reader's browser. Under 620 px the tree band is
-left off: a narrow ruler shows fewer bands, never thinner ones. Window height does not change the bands. A caption's key is drawn long,
-then short, whichever fits on one line. If neither fits, the short one wraps onto more lines and
-the ruler grows, so a key is never dropped. The bus band is keyed by the two ends of the speed
+benches (solid) with the pedestrian counter (ring) and the buildings with a shed permit in force.
+The ruler's height is computed from the bands drawn and from the label height measured in the
+reader's browser, and it has a ceiling: 128 px, or 96 px in a window under 720 px high
+(`RULER_MAX`, `RULER_MAX_SHORT`, `SHORT_WINDOW` in `plan/scripts.js`). When the bands do not fit
+under the ceiling the ruler shows fewer bands, never smaller type: the tree band goes first, then
+the bench, counter and shed band. The priority tier and the bus are always drawn, so a ruler with
+wrapped captions and large type can still pass the ceiling. Under 620 px the tree band is left
+off whatever the height. Every band drawn has its caption. When the tree caption and the caption
+of the band under it both fit on one line they share that line, and the two bars sit under it in
+the same order, top to bottom, as the captions read left to right. A caption's key is drawn long,
+then short, whichever fits on one line. If neither fits, the short one wraps onto more lines, so
+a key is never dropped from a band that is drawn. The bus band is keyed by the two ends of the speed
 ramp (the mph values are read from the ramp, multiples of the 3.1 mph walking pace), and its
 caption says the speed is each leg's average, since the band is drawn with the bus row shut.
 
@@ -426,6 +435,23 @@ capped at the same maximum zoom as before. It is not a fit to the lon/lat boundi
 is upright while the street is diagonal, so the box fit was limited by the map's height and the
 street shrank on short windows. The view is computed again on load, on resize and when the first
 screen opens or shuts, until the reader moves the map.
+
+**Ruler and map in register.** The same function (`streetFit` in `plan/scripts.js`) gives the
+opening zoom and the place of the street's two ends across the map's width: the run between the
+ends of LINE42 along the map's bearing, in px at that zoom, centred. The ruler is as wide as the
+map and is set out between the same two places, stations spaced evenly between them, so at the
+opening view a station on the ruler sits under the same station on the map. Measured at 1,440 px
+the ruler's mark and the map's pin are within 1 px of each other at 0, 300, 4,000 and 6,000 ft.
+The centreline is not perfectly straight, so the match is to the pixel and not exact. A press on
+the ruler is read back through the same scale. The window on the ruler is taken from where the
+map draws the two ends of the street: the stations at the map's left and right edges follow from
+those two points, and the window runs to the ruler's edge when the map shows more than the
+street. A printed ruler keeps the screen's proportions.
+
+**The station card and the map.** In a window 900 px wide or more the station card floats over
+the map's lower right corner. When the pin of the station being read would fall under the card,
+the map is moved sideways so the station stands in the middle of the part of the map the card
+leaves open. That counts as the reader moving the map: the opening fit is no longer reapplied.
 
 **On the station card.** `stationProfile` adds the tier of the segment that covers the station,
 with its rank out of the number of tiers in `PED_TIER_META`, or says the source has none there.
