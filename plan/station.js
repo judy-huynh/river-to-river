@@ -9,9 +9,12 @@ const LINE=window.LINE42, LOTS=window.LOTS_POLY, TREES=window.TREES, ROAD=window
 const SW=window.SIDEWALK||[];
 const BENCHES=window.BENCHES||[], PED=window.PED_COUNT||null, BUS=window.BUS||[];
 const TIER=window.PED_TIER||[];
+const CURB=window.CURB||[], SHEDS=window.SHEDS||[], CRASHES=window.CRASHES||[];
 const LEN=LINE[LINE.length-1][0];
-const AVES=[[0,'12th'],[903,'11th'],[1890,'10th'],[2699,'9th'],[3473,'8th'],[4542,'7th'],[5480,'6th'],
-  [6417,'5th'],[6932,'Mad'],[7520,'Park'],[8021,'Lex'],[8940,'3rd'],[9730,'2nd'],[10411,'1st']];
+/* where each cross street meets the line, baked from the city centerline. AVES is the ticked
+   avenues as [station, label, west edge, east edge]; nothing here is typed */
+const CROSS=window.AVES||[];
+const AVES=CROSS.filter(v=>v.label).map(v=>[v.ft,v.label,v.a,v.b]);
 
 /* true perpendicular projection onto LINE42. same maths as scripts/bake/station.py,
    so a map click stations exactly the way a baked record does. */
@@ -55,13 +58,33 @@ function crossing(bbl,ft){
 const REACH=Math.max(...[...LOT_BAND.values()].map(k=>k.far));
 const LOT_BY_BBL=new Map(LOTS.features.map(f=>[String(f.properties.bbl),f.properties]));
 const TREE_REACH=200;
+/* the nearest crash place is looked for this far either way along the street. the police put
+   most crashes at an intersection, so a station between two avenues often has none */
+const CRASH_REACH=150;
+/* a place is the crashes the police put within CRASH_JOIN ft of each other along the street,
+   which merges the two points they use for some intersections. named by the street its crashes
+   name most often. the map's circle, the row's list and the card all read this one list. */
+const CRASH_JOIN=10;
+const PLACES=(()=>{ const out=[];
+  [...CRASHES].sort((x,y)=>x.ft-y.ft).forEach(c=>{ const p=out[out.length-1];
+    if(p&&c.ft-p.last<=CRASH_JOIN){ p.list.push(c); p.last=c.ft; } else out.push({list:[c],last:c.ft}); });
+  return out.map(p=>{ const L=p.list, mean=k=>L.reduce((t,c)=>t+c[k],0)/L.length;
+    const names=[...L.reduce((m,c)=>c.x?m.set(c.x,(m.get(c.x)||0)+1):m,new Map())].sort((x,y)=>y[1]-x[1]||(x[0]<y[0]?-1:1));
+    return {ft:Math.round(mean('ft')), lon:mean('lon'), lat:mean('lat'), n:L.length,
+      inj:L.reduce((t,c)=>t+(c.inj||0),0), name:names.length?names[0][0]:null, list:L}; });
+})();
+/* a shed permit is for a building, so it is read through the building's lot */
+const SHED_BY_BBL=new Map(SHEDS.map(s=>[String(s.bbl),s]));
 /* the counter speaks for a station only this close to it along the street, and never past
    the avenues either side of it: it counts one block */
 const COUNT_REACH=300;
-const flank=ft=>{ let w=AVES[0]; AVES.forEach(a=>{ if(a[0]<=ft) w=a; });
-  return [w, AVES.find(a=>a[0]>=ft)||AVES[AVES.length-1]]; };
-const between=ft=>{ const [w,e]=flank(ft); return {west:w[1], east:e[1]}; };
-const COUNT_SPAN=PED?[Math.max(PED.ft-COUNT_REACH,flank(PED.ft)[0][0]), Math.min(PED.ft+COUNT_REACH,flank(PED.ft)[1][0])]:null;
+/* the ticked avenue to the west and to the east of a station. inside an avenue's own crossing
+   both are that avenue. null where the line runs on past the last avenue. */
+const flank=ft=>{ const on=AVES.find(a=>ft>=a[2]&&ft<=a[3]); if(on) return [on,on];
+  let w=null; AVES.forEach(a=>{ if(a[0]<=ft) w=a; });
+  return [w, AVES.find(a=>a[0]>=ft)||null]; };
+const between=ft=>{ const [w,e]=flank(ft); return {west:w?w[1]:null, east:e?e[1]:null}; };
+const COUNT_SPAN=PED?(([w,e])=>[Math.max(PED.ft-COUNT_REACH,w?w[0]:0), Math.min(PED.ft+COUNT_REACH,e?e[0]:LEN)])(flank(PED.ft)):null;
 /* the counter's newest period that has a PM figure. null when the series has none. */
 const PED_LAST=PED?[...PED.periods].reverse().find(p=>p.pm!=null)||null:null;
 
@@ -88,9 +111,7 @@ function stationProfile(ft,hour){
   const rd=covering(ROAD.features.map(f=>f.properties),x=>[x.a,x.b]);
   /* the plan's tier for the segment under the station. null past either end of the source. */
   const tr=covering(TIER,x=>[x.a,x.b]);
-  let w=AVES[0], e=AVES[AVES.length-1];
-  AVES.forEach(a=>{ if(a[0]<=ft) w=a; });
-  e=AVES.find(a=>a[0]>=ft)||e;
+  const [w,e]=flank(ft);
   const near=TREES.filter(t=>Math.abs(t.ft-ft)<=TREE_REACH);
   /* the lots that face the reader: the first boundary the perpendicular meets on each side,
      and any other within FRONT_TOL of it. a lot standing behind another is not listed. */
@@ -107,16 +128,26 @@ function stationProfile(ft,hour){
   const count=PED&&PED_LAST&&ft>=COUNT_SPAN[0]&&ft<=COUNT_SPAN[1]?{ft:PED.ft, dist:Math.abs(PED.ft-ft),
     dir:PED.ft>ft?'east':PED.ft<ft?'west':null, p:PED_LAST.p, pm:PED_LAST.pm, win:PED.windows?PED.windows.pm:null,
     ...between(PED.ft)}:null;
+  /* the metered face under the station, per side. null is a curb with no meter, not a free one. */
+  const face=sd=>covering(CURB.filter(f=>f.side===sd),f=>[f.a,f.b]);
+  /* the one place nearest the station, so the card gives the figure the map's circle gives.
+     a tie goes to the one to the west. none when the nearest is out of reach. */
+  const pl=PLACES.reduce((x,y)=>!x||Math.abs(y.ft-ft)<Math.abs(x.ft-ft)?y:x,null);
+  const place=pl&&Math.abs(pl.ft-ft)<=CRASH_REACH?pl:null;
   const biggest=[...n,...s].reduce((x,y)=>!x||y.lotarea>x.lotarea?y:x,null);
-  return {ft, west:{ft:w[0],name:w[1]}, east:{ft:e[0],name:e[1]},
+  const side=v=>v?{ft:v[0],name:v[1]}:null;
+  return {ft, at:w&&w===e?w[1]:null, west:side(w), east:side(e),
     north:walk(1), south:walk(-1),
     road:rd?{w:rd.w, lanes:rd.lanes, park:rd.park, dir:rd.dir}:null,
     trees:{n:near.filter(t=>t.side==='n').length, s:near.filter(t=>t.side==='s').length, all:near.length},
     tier:tr?{rank:tr.rank, name:tr.tier}:null,
+    curb:CURB.length?{n:face('n'), s:face('s')}:null,
+    crashes:CRASHES.length?{reach:CRASH_REACH, place:place?{ft:place.ft, name:place.name, n:place.n, inj:place.inj,
+      dist:Math.abs(place.ft-ft), dir:place.ft>ft?'east':place.ft<ft?'west':null}:null}:null,
     bench, count, bus:hour==null?null:busAt(ft,hour), lots:{n,s}, biggest};
 }
 
-const api={AVES, TREE_REACH, COUNT_REACH, COUNT_SPAN, PED_LAST, between, FRONT_TOL, REACH, LOT_BAND, crossing, LOT_BY_BBL, project, busAt, stationProfile};
+const api={AVES, CROSS, TREE_REACH, CRASH_REACH, CRASH_JOIN, PLACES, SHED_BY_BBL, COUNT_REACH, COUNT_SPAN, PED_LAST, between, FRONT_TOL, REACH, LOT_BAND, crossing, LOT_BY_BBL, project, busAt, stationProfile};
 window.STATION=api;
 if(typeof module!=='undefined'&&module.exports) module.exports=api;
 })();

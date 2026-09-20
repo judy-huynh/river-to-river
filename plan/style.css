@@ -200,6 +200,12 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .sizes{display:flex; align-items:flex-end; gap:16px; padding:8px 0 4px}
 .sizes figure{margin:0; display:flex; flex-direction:column; align-items:center; gap:6px}
 .sizes span{display:block; border-radius:50%; background:var(--leaf); opacity:.9}
+/* the same graduated circles in ink, for a count that has no colour of its own */
+.sizes--ink span{background:var(--ink); opacity:.6}
+/* a filled and an outlined lot, as the shed permits are drawn on the map */
+.key h4 i.mark{display:inline-block; width:12px; height:12px; margin:0 8px 0 0; vertical-align:-1px;
+  border:1.5px solid var(--ink)}
+.key h4 i.mark--full{background:var(--ink-70)}
 .sizes figcaption{font-family:var(--mono); font-size:var(--t-micro); color:var(--ink-50); letter-spacing:.06em}
 
 /* toggle chips inside a layer */

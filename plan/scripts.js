@@ -9,6 +9,9 @@
      BENCHES    NYC DOT Seating Locations on 42 Street
      PED_COUNT  NYC DOT Bi-Annual Pedestrian Counts, the one location on 42 Street
      PED_TIER   NYC DOT Pedestrian Mobility Plan, the priority tier of each segment
+     CURB       NYC DOT ParkNYC metered block faces on 42 Street
+     SHEDS      DOB sidewalk shed permits at 42 Street addresses, one record per building
+     CRASHES    NYPD police-reported crashes within CRASH_META.near_ft of the centreline
    ═══════════════════════════════════════════════════════════════════════ */
 (() => {
 'use strict';
@@ -44,7 +47,11 @@ function at(ft){
   }
   return [LINE.at(-1)[1], LINE.at(-1)[2]];
 }
-const HUBS=[[2699,3473,'Port Authority'],[4380,4760,'Times Sq'],[5480,6417,'Bryant Park'],[7520,8021,'Grand Central']];
+/* the four named stretches on the ruler, each from one baked cross street to another, so a
+   band moves with the avenues and no station is typed */
+const HUBS=[['9 Avenue','8 Avenue','Port Authority'],['7 Avenue','Broadway','Times Sq'],
+  ['Avenue of the Americas','5 Avenue','Bryant Park'],['Park Avenue','Lexington Avenue','Grand Central']]
+  .map(([w,e,name])=>{const at=n=>(window.AVES||[]).find(v=>v.name===n); return at(w)&&at(e)?[at(w).ft,at(e).ft,name]:null;}).filter(Boolean);
 
 /* ── palettes ─────────────────────────────────────────────────────────── */
 const ZONE={'C5-2':'#FFC24D','C5-2.5':'#FF9E2C','C5-3':'#FF5A36',
@@ -141,7 +148,7 @@ const busGeo=h=>({type:'FeatureCollection',features:BUS.filter(r=>r.h===h).map(r
 
 /* ── stationing ───────────────────────────────────────────────────────── */
 /* the lookups live in station.js so node can load and test them without a page */
-const {AVES, TREE_REACH, COUNT_REACH, REACH, LOT_BAND, LOT_BY_BBL, PED_LAST, between, project, stationProfile}=window.STATION;
+const {AVES, TREE_REACH, COUNT_REACH, SHED_BY_BBL, PLACES, REACH, LOT_BAND, LOT_BY_BBL, PED_LAST, between, project, stationProfile}=window.STATION;
 
 /* the benches and the counter, summarised once. none is every stretch of the street between
    one DOT bench and the next, ends included, longest first. */
@@ -170,6 +177,42 @@ const TIER_STATS=TIER.length?(()=>{
   const on=[...new Map(TIER.map(r=>[r.rank,{rank:r.rank,tier:r.tier}])).values()].sort((x,y)=>x.rank-y.rank);
   return {runs, blank, on};
 })():null;
+/* feet covered by a list of [a,b] bands once overlaps are merged */
+const mergedFeet=bands=>{const m=[]; [...bands].sort((x,y)=>x[0]-y[0]).forEach(([a,b])=>{
+  if(m.length&&a<=m[m.length-1][1]) m[m.length-1][1]=Math.max(m[m.length-1][1],b); else m.push([a,b]); });
+  return m.reduce((t,[a,b])=>t+(b-a),0);};
+/* the metered curb, summarised once. who and hours are tallies of the source's own words. */
+const CURB=window.CURB||[];
+const CURB_STATS=CURB.length?(()=>{
+  const tally=get=>[...CURB.reduce((m,f)=>m.set(get(f),(m.get(get(f))||0)+1),new Map())].sort((x,y)=>y[1]-x[1]);
+  const feet=sd=>mergedFeet(CURB.filter(f=>f.side===sd).map(f=>[f.a,f.b]));
+  return {who:tally(f=>f.who), hours:tally(f=>(f.com||f.all||{}).hours||'not stated'), n:feet('n'), s:feet('s')};
+})():null;
+/* the source's terms for a face, for each kind of vehicle it names */
+const curbTerms=f=>[['commercial vehicles',f.com],['all vehicles',f.all]].filter(x=>x[1])
+  .map(([k,t])=>`${k}: ${t.limit}, ${t.hours}, ${t.rate}`).join('<br>');
+/* shed permits, summarised once. a permit is a record at a building, never a length of shed. */
+const SHEDS=window.SHEDS||[], SHEDS_META=window.SHEDS_META||null;
+const SHED_STATS=SHEDS.length&&SHEDS_META?(()=>{
+  const live=SHEDS.filter(x=>x.state==='in force'), lapsed=SHEDS.filter(x=>x.state!=='in force').sort((x,y)=>y.expires.localeCompare(x.expires)||x.ft-y.ft);
+  return {live, lapsed, oldest:live.reduce((x,y)=>!x||y.since<x.since?y:x,null)};
+})():null;
+/* crashes, summarised once. places are station.js PLACES, the list the card reads too.
+   drawn is every place with anyone injured, west to east: one circle and one button each. */
+const CRASHES=window.CRASHES||[], CRASH_META=window.CRASH_META||null;
+const CRASH_STATS=CRASHES.length&&CRASH_META?(()=>{
+  const sum=k=>CRASHES.reduce((t,c)=>t+(c[k]||0),0);
+  const years=[...CRASHES.reduce((m,c)=>{const y=c.d.slice(0,4), v=m.get(y)||{n:0,inj:0}; v.n++; v.inj+=c.inj||0; return m.set(y,v);},new Map())].sort();
+  const inj=sum('inj'), split=[['Pedestrians',sum('ped')],['Cyclists',sum('cyc')],['Motorists',sum('mot')]];
+  const drawn=PLACES.filter(p=>p.inj);
+  /* crashes the source names on a road that is not the street: said on the row, from the data */
+  const fdr=CRASHES.filter(c=>c.x==='FDR Drive');
+  return {n:CRASHES.length, inj, k:sum('k'), hurt:CRASHES.filter(c=>c.inj).length, split,
+    other:inj-split.reduce((t,x)=>t+x[1],0), years, drawn,
+    fdr:{n:fdr.length, inj:fdr.reduce((t,c)=>t+(c.inj||0),0)},
+    top:[...drawn].sort((x,y)=>y.inj-x.inj||x.ft-y.ft)};
+})():null;
+const CRASH_TOP=5;   /* places the open row lists first, before the whole list */
 /* the PM series as a line against time, from a zero baseline. a period with no figure breaks the
    line, and so does a hole between two periods: nothing is drawn across time that was not counted. */
 const spark=(W,H)=>{
@@ -346,6 +389,59 @@ const LAYERS=[
     }
   },
   {
+    id:'sheds', group:'People', short:'Sheds', name:'What is in the way?', has:!!SHED_STATS,
+    get fig(){ const n=SHED_STATS.live.length; return [commas(n), `building${n===1?'':'s'}`]; },
+    get sub(){ const S=SHED_STATS; return `with a sidewalk shed permit in force on ${day(SHEDS_META.asof)}`+(S.oldest?` &middot; longest run of permits began ${day(S.oldest.since)}`:''); },
+    on:false, open:false, ids:['shedFill','shedLine'],
+    says:`Buildings addressed on 42nd Street with a Department of Buildings permit for a sidewalk shed. <b>A permit is a record, not a sighting.</b> It does not say a shed is standing, how long it is, or which side of a corner building it covers.`,
+    legend(){
+      const S=SHED_STATS, M=SHEDS_META;
+      const rows=(list,line)=>`<ul class="lotrows">${list.map(x=>`<li><button type="button" data-st="${x.ft}">`
+        +`<b>${x.addr}</b><span>${x.side==='n'?'North':'South'} side &middot; ${commas(x.ft)} ft from the west end</span>`
+        +`<span class="num">${line(x)}</span></button></li>`).join('')}</ul>`;
+      let o=`<div class="key"><h4><i class="mark mark--full"></i>Permit in force on ${day(M.asof)}</h4><p>${S.live.length} building${S.live.length===1?'':'s'}. Pick one to stand at its station.</p></div>`
+        +rows(S.live,x=>`${x.n} permit${x.n===1?'':'s'} in a run since ${day(x.since)} &middot; runs to ${day(x.expires)}`);
+      if(S.lapsed.length)
+        o+=`<div class="key key--after"><h4><i class="mark"></i>Permit run out, no sign-off recorded</h4><p>${S.lapsed.length} building${S.lapsed.length===1?'':'s'}, newest first. The record does not say whether a shed still stands.</p></div>`
+          +rows(S.lapsed,x=>`ran out ${day(x.expires)} &middot; run began ${day(x.since)}`);
+      o+=`<p class="flag"><b>The length of a shed is not in the record</b>DOB publishes the address, dates and status of each permit, and not how much sidewalk the shed covers, so no length is given here. Permits at one building are read as one run when each starts within ${M.gap_days} days of the last running out.</p>`;
+      o+=`<div class="key"><p>DOB NOW: Build, Approved Permits${srcDate('SHEDS')}, ${commas(M.rows.now)} shed permits on 42 Street. Runs dated with ${commas(M.rows.old)} older permits from DOB Permit Issuance. <a href="${METHOD}">Method</a></p></div>`;
+      return o;
+    }
+  },
+  {
+    id:'crashes', group:'People', short:'Crashes', name:'Who gets hurt?', has:!!CRASH_STATS,
+    get fig(){ return [commas(CRASH_STATS.inj),'people injured']; },
+    get sub(){ return `in ${commas(CRASH_STATS.n)} police-reported crashes, ${day(CRASH_META.since)} to ${day(CRASH_META.to)} &middot; a count, not a rate`; },
+    on:false, open:false, ids:['crashDots'],
+    get says(){ return `Every crash the police reported within ${CRASH_META.near_ft} ft of the centre of 42nd Street. <b>A circle is the people injured at one place.</b> The police put most crashes at the nearest intersection, not at the spot, so a place is an intersection far more often than a spot.`; },
+    legend(){
+      const S=CRASH_STATS, M=CRASH_META;
+      let o=`<div class="key"><h4>People injured, ${day(M.since)} to ${day(M.to)}</h4>
+        <p>${commas(S.hurt)} of the ${commas(S.n)} crashes injured someone. The split is the source's own.</p><ul>${
+        S.split.map(([k,v])=>`<li><span>${k}</span><b>${commas(v)}</b></li>`).join('')}${
+        S.other?`<li><span>In none of the three</span><b>${commas(S.other)}</b></li>`:''}
+        <li><span>All injured</span><b>${commas(S.inj)}</b></li>
+        <li><span>People killed</span><b>${commas(S.k)}</b></li></ul></div>`;
+      o+=`<div class="key"><h4>By year</h4><p>The last year runs to ${day(M.to)} only.</p><ul>${
+        S.years.map(([y,v])=>`<li><span>${y} &middot; ${commas(v.n)} crashes</span><b>${commas(v.inj)} injured</b></li>`).join('')}</ul></div>`;
+      o+=`<div class="key"><h4>Circle size</h4><p>Area grows with the people injured at one place: the crashes the police put within ${window.STATION.CRASH_JOIN} ft of each other along the street. A place where nobody was injured is not drawn.</p>
+        <div class="sizes sizes--ink">${[1,10,40].map(v=>`<figure><span style="width:${(Math.sqrt(v)*4.4).toFixed(1)}px;height:${(Math.sqrt(v)*4.4).toFixed(1)}px"></span><figcaption>${v}</figcaption></figure>`).join('')}</div></div>`;
+      const rows=list=>`<ul class="lotrows">${list.map(p=>`<li><button type="button" data-st="${p.ft}">`
+          +`<b>${p.name?`At ${p.name}`:whereName(between(p.ft))}</b><span>${commas(p.ft)} ft from the west end</span>`
+          +`<span class="num">${commas(p.inj)} injured in ${commas(p.n)} crash${p.n===1?'':'es'}</span></button></li>`).join('')}</ul>`;
+      o+=`<div class="key key--after"><h4>The ${Math.min(CRASH_TOP,S.top.length)} places with most injured</h4><p>Pick one to stand at its station.</p></div>`+rows(S.top.slice(0,CRASH_TOP));
+      o+=`<div class="key key--after"><h4>Every place with anyone injured, west to east</h4><p>${commas(S.drawn.length)} places, one circle each.</p></div>`+rows(S.drawn);
+      o+=`<p class="flag"><b>A count, not a rate</b>No source counts how many people walk, cycle or drive along the street, so there is nothing to divide by. These figures say how many people were hurt. They do not say how dangerous the street is for one person using it, and a busy corner cannot be compared with a quiet one.</p>`;
+      if(S.fdr.n)
+        o+=`<p class="flag"><b>Not every crash here was on 42nd Street</b>The rule is distance, so a crash on an avenue inside one of the street's intersections is counted. ${commas(S.fdr.n)} of the crashes are ones the source names on the FDR Drive, at the east end, with ${commas(S.fdr.inj)} people injured.</p>`;
+      if(M.unlocated.n)
+        o+=`<p class="flag"><b>${commas(M.unlocated.n)} more crashes have no point</b>The source records them on 42 Street with no coordinates, so they cannot be placed and are not counted above. ${commas(M.unlocated.inj)} people were injured in them.</p>`;
+      o+=`<div class="key"><p>NYPD Motor Vehicle Collisions, Crashes${srcDate('CRASHES')}. <a href="${METHOD}">Method</a></p></div>`;
+      return o;
+    }
+  },
+  {
     id:'bus', group:'Movement', short:'Bus', name:'How fast does the bus move?', has:!!BUS_STATS, hour:true,
     /* getters: the shut row follows the hour slider */
     get fig(){ const v=busCorridor(SEL.hour);
@@ -403,6 +499,27 @@ const LAYERS=[
           <p class="flag"><b>This is gross concrete, not clear width</b>Sheds, stairs, newsstands and kiosks are not deducted, so every figure here is an upper bound on what you can actually walk on. Coverage is ${pct(SW_STATS.coverN,LEN)}% of the north side and ${pct(SW_STATS.coverS,LEN)}% of the south.</p>`;
       }
       return h;
+    }
+  },
+  {
+    id:'curb', group:'Movement', short:'Curb', name:'Who is the curb for?', has:!!CURB_STATS,
+    get fig(){ return [`${CURB_STATS.who[0][1]} of ${CURB.length}`,'metered block faces']; },
+    get sub(){ return `${CURB_STATS.who[0][0].toLowerCase()} &middot; meters along ${pct(CURB_STATS.n+CURB_STATS.s,2*LEN)}% of the length of the two sides`; },
+    on:false, open:false, ids:['curbLine'],
+    says:`Each side of a block where NYC DOT runs parking meters, and who may pay to stand there. <b>A line is one metered block face.</b> Curb with no line has no meter.`,
+    legend(){
+      const S=CURB_STATS;
+      let o=`<div class="key"><h4>Who may pay to stand</h4><p>The source's own vehicle type, by block face.</p><ul>${
+        S.who.map(([k,v])=>`<li><span>${k}</span><b>${v} face${v===1?'':'s'}</b></li>`).join('')}</ul></div>`;
+      o+=`<div class="key"><h4>When the meters run</h4><ul>${
+        S.hours.map(([k,v])=>`<li><span>${k}</span><b>${v} face${v===1?'':'s'}</b></li>`).join('')}</ul></div>`;
+      o+=`<div class="key key--after"><h4>Each block face, west to east</h4><p>Pick one to stand at its middle.</p></div>
+        <ul class="lotrows">${CURB.map(f=>`<li><button type="button" data-st="${Math.round((f.a+f.b)/2)}">`
+          +`<b>${f.side==='n'?'North':'South'} side, between ${f.from} and ${f.to}</b>`
+          +`<span>${commas(f.a)} to ${commas(f.b)} ft &middot; ${f.who}</span><span class="num">${curbTerms(f)}</span></button></li>`).join('')}</ul>`;
+      o+=`<p class="flag"><b>${pct(2*LEN-S.n-S.s,2*LEN)}% of the length of the two sides has no meter</b>Meters run along ${pct(S.n,LEN)}% of the north side and ${pct(S.s,LEN)}% of the south. Each share is of the whole ${commas(LEN)} ft of the street, avenue crossings included, so it is a share of the street's length and not of the curb a vehicle could use. No meter does not mean free to park. Bus stops, no standing zones and other posted rules apply there, and they are in another source that is not on this sheet.</p>`;
+      o+=`<div class="key"><p>NYC DOT Parking Meters, ParkNYC Block Faces${srcDate('CURB')}. <a href="${METHOD}">Method</a></p></div>`;
+      return o;
     }
   },
   {
@@ -699,6 +816,30 @@ map.on('style.load',()=>{
       'circle-radius':['interpolate',['linear'],['zoom'],13,4,17,9]});
   }
 
+  /* the metered faces at their own curb line, in ink */
+  if(CURB_STATS){
+    map.addSource('curb',{type:'geojson',data:{type:'FeatureCollection',features:CURB.map((f,i)=>({
+      type:'Feature',properties:{i},geometry:{type:'LineString',coordinates:f.c}}))}});
+    map.addLayer({id:'curbLine',type:'line',source:'curb',slot:'middle',layout:{visibility:'none','line-cap':'butt'},
+      paint:{'line-color':'#14120F','line-emissive-strength':1,'line-width':['interpolate',['linear'],['zoom'],13,2.5,17,6]}});
+  }
+  /* a shed permit belongs to a building, so the building's lot is what is marked: filled where a
+     permit is in force, outlined where one ran out unsigned. no length of shed is drawn. */
+  if(SHED_STATS){
+    const bbls=list=>['in',['to-string',['get','bbl']],['literal',list.map(x=>String(x.bbl))]];
+    map.addLayer({id:'shedFill',type:'fill',source:'lots',slot:'middle',filter:bbls(SHED_STATS.live),layout:{visibility:'none'},
+      paint:{'fill-color':'#14120F','fill-opacity':.72,'fill-emissive-strength':1}});
+    map.addLayer({id:'shedLine',type:'line',source:'lots',slot:'middle',filter:bbls(SHEDS),layout:{visibility:'none'},
+      paint:{'line-color':'#14120F','line-width':2,'line-emissive-strength':1}});
+  }
+  /* one circle per place, its area the people injured there */
+  if(CRASH_STATS){
+    map.addSource('crashes',{type:'geojson',data:{type:'FeatureCollection',features:CRASH_STATS.drawn.map(p=>({
+      type:'Feature',properties:{inj:p.inj},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}))}});
+    dot('crashDots','crashes',{'circle-color':'#14120F','circle-opacity':.6,'circle-stroke-color':'#FCFAF5','circle-stroke-width':1,
+      'circle-radius':['interpolate',['linear'],['zoom'],13,['*',1.3,['sqrt',['get','inj']]],17,['*',4.4,['sqrt',['get','inj']]]]});
+  }
+
   map.addSource('aves',{type:'geojson',data:{type:'FeatureCollection',features:AVES.map(([ft,name])=>({
     type:'Feature',properties:{name},geometry:{type:'Point',coordinates:at(ft)}}))}});
   map.addLayer({id:'aveLab',type:'symbol',source:'aves',slot:'top',
@@ -767,6 +908,24 @@ function wire(){
         +`<span>DOT count location ${PED.loc}</span>`));
     map.on('mouseleave','countDot',()=>tip.dataset.show='false');
   }
+  /* each of these is also a button in its row's legend, and the card at a crash place's
+     station gives the same figure as its circle */
+  if(map.getLayer('curbLine')){
+    map.on('mousemove','curbLine',e=>{const f=CURB[e.features[0].properties.i];
+      showTip(e,`<b>${f.who}</b><em>${f.side==='n'?'north':'south'} side, between ${f.from} and ${f.to}</em><span>${curbTerms(f)}</span>`);});
+    map.on('mouseleave','curbLine',()=>tip.dataset.show='false');
+  }
+  if(map.getLayer('shedLine')){
+    map.on('mousemove','shedLine',e=>{const x=SHED_BY_BBL.get(String(e.features[0].properties.bbl)); if(!x) return;
+      showTip(e,`<b>${x.addr}</b><em>shed permit ${shedSays(x)}</em><span>a permit, not a sighting</span>`);});
+    map.on('mouseleave','shedLine',()=>tip.dataset.show='false');
+  }
+  if(map.getLayer('crashDots')){
+    map.on('mousemove','crashDots',e=>{const c=e.lngLat, p=CRASH_STATS.drawn.reduce((x,y)=>
+        Math.hypot(y.lon-c.lng,y.lat-c.lat)<Math.hypot(x.lon-c.lng,x.lat-c.lat)?y:x);
+      showTip(e,`<b>${commas(p.inj)} injured</b><em>${p.name?`at ${p.name}, `:''}${commas(p.ft)} ft</em><span>${commas(p.n)} crash${p.n===1?'':'es'} &middot; a count, not a rate</span>`);});
+    map.on('mouseleave','crashDots',()=>tip.dataset.show='false');
+  }
   map.on('move',syncRuler);
 }
 
@@ -786,7 +945,9 @@ const away=x=>x.dir?`${commas(x.dist)} ft ${x.dir}`:'at this station';
 /* a count window from the baked hours, 24 hour clock in: 'weekday 4 to 7pm' */
 const span=w=>w?`${w.day} ${hr(w.from).slice(0,(w.from<12)===(w.to<12)?-2:undefined)} to ${hr(w.to)}`:'PM';
 const PM_WIN=span((window.PED_COUNT||{}).windows&&window.PED_COUNT.windows.pm);
-const block=x=>x.west===x.east?`at ${aveShort(x.west)}`:`${aveShort(x.west)} to ${aveShort(x.east)}`;
+/* a shed permit in one line, the same words on the map, in the card and in the lot list */
+const shedSays=x=>x.state==='in force'?`in force to ${day(x.expires)}`:`ran out ${day(x.expires)}, no sign-off recorded`;
+const block=x=>x.west===x.east?`at ${aveShort(x.west)}`:!x.west?`west of ${aveShort(x.east)}`:!x.east?`east of ${aveShort(x.west)}`:`${aveShort(x.west)} to ${aveShort(x.east)}`;
 /* source, date and caveat travel with the figures, whichever layers are on */
 /* the rendered file on GitHub. a relative .md link is not served the same way by every host. */
 const METHOD='https://github.com/judy-huynh/river-to-river/blob/main/METHODOLOGY.md';
@@ -802,16 +963,25 @@ const NOTE_WALK=`Walk widths are gross concrete. Sheds, stairs, newsstands and k
   +`counter and only on its own block.`
   +(TIER_STATS?` Priority tier: NYC DOT Pedestrian Mobility Plan${srcDate('PED_TIER')}. A tier is the plan's rank `
   +`for the street segment, 1 the highest. It is not a count of people.`:'')
+  +(CURB_STATS?` Curb: NYC DOT ParkNYC Block Faces${srcDate('CURB')}. No meter does not mean free to park: other posted `
+  +`rules apply and are not in the source.`:'')
+  +(CRASH_STATS?` Crashes: NYPD Motor Vehicle Collisions${srcDate('CRASHES')}, ${day(CRASH_META.since)} to ${day(CRASH_META.to)}, `
+  +`police points within ${CRASH_META.near_ft} ft of the centreline, usually the nearest intersection. A count of people hurt, not a rate.`:'')
   +(BUS_STATS?` Bus: MTA Bus Route Segment Speeds, ${BUS_META.route}, weekdays in ${busMonth()}${srcDate('BUS')}. `
   +`A speed is the average over a whole leg between two timepoints, not a reading at this station. `
   +`A leg with a timepoint off 42nd Street is left out, so some stations have none.`:'');
 const NOTE_LOT=`Unbuilt floor area is lot area &times; the base floor area ratio of the zoning district, minus `
   +`floor area built. Special district rules are not applied, and a landmarked lot may not be able `
-  +`to use it. Lots: NYC MapPLUTO.`;
+  +`to use it. Lots: NYC MapPLUTO.`
+  +(SHED_STATS?` Shed permits: DOB NOW: Build, Approved Permits${srcDate('SHEDS')}, read as of ${day(SHEDS_META.asof)}. `
+  +`A permit is a record, not a sighting, and the length of a shed is not in it.`:'');
 const note=t=>`<p class="note">${t} <a href="${METHOD}">Method</a></p>`;
-const where=P=>P.west.ft===P.ft?`At ${aveName(P.west.name)}`
-  : P.east.ft===P.ft?`At ${aveName(P.east.name)}`
-  : `Between ${aveShort(P.west.name)} and ${aveName(P.east.name)}`;
+/* the line runs on past the first and last avenue, so a station can have one on one side only */
+const whereName=x=>x.west&&x.west===x.east?`At ${aveName(x.west)}`
+  : !x.west?`West of ${aveName(x.east)}`
+  : !x.east?`East of ${aveName(x.west)}`
+  : `Between ${aveShort(x.west)} and ${aveName(x.east)}`;
+const where=P=>whereName(between(P.ft));
 
 /* a slider must always carry a value: with no station picked it reports the middle of the view */
 function restSlider(){
@@ -877,6 +1047,7 @@ function stationHTML(P){
   const tags=p=>{const t=[];
     if(P.biggest&&p.bbl===P.biggest.bbl) t.push('largest lot here');
     if(p.addr&&!ON_42.test(p.addr)) t.push('not a 42 Street address');
+    const shed=SHED_BY_BBL.get(String(p.bbl)); if(shed) t.push('shed permit '+shedSays(shed));
     return t.length?`<span class="num">${t.join(' &middot; ')}</span>`:'';};
   const none=parts.every(x=>x[1]==null);
   const lotList=(side,list)=>`<h4 class="micro">${side} side &middot; ${list.length} lot${list.length===1?'':'s'}</h4>`
@@ -891,7 +1062,7 @@ function stationHTML(P){
     +`<button class="mini" type="button" data-close>close</button></div>`
    +`<h3>${where(P)}</h3>`
    +`<span class="micro">${commas(P.ft)} ft from the west end`
-   +(P.west.ft!==P.ft&&P.east.ft!==P.ft?` &middot; ${commas(P.ft-P.west.ft)} ft past ${aveShort(P.west.name)}, ${commas(P.east.ft-P.ft)} ft to ${aveShort(P.east.name)}`:'')+`</span>`
+   +(P.at?'':` &middot; `+[P.west&&`${commas(P.ft-P.west.ft)} ft past ${aveShort(P.west.name)}`, P.east&&`${commas(P.east.ft-P.ft)} ft to ${aveShort(P.east.name)}`].filter(Boolean).join(', '))+`</span>`
    /* flex-grow is the width in feet, so the bar is to scale by construction */
    +`<div class="xsec${none?' xsec--none':''}" role="img" aria-label="Cross-section. ${said}.">${parts.map(([k,v])=>
       v!=null?`<i class="xsec__${k}" style="flex:${v} 1 0"></i>`:`<i class="xsec__gap"></i>`).join('')}</div>`
@@ -907,6 +1078,10 @@ function stationHTML(P){
    +(P.bus?`<div><dt>M42 bus here, ${hourSpan(P.bus.hour)}</dt><dd>${[P.bus.e,P.bus.w].some(Boolean)?[P.bus.e,P.bus.w].filter(Boolean).map(r=>
        `${r.mph!=null?r.mph.toFixed(2)+' mph':'no buses measured'} ${DIRS[r.dir]}<span>whole leg, ${legName(r)}, ${commas(r.b-r.a)} ft</span>`).join('')
        :'no M42 speed kept here'}</dd></div>`:'')
+   +(P.curb?`<div><dt>Metered curb here</dt><dd>${[['north',P.curb.n],['south',P.curb.s]].map(([k,f])=>
+       `<span>${k}: ${f?`${f.who.toLowerCase()}, ${(f.com||f.all).hours}`:'no meter'}</span>`).join('')}</dd></div>`:'')
+   +(P.crashes?`<div><dt>Nearest crash place</dt><dd>${(c=>c?`${commas(c.inj)} injured<span>in ${commas(c.n)} crash${c.n===1?'':'es'}${c.name?` at ${c.name}`:''}, ${away(c)}, ${day(CRASH_META.since)} to ${day(CRASH_META.to)}, a count, not a rate</span>`
+       :`none within ${P.crashes.reach} ft`)(P.crashes.place)}</dd></div>`:'')
    +(TIER_STATS?`<div><dt>DOT pedestrian priority tier</dt><dd>${P.tier?`${P.tier.name}<span>tier ${P.tier.rank} of ${TIER_META.length}, a planning rank, not a count</span>`:'no tier in the source here'}</dd></div>`:'')
    +(P.count?`<div><dt>Pedestrians counted</dt><dd>${commas(P.count.pm)}<span>${span(P.count.win)}, one day in ${day(P.count.p)}, counter ${away(P.count)}, ${block(P.count)}</span></dd></div>`:'')
    +`</dl>`+note(NOTE_WALK)
@@ -986,12 +1161,15 @@ const RULER_BANDS=[
     draw(add,X,y,h){
       TREE_GAPS.forEach(([a,b])=>add('rect',{x:X(a),y,width:X(b)-X(a),height:h,fill:ALARM,'fill-opacity':.45}));
       TREES.forEach(t=>add('rect',{x:X(t.ft),y,width:1,height:h,fill:LEAF,'fill-opacity':.9})); } },
-  { id:'marks', has:!!(BENCH_STATS||PED_STATS),
-    /* each bench solid, the counter a ring, as on the map */
-    caption:()=>[[...(BENCH_STATS?[{dot:{fill:INK}, t:`DOT bench${BENCHES.length===1?'':'es'}`}]:[]),
+  { id:'marks', has:!!(BENCH_STATS||PED_STATS||SHED_STATS),
+    /* each bench solid, the counter a ring, as on the map. a building with a shed permit in
+       force is a narrow bar at its station, never a length: narrow so it clears the counter's ring */
+    caption:()=>[[...(SHED_STATS?[{sw:{fill:INK}, t:`shed permit in force, ${SHED_STATS.live.length} building${SHED_STATS.live.length===1?'':'s'}`}]:[]),
+      ...(BENCH_STATS?[{dot:{fill:INK}, t:`DOT bench${BENCHES.length===1?'':'es'}`}]:[]),
       ...(PED_STATS?[{dot:{fill:PAPER,stroke:INK,'stroke-width':1.5}, ring:true, t:'DOT pedestrian counter'}]:[])]],
     draw(add,X,y,h){ const cy=y+h/2;
       add('line',{x1:0,x2:X(LEN),y1:cy,y2:cy,stroke:INK,'stroke-opacity':.13,'stroke-width':1});
+      if(SHED_STATS) SHED_STATS.live.forEach(x=>add('rect',{x:X(x.ft)-1.5,y,width:3,height:h,fill:INK}));
       if(BENCH_STATS) BENCHES.forEach(b=>add('circle',{cx:X(b.ft),cy,r:3,fill:INK}));
       if(PED_STATS) add('circle',{cx:X(PED.ft),cy,r:4,fill:PAPER,stroke:INK,'stroke-width':1.5}); } }
 ];
@@ -1125,7 +1303,7 @@ function syncRuler(){
   const mid=(lo+hi)/2, ave=AVES.reduce((x,y)=>Math.abs(y[0]-mid)<Math.abs(x[0]-mid)?y:x);
   /* says it is the map, so it is not read as the place of the open station card */
   $('#rulerMid').textContent = 'map view '+(mid<120?'at the Hudson' : mid>LEN-120?'at the East River'
-    : `near ${ave[1]} Avenue · ${commas(mid)} ft from the Hudson`);
+    : `near ${aveName(ave[1])} · ${commas(mid)} ft from the Hudson`);
 }
 let VIEW=[0,LEN];
 (function drag(){

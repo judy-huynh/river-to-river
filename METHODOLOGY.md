@@ -1,7 +1,7 @@
 # Data and methodology
 
 High level record of where every number on River to River comes from and what was done to it.
-Updated whenever a dataset is added or a spatial step changes. Last updated 19 Sep 2026.
+Updated whenever a dataset is added or a spatial step changes. Last updated 20 Sep 2026.
 
 The rule the project holds itself to: every published number traces to a public source, the
 spatial steps that produced it are written down here, and anything that cannot be reproduced
@@ -13,7 +13,8 @@ Every dataset is reduced to one question: **how many feet along 42nd Street is t
 
 1. **Centreline.** The 42nd Street centreline is pulled once from OpenStreetMap (Overpass) and
    baked into `plan/data.js` as `LINE42`, a list of `[station_ft, lon, lat]` vertices.
-   Currently 12th Avenue to 1st Avenue, 59 vertices, 10,411 ft (1.97 mi). An early version
+   59 vertices, 10,411 ft (1.97 mi). It starts 51 ft west of the middle of 12th Avenue and runs
+   on 457 ft past the middle of 1st Avenue, to the FDR Drive (section 1a). An early version
    interpolated between guessed avenue coordinates and drifted up to 150 m, a whole block, so the
    centreline is always snapped to OSM, never estimated.
 2. **Projection.** A point is stationed by true perpendicular projection onto the nearest
@@ -28,6 +29,45 @@ Every dataset is reduced to one question: **how many feet along 42nd Street is t
    whole dataset can be re-stationed against a new centreline in one script run. This matters
    because the extent is moving from 12th-to-1st to pier to pier.
 
+## 1a. Where the avenues are (added 20 Sep 2026)
+
+`scripts/bake/aves.py`, `window.AVES`. NYC Street Centerline (CSCL), NYC Open Data `inkn-q76z`,
+rows last updated 19 Sep 2026. Until this bake the avenue stations were a table typed into
+`plan/station.js`. It was wrong by up to 530 ft east of Lexington Avenue and by 170 ft at
+8th Avenue, and every place name on the sheet was read off it. The table is gone.
+
+1. **Read by place.** Every Manhattan centerline segment inside the street's padded bounding
+   box, 953 segments.
+2. **Find the ends on the street.** The source splits every street at every intersection, so a
+   cross street's segments end on 42nd Street. An end is kept when it lies within **40 ft** of
+   `LINE42` (`NEAR_FT`), the segment leaves it at more than **45 degrees** from the local
+   heading (`CROSS_DEG`), the segment is a street, highway or bridge (`rw_type` 1, 2 or 3), and
+   it is not itself named 42 Street. Paths, alleys and ramps are printed and left out.
+3. **Group by the source's street name**, spelling made regular so it matches the names the
+   curb and crash sources use. A street with no end at street level (the source's level code
+   13) is printed and left out: the Park Avenue Viaduct and Tudor City Place, which pass over.
+4. **Station** each end by perpendicular projection as in section 1 and keep its own lon/lat
+   (`c`). `a` and `b` are the westmost and eastmost end, `ft` the middle of the two. An avenue
+   with one roadway has one end and `a`, `ft` and `b` are equal. 12th Avenue has two (13 and
+   89), Park Avenue three (7,435 to 7,517) and 1st Avenue six, with its tunnel (9,905 to 10,003).
+5. **What it holds.** 18 cross streets. 14 carry a `label`, the avenues the ruler ticks: 12th
+   51, 11th 949, 10th 1,846, 9th 2,744, 8th 3,643, 7th 4,541, 6th 5,435, 5th 6,456, Madison
+   6,965, Park 7,476, Lexington 7,986, 3rd 8,493, 2nd 9,200, 1st 9,954. The other four are
+   Dyer Avenue 2,332, Broadway 4,712, Vanderbilt Avenue 7,259 and De Pew Place 7,653. Which
+   avenues are ticked is a list in the bake; the bake stops if one is not found. No station is
+   typed anywhere.
+6. **Checked against two other sources**, in `node scripts/check/station.js`, which fails
+   otherwise: every metered face (section 3e) lies between the two cross streets its own source
+   names, with no ticked avenue inside it, and every crash (section 3g) that names one of these
+   streets is stationed within 25 ft of that street's crossing. The pedestrian tier segments
+   (section 3d) also break at 2,746 and 7,988, 2 ft from 9th and Lexington Avenue.
+
+**On the sheet.** The ruler ticks, the map's avenue labels, the four named stretches on the
+ruler (each runs from one baked cross street to another) and every "between" on the page read
+this set. A station inside an avenue's own crossing (`a` to `b`) is "at" that avenue. West of
+12th Avenue and east of 1st Avenue a station has an avenue on one side only and the card says
+so. Reproduce with `python3 scripts/bake/aves.py --check`.
+
 Nothing is loaded live. All data is clipped, stationed and baked into `plan/data.js` so the page
 depends on Mapbox for the basemap and on nothing else.
 
@@ -36,6 +76,7 @@ depends on Mapbox for the basemap and on nothing else.
 | Global in `plan/data.js` | Source | What was done to it |
 |---|---|---|
 | `LINE42` | OpenStreetMap via Overpass | Snapped centreline, stationed in feet |
+| `AVES` | NYC Street Centerline (CSCL) `inkn-q76z` | Where 18 cross streets meet the centreline, stationed; 14 are the avenues the ruler ticks. See section 1a |
 | `LOTS_POLY` | NYC MapPLUTO (Dept of City Planning) | Tax lots near the centreline with owner, zoning, floor area built and allowed. **Under revision, see section 4** |
 | `TREES` | NYC Parks Forestry Tree Points | 281 street trees, stationed, with species, trunk diameter, condition |
 | `ROAD` | NYC CSCL street centerline (DoITT/OTI) | 26 segments with roadway width, moving lanes, parking lanes |
@@ -44,6 +85,9 @@ depends on Mapbox for the basemap and on nothing else.
 | `PED_COUNT` | NYC DOT Bi-Annual Pedestrian Counts `cqsj-cfgu` | The one count location on the street with its whole series, stationed. See section 3b |
 | `BUS`, `BUS_META` | MTA Bus Route Segment Speeds `kufs-yh3x` (data.ny.gov) | M42 weekday speed by leg, hour and direction for one month, each leg a from/to band. See section 3c |
 | `PED_TIER`, `PED_TIER_META` | NYC DOT Pedestrian Mobility Plan `fwpa-qxaf` | The plan's priority tier for each of 34 segments of the street, each a from/to band, and the plan's five tiers citywide. A rank, not a count. See section 3d |
+| `CURB` | NYC DOT Parking Meters, ParkNYC Block Faces `e7yp-wx55` | 18 metered block faces, each a from/to band on its own side. See section 3e |
+| `SHEDS`, `SHEDS_META` | DOB NOW: Build, Approved Permits `rbx6-tga4`, with DOB Permit Issuance `ipu4-2q9a` for history | One record per building whose newest sidewalk shed permit is not signed off, stationed, with the run of permits dated. A permit, not a sighting, and no shed length. See section 3f |
+| `CRASHES`, `CRASH_META` | NYPD Motor Vehicle Collisions, Crashes `h9gi-nx95` | 1,192 police-reported crashes within 75 ft of the centreline since 1 Jan 2021, stationed, with people injured. A count, not a rate. See section 3g |
 | `SOURCE_DATE` | The open data portal's own metadata | The date each publisher last changed its rows, read at bake time |
 
 Derived figures computed in the page, not typed:
@@ -64,11 +108,22 @@ Derived figures computed in the page, not typed:
   - *Where can you stop?* The number of records in `BENCHES`. "None west of" and "none east of"
     are the avenues flanking the westmost and eastmost bench. The stretches with no DOT bench are
     the differences between consecutive bench stations, with both ends of the street included.
+  - *What is in the way?* The number of `SHEDS` records whose state is in force, which is the
+    number of buildings with a shed permit covering `SHEDS_META.asof`, with that day beside it
+    and the earliest `since` among them (section 3f).
+  - *Who gets hurt?* The sum of `inj` over `CRASHES`, with the number of crashes and the first
+    and last day from `CRASH_META`. The row says on its shut line that it is a count and not a
+    rate (section 3g).
   - *How fast does the bus move?* The street average at the chosen hour: miles run over hours
     taken across every kept leg in both directions, weighted by buses measured (section 3c). The
     slowest leg is the lowest single leg speed at that hour.
   - *Who gets the ground?* The length-weighted average roadway width against the median sidewalk
     width of section 3.
+  - *Who is the curb for?* The number of `CURB` faces carrying the most common vehicle type, out
+    of all faces, with that type in the source's words, and the share of the two curbs under a
+    metered face: the merged length of the faces on each side over twice the street length
+    (section 3e). The row words it as a share of the length of the two sides, not of the curb,
+    because that length includes every avenue crossing and the stretch past 1st Avenue.
   - *What could be built?* The count of drawn lots whose unbuilt floor area is above zero, out of
     all drawn lots, and the count that are landmarked. It is a count and not a floor area total
     on purpose: the drawn lot set is under revision (section 4), and a total summed over it would
@@ -187,7 +242,7 @@ per bench, rows last updated 8 Sep 2026.
    lon/lat. They stand at stations 5,616 (6th to 5th Avenue) and 6,625 (5th to Madison), both
    on the south side, 37 and 40 ft off the centreline. The computed side agrees with the
    source's own `side_of_st` for both. Installed 4 May 2025 and 20 May 2025. No bench stands
-   west of station 5,616, so none west of 6th Avenue (station 5,480).
+   west of station 5,616, so none west of 6th Avenue (station 5,435).
 3. **Cross-check**, printed on every run: any DOT bench within 100 ft of the centreline that the
    street rule left out. There are 0. The nearest other bench is on 3rd Avenue, 143 ft off.
 
@@ -226,8 +281,8 @@ not as a radius, its side, the avenues either side of it, and its install date. 
 the station is within 300 ft of it along the street (`COUNT_REACH`) and on the counter's own
 block, the weekday 4 to 7pm figure of the latest period that has one, with the window, the
 period and the distance to the counter. The reach is clipped at the avenues either side of the
-counter (`COUNT_SPAN`), so with Park at 7,520 and Lexington at 8,021 the count shows from 7,520
-to 8,021 and not on the next block. Elsewhere the card shows no count, because one counter does
+counter (`COUNT_SPAN`), so with the counter at 7,796, Park at 7,476 and Lexington at 7,986 (section 1a) the count
+shows from 7,496 to 7,986 and not on the next block. Elsewhere the card shows no count, because one counter does
 not describe the rest of the street (section 6). Both are checked in
 `node scripts/check/station.js`.
 
@@ -316,7 +371,7 @@ never calls it demand or volume.**
    no gap and no overlap between neighbours, 10,309 ft stationed. The first 54 ft and the last
    48 ft have no segment in the source and are drawn blank.
 5. **What it holds.** Two tiers. Regional from 54 to 2,746, **Global from 2,746 to 7,988
-   (5,242 ft unbroken, from 47 ft east of 9th Avenue to 33 ft west of Lexington Avenue)**, Regional from 7,988 to 10,363.
+   (5,242 ft unbroken, from 2 ft east of the middle of 9th Avenue to 2 ft east of the middle of Lexington Avenue)**, Regional from 7,988 to 10,363.
 6. **The five tiers citywide** are read in the same run by a grouped query (`opendata.grouped`)
    and baked as `PED_TIER_META.tiers` with their source row counts: 851 Global, 4,487 Regional,
    22,769 Neighborhood, 34,195 Community, 64,975 Baseline. These are raw rows, repeats included.
@@ -348,6 +403,152 @@ with its rank out of the number of tiers in `PED_TIER_META`, or says the source 
 This is how the band is read by tap and keyboard. Checked in `node scripts/check/station.js`.
 
 Reproduce with `python3 scripts/bake/ped_tier.py --check`.
+
+## 3e. Who the metered curb is for (added 20 Sep 2026)
+
+`scripts/bake/curb.py`, `window.CURB`. NYC DOT Parking Meters, ParkNYC Block Faces, NYC Open Data
+`e7yp-wx55`, rows last updated 1 Sep 2026 (the run prints the date and it is
+baked into `SOURCE_DATE`). One line per metered side of a block, with the vehicle type
+that may pay to stand there, the time limit, the hours the meter runs and the rate.
+
+1. **Read by place.** The fetch is every face inside the street's own bounding box, padded, so
+   the run can see faces the name rule leaves out. 506 faces.
+2. **Select** by name: `on_street` is East or West 42 Street (`on_42`) and the borough is
+   Manhattan. The source writes the borough in three cases (Manhattan, MANHATTAN, manhattan), so
+   it is compared in capitals. **18** faces pass.
+3. **Station** both ends by perpendicular projection as in section 1, low station first, keeping
+   the two ends' own lon/lat (`c`, west end first). Side is the cross product, and the bake
+   stops if a face has an end on each side, more than one part, or a vertex stationing past its
+   own ends (a face that curled round a corner would). None does. The computed side agrees with
+   the source's `side_of_st` for all 18, the faces lie 29 to 41 ft off the centreline, and each
+   stationed length is within 7 ft of the source's own `shape_leng`.
+4. **Cross-check**, printed on every run: any face not named 42 Street with both ends within
+   60 ft of the centreline. There are 0.
+5. **What it holds.** All 18 are `Commercial Only`. No face on the street is metered for all
+   vehicles. 10 run Monday to Saturday 7pm to midnight, 5 run 7am to midnight, 2 run 10am to 2pm
+   and 1 runs 7am to 7pm. 17 are 1 hour at $7.00 and one (south side, 10th to 11th Avenue) is
+   3 hours on a rising rate. The faces cover 5,155 ft of the north curb (50%) and 6,219 ft of
+   the south (60%), 55% of the two together.
+6. **Cross streets** are the source's `from_stree` and `to_street` in the source's own order,
+   which is not west to east and does not follow the way the line is drawn, so the page says
+   "between" and never "from". Only the spelling is made regular (`11Avenue`, `Dyer Ave`,
+   `3 Ave`); the run prints each change.
+
+**What it cannot say.** A curb with no metered face is not free curb. Bus stops, no standing
+zones, hydrants and every other posted rule are in the parking signs set (`nfid-uabd`), which is
+not baked. The page says this beside the figure and on the station card. The hours are when the
+meter runs, not the rule outside those hours.
+
+**On the sheet.** Faces are drawn in ink at their own curb line. The open row lists every face
+as a button that stands at its middle, which is how the map's hover is reached by tap and
+keyboard. `stationProfile` returns the face under the station on each side, or none. Checked in
+`node scripts/check/station.js`. Reproduce with `python3 scripts/bake/curb.py --check`.
+
+## 3f. Sidewalk shed permits (added 20 Sep 2026)
+
+`scripts/bake/sheds.py`, `window.SHEDS` and `window.SHEDS_META`. DOB NOW: Build, Approved
+Permits, NYC Open Data `rbx6-tga4`, rows last updated 19 Sep 2026, work type Sidewalk Shed. DOB
+Permit Issuance `ipu4-2q9a`, the older system (permit subtype SH), is read only to date how far
+back a run of permits goes: its newest shed permit on the street was issued 18 Sep 2020 and none
+is in force.
+
+**A permit is a record that a shed was allowed at an address between two dates. It is not a
+sighting of a shed. Neither source records the length of a shed or which frontage of a corner
+building it covers, so the sheet gives no length of covered sidewalk and draws none.**
+
+1. **Select** by the permit's street: East or West 42 Street in Manhattan (`on_42`). The fetch
+   is loose on purpose and the run prints what the exact rule leaves out: 180 permits on West
+   142 Street. **198** DOB NOW permits (144 signed off, 54 issued) and **660** older permits are
+   on 42nd Street, naming 102 buildings, the first permit issued 17 May 1990. 8 older rows have
+   no dates and are not used.
+2. **One record per building**, keyed on DOB's building number (`bin`), as of one day,
+   `SHEDS_META.asof` (20 Sep 2026). A permit issued after that day is ignored, so a later
+   `--check` reads the same permits.
+   - **In force**: a permit with status `Permit Issued` whose dates cover the day. **4 buildings**:
+     215 West, 50 East, 122 East and 320 East 42 Street.
+   - **Lapsed**: no permit in force, and the building's newest permit is still `Permit Issued`
+     but has run out. **13 buildings**, running out between 10 Oct 2018 and 16 Sep 2026. The
+     record does not say whether a shed still stands, and the page says so. It lists them apart
+     from the four and does not count them in the figure.
+   - A building whose newest permit is `Signed-off` is closed and is not in the set.
+3. **The run of permits.** Working back from the newest permit, any permit at the same building,
+   from either source and whatever its job number, joins the run when it ends no more than 30
+   days (`GAP_DAYS`) before the run starts. `since` is the first day of the run and `n` the
+   permits in it. The 30 days is a judgement: renewals are often issued some days after the last
+   permit ran out. The run prints `since` at 0, 30 and 90 days for every building. It matters for
+   three: 122 East 42 Street reads 15 Jan 2025, **22 Mar 2018** and 15 Nov 2017, 215 West 42
+   Street reads 10 Oct 2024, **1 May 2018** and 1 May 2018, and 345 West 42 Street (lapsed) reads
+   9 Sep 2022, 11 Sep 2018 and 28 Mar 2018. A run can join different jobs, which may be
+   different sheds on different frontages. It is a run of permits, not the age of one shed.
+4. **Station** the source's point for the building by perpendicular projection as in section 1,
+   keeping its own lon/lat. The point sits on the street, 1 to 7 ft off the centreline for most
+   buildings, on the building's side. That is too close for the cross product to be trusted
+   alone, so the run checks the computed side against the house number (odd numbers stand on the
+   north side): all 17 agree.
+5. **Join to the lot.** Each record carries the source's `bbl`. All 17 match a drawn lot, and
+   `node scripts/check/station.js` fails if one ever does not.
+
+**On the sheet.** The building's lot is filled where a permit is in force and outlined where one
+lapsed. No line is drawn along the sidewalk. The ruler marks each building with a permit in
+force as a narrow bar at its station, narrow so that it clears the counter's ring beside it. The open row lists every building as a button, and the station
+card tags a listed lot that has a permit. An earlier mock-up of this row showed 11 buildings;
+that figure does not reproduce under any rule tried here and is not used.
+
+`--check` re-derives the set as of the baked day. The source changes daily, and a permit signed
+off or renewed since then shows as a difference, which is the cue to re-bake. Reproduce with
+`python3 scripts/bake/sheds.py --check`.
+
+## 3g. Who gets hurt (added 20 Sep 2026)
+
+`scripts/bake/crashes.py`, `window.CRASHES` and `window.CRASH_META`. NYPD Motor Vehicle
+Collisions, Crashes, NYC Open Data `h9gi-nx95`, rows last updated 15 Jun 2026. The newest crash
+in the whole source is dated 11 Jun 2026, so the set stops there whatever day it is baked.
+
+1. **Select** by date and distance: dated 1 Jan 2021 or later, and the police point within
+   **75 ft** of `LINE42` (`NEAR_FT`) by perpendicular projection as in section 1. The fetch is
+   the street's padded bounding box (10,750 crashes); the distance rule keeps **1,192**, 2 Jan
+   2021 to 9 Jun 2026. A point past either end of the centreline stations at the end, so the rule
+   is a 75 ft band with a rounded cap at each end.
+2. **Keep** each crash's own lon/lat, its station, its distance off the centreline, the day, the
+   source's counts and its collision id. Zero counts are left out of the record to keep the file
+   small. `x` is the first street the source names that is not 42 Street, with the spelling made
+   regular, so a place can be named from the source and not from a table in the page.
+3. **What it holds.** **631 people injured** in 520 of the crashes, and 3 killed (1 cyclist, 2
+   motorists). The source splits the injured into 180 pedestrians, 125 cyclists and 303
+   motorists. That is 608. The other 23 are in the source's total and in none of its three
+   columns, and the page lists them as that. By year: 195, 210, 250, 228, 207 crashes from 2021
+   to 2025, and 102 in 2026 to 9 Jun.
+4. **The police point is usually the nearest intersection, not the spot.** The 1,192 crashes sit
+   on 209 distinct points. So the set includes crashes on an avenue inside one of the street's
+   intersections, and 18 that the source names on the FDR Drive at the east end. 360 name no
+   street but 42 Street.
+5. **Not in the set**, printed on every run and baked into `CRASH_META.unlocated`: 12 crashes
+   the source records on East or West 42 Street in Manhattan with no coordinates, 3 people
+   injured. They cannot be stationed. The page states them beside the figure.
+
+**What it cannot say.** It is a count of people hurt with **no denominator**: no source counts
+the people walking, cycling or driving along the street, so there is no rate, and one corner
+cannot be compared with another on risk. The shut row, the open row, the map tip and the station
+card all say "a count, not a rate". The page makes no statement about where a person on foot was
+when hit; see section 6.
+
+**On the sheet.** Crashes whose stations are within 10 ft of each other (`CRASH_JOIN`, which
+merges the two points the police use for some intersections) are one **place**, named by the
+street its crashes name most often. Places are built once, in `plan/station.js` (`PLACES`), and
+the map, the row and the card all read that list. Each place with anyone injured is one ink
+circle, area in proportion to the people injured: 92 places. The open row lists the five with
+most injured and then all 92, west to east, each a button that stands at the place's station.
+`stationProfile` returns the one place nearest the station, if it is within 150 ft along the
+street (`CRASH_REACH`), with that place's own crashes and injured. So the card at a place's
+station gives the same figure as its circle, which is how a circle is read by tap and keyboard.
+An earlier version summed every crash within 150 ft, which pulled in neighbouring places and
+disagreed with the circle at 87 of the 92. The open row also says, from the data, how many of
+the crashes the source names on the FDR Drive and how many people were injured in them, and
+that crashes on an avenue inside an intersection are counted. Checked in
+`node scripts/check/station.js`.
+
+`--check` re-derives the set up to the baked last day. The police amend old reports, and an
+amended report shows as a difference. Reproduce with `python3 scripts/bake/crashes.py --check`.
 
 ## 4. The lot rule, and what is being corrected
 
@@ -392,11 +593,11 @@ or data.ny.gov resource IDs.
 | | NYC DOT Pedestrian Mobility Plan | `fwpa-qxaf`, **baked, section 3d** | A priority **tier**, not a count. All 34 de-duplicated segments rank in the top two tiers |
 | Where can you stop | NYC DOT Seating Locations | `esmy-s8q5`, **baked, section 3b** | 2 benches, both installed May 2025, none west of 6th Avenue |
 | | Street Seats `5ar6-qxhs`, Open Streets `uiay-nctu`, Dining Out NYC `fpeh-f7ci` | | 0, 0, and 0 roadway dining licences on the street |
-| What is in the way | DOB NOW Approved Permits (legacy `ipu4-2q9a`) | `rbx6-tga4` | Sidewalk sheds with renewal chains datable to the day |
+| What is in the way | DOB NOW Approved Permits (legacy `ipu4-2q9a`) | `rbx6-tga4`, **baked, section 3f** | Sidewalk sheds with renewal chains datable to the day |
 | | DOT Street Construction Permits | `tqtj-sjs8` | Active permits by block face. No geometry, joins by from/to street |
-| Who gets hurt | NYPD Motor Vehicle Collisions, crashes and persons | `h9gi-nx95`, `f55k-p6yu` | 1,192 crashes and 631 injured within 75 ft of the centreline since Jan 2021 |
+| Who gets hurt | NYPD Motor Vehicle Collisions, crashes and persons | `h9gi-nx95` **baked, section 3g**, `f55k-p6yu` | 1,192 crashes and 631 injured within 75 ft of the centreline since Jan 2021 |
 | | Vision Zero priority corridors and projects | `36nr-7fbp`, `if4c-w48d` | Whole street is a priority corridor. Last corridor project ended Dec 2019 |
-| Who is the curb for | ParkNYC metered block faces, parking signs, bus lanes | `e7yp-wx55`, `nfid-uabd`, `ycrg-ses3` | 18 metered faces, all commercial only. 17,520 ft of bus lane |
+| Who is the curb for | ParkNYC metered block faces, parking signs, bus lanes | `e7yp-wx55` **baked, section 3e**, `nfid-uabd`, `ycrg-ses3` | 18 metered faces, all commercial only. 17,520 ft of bus lane |
 | | MTA bus lane camera violations | `kh8p-hcbm` | 28,522 point-located M42 detections: where the bus gets blocked |
 
 ## 6. What the data cannot say, stated plainly

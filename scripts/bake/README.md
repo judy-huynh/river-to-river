@@ -14,6 +14,9 @@ From the repo root:
     python3 scripts/bake/owner_case.py --check  # owner names already re-cased, writes nothing
     python3 scripts/bake/owner_case.py          # re-case the owner names in window.LOTS_POLY
 
+    python3 scripts/bake/aves.py --check        # where the cross streets meet the centreline, writes nothing
+    python3 scripts/bake/aves.py                # re-derive and write window.AVES
+
     python3 scripts/bake/benches.py --check     # DOT benches on 42 Street, writes nothing
     python3 scripts/bake/benches.py             # re-derive and write window.BENCHES
 
@@ -23,11 +26,22 @@ From the repo root:
     python3 scripts/bake/ped_tier.py --check    # DOT pedestrian priority tier by segment, writes nothing
     python3 scripts/bake/ped_tier.py            # re-derive and write window.PED_TIER, window.PED_TIER_META
 
+    python3 scripts/bake/curb.py --check        # ParkNYC metered block faces on 42 Street, writes nothing
+    python3 scripts/bake/curb.py                # re-derive and write window.CURB
+
+    python3 scripts/bake/sheds.py --check       # shed permits as of the baked day, writes nothing
+    python3 scripts/bake/sheds.py               # as of today, into window.SHEDS, window.SHEDS_META
+
+    python3 scripts/bake/crashes.py --check     # crashes up to the baked last day, writes nothing
+    python3 scripts/bake/crashes.py             # re-derive and write window.CRASHES, window.CRASH_META
+
     python3 scripts/bake/bus.py --check         # M42 weekday speeds for the baked month, writes nothing
     python3 scripts/bake/bus.py                 # the newest whole month into window.BUS, window.BUS_META
     python3 scripts/bake/bus.py --month 2026-07 # a named month
 
-`--check` exits 0 when the re-derived set equals what is baked, 1 when it differs. Large sources
+`--check` exits 0 when the re-derived set equals what is baked, 1 when it differs. The shed permits
+and the crashes come from sources that change daily, so their check re-derives the set as of the
+baked day: a difference there means the source has moved and the set wants re-baking. Large sources
 download once to a `river-to-river` folder in the system temp directory (on macOS that is under
 `/var/folders`, not `/tmp`), never into the repo. Set `R2R_CACHE` to use another folder, for
 example one that already holds the file: `R2R_CACHE=/tmp/claude-501 python3 scripts/bake/sidewalk.py --check`.
@@ -57,9 +71,10 @@ Stations are interpolated between the stations already baked on the centreline v
 record always agrees with `LINE42` as the page reads it. Stations are returned unrounded. The bake
 script rounds.
 
-`opendata.py` reads a Socrata portal: `rows(domain, id, where)` returns the matching rows and
+`opendata.py` reads a Socrata portal: `rows(domain, id, where, select=None)` returns the matching rows
+(`select` names the columns, for a source too wide to read whole) and
 prints their count, size and sha256, `updated(domain, id)` returns the date the publisher last
-changed them, `grouped(domain, id, by)` returns row counts grouped by the named columns. Small sets are fetched fresh on every run, not cached.
+changed them (a fetch that times out is tried again, three times in all), `grouped(domain, id, by)` returns row counts grouped by the named columns. Small sets are fetched fresh on every run, not cached.
 
 ## Rules for `write_global`
 

@@ -33,11 +33,13 @@ for(let ft=0;ft<=LEN;ft+=100){
    501 5 Avenue faces the street on the south side */
 assert.deepStrictEqual(S.stationProfile(6500).lots.s.map(p=>p.addr),['501 5 Avenue']);
 /* the nearest bench is never farther than any other. the counter speaks only inside its reach
-   and only on its own block, Park (7,520) to Lexington (8,021) */
+   and only on its own block, between the baked avenues either side of it */
+const ave=l=>window.AVES.find(v=>v.label===l), PARK=ave('Park'), LEX=ave('Lex');
+assert.ok(PARK.ft<window.PED_COUNT.ft&&window.PED_COUNT.ft<LEX.ft);
 for(let ft=0;ft<=LEN;ft+=50){
   const Q=S.stationProfile(ft);
   assert.strictEqual(Q.bench.dist,Math.min(...window.BENCHES.map(b=>Math.abs(b.ft-ft))));
-  const d=Math.abs(window.PED_COUNT.ft-ft), onBlock=ft>=7520&&ft<=8021;
+  const d=Math.abs(window.PED_COUNT.ft-ft), onBlock=ft>=PARK.ft&&ft<=LEX.ft;
   assert.strictEqual(Q.count!==null,d<=S.COUNT_REACH&&onBlock);
 }
 const C=S.stationProfile(window.PED_COUNT.ft).count, last=window.PED_COUNT.periods[window.PED_COUNT.periods.length-1];
@@ -68,4 +70,56 @@ for(let ft=0;ft<=LEN;ft+=50){
 }
 assert.strictEqual(new Set(window.PED_TIER.map(r=>r.id)).size,window.PED_TIER.length);
 assert.strictEqual(S.stationProfile(0).tier,null);
+/* the metered face at a station is a baked face on that side that covers it, and where none
+   covers it there is none */
+for(let ft=0;ft<=LEN;ft+=50){
+  const Q=S.stationProfile(ft);
+  ['n','s'].forEach(sd=>{ const hit=window.CURB.filter(f=>f.side===sd&&ft>=f.a&&ft<=f.b);
+    assert.strictEqual(Q.curb[sd]!==null,hit.length>0);
+    if(Q.curb[sd]) assert.ok(hit.includes(Q.curb[sd])); });
+}
+/* the avenues are baked, in order, inside the line, each middle inside its own crossing, and
+   the 14 the ruler ticks are all there */
+const A=window.AVES;
+assert.strictEqual(A.filter(v=>v.label).length,14);
+A.forEach((v,i)=>{ assert.ok(v.a>=0&&v.a<=v.ft&&v.ft<=v.b&&v.b<=LEN&&v.c.length>0); if(i) assert.ok(v.a>A[i-1].b); });
+/* the card names a station by those avenues: at one inside its crossing, between the two either
+   side otherwise, and one side only past the first and last */
+for(let ft=0;ft<=LEN;ft+=25){
+  const Q=S.stationProfile(ft), on=A.find(v=>v.label&&ft>=v.a&&ft<=v.b);
+  assert.strictEqual(Q.at,on?on.label:null);
+  if(!on){ assert.ok(Q.west===null?ft<A[0].ft:Q.west.ft<ft); assert.ok(Q.east===null?ft>A[A.length-1].ft:Q.east.ft>ft);
+    assert.ok(!A.some(v=>v.label&&v.ft>(Q.west?Q.west.ft:-1)&&v.ft<(Q.east?Q.east.ft:LEN+1))); }
+}
+/* two sources name cross streets on their own records. each must agree with the baked avenues:
+   a metered face lies between the two streets its source names, with no ticked avenue inside
+   it, and between() says the same when both are ticked */
+const byName=n=>A.find(v=>v.name===n);
+window.CURB.forEach(f=>{ const [x,y]=[byName(f.from),byName(f.to)].sort((p,q)=>p.ft-q.ft);
+  assert.ok(x&&y,`curb face ${f.id} names a street the avenues do not hold`);
+  assert.ok(f.a>=x.b&&f.b<=y.a,`curb face ${f.id} is not between ${x.name} and ${y.name}`);
+  assert.ok(!A.some(v=>v.label&&v.ft>f.a&&v.ft<f.b));
+  const B=S.between((f.a+f.b)/2);
+  if(x.label) assert.strictEqual(B.west,x.label); if(y.label) assert.strictEqual(B.east,y.label); });
+/* a crash that names a baked cross street is stationed at that street's crossing */
+const NAME_TOL=25;
+window.CRASHES.forEach(c=>{ const v=byName(c.x); if(v) assert.ok(c.ft>=v.a-NAME_TOL&&c.ft<=v.b+NAME_TOL,`crash ${c.id} names ${c.x} at ${c.ft} ft`); });
+/* crash places: every crash is in exactly one, the people injured add up, and the card at a
+   place's own station reports that place with its own figures, the ones its circle shows */
+assert.strictEqual(S.PLACES.reduce((t,p)=>t+p.n,0),window.CRASHES.length);
+assert.strictEqual(S.PLACES.reduce((t,p)=>t+p.inj,0),window.CRASHES.reduce((t,c)=>t+(c.inj||0),0));
+S.PLACES.forEach((p,i)=>{ if(i) assert.ok(p.list[0].ft-S.PLACES[i-1].list[S.PLACES[i-1].list.length-1].ft>S.CRASH_JOIN);
+  const v=byName(p.name); if(v) assert.ok(Math.abs(p.ft-v.ft)<=(v.b-v.a)/2+NAME_TOL);
+  const c=S.stationProfile(p.ft).crashes.place;
+  assert.deepStrictEqual([c.ft,c.name,c.n,c.inj,c.dist],[p.ft,p.name,p.n,p.inj,0]); });
+for(let ft=0;ft<=LEN;ft+=50){ const c=S.stationProfile(ft).crashes.place, d=Math.min(...S.PLACES.map(p=>Math.abs(p.ft-ft)));
+  assert.strictEqual(c!==null,d<=S.CRASH_REACH); if(c) assert.strictEqual(c.dist,d); }
+/* every crash is inside the distance rule, and the source's split never exceeds its total */
+window.CRASHES.forEach(c=>{ assert.ok(c.off<=window.CRASH_META.near_ft&&c.d>=window.CRASH_META.since&&c.d<=window.CRASH_META.to);
+  assert.ok((c.ped||0)+(c.cyc||0)+(c.mot||0)<=(c.inj||0)); });
+/* a shed permit in force covers the day the set describes, a lapsed one ran out before it,
+   and each building's lot is in the drawn set */
+window.SHEDS.forEach(s=>{ const D=window.SHEDS_META.asof;
+  assert.strictEqual(s.state==='in force',s.expires>=D); assert.ok(s.since<=s.expires);
+  assert.ok(S.LOT_BY_BBL.has(String(s.bbl))); });
 console.log('station checks pass');
