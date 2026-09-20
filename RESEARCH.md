@@ -22,7 +22,7 @@ Their numbers, which everyone else still quotes:
 Source: [vision42.org](https://vision42.org/), [The Purpose](https://vision42.org/?page_id=38), [Technical Studies](https://vision42.org/?page_id=5941), [design competition](https://vision42.archpaper.com/), [Streetsblog, 2015](https://nyc.streetsblog.org/2015/01/13/with-new-conceptual-designs-group-seeks-support-for-car-free-42nd-street)
 
 ### 2. KPF, "A Fix for 42nd Street"
-Streetcar plus bike lanes, doubled pedestrian realm, the street as a linear plaza with seating, greenery and performance space. Their framing is the useful part: **the avenues got the interventions and 42nd Street itself was overlooked.**
+A river to river streetcar ending in new ferry terminals on both rivers, with a different public realm move for each stretch of the street: over 100,000 sq ft of new parkland from the Hudson to 9th Avenue, a doubled pedestrian realm at Times Square, rush hour and lunchtime pedestrianisation between 5th and Park, and bike lanes, tree canopy and pocket parks east of Grand Central. It also names the governance gap: the street runs along the edges of five business improvement districts and none of them holds it as a whole. Their framing is the useful part: **the avenues got the interventions and 42nd Street itself was overlooked.** The piece cites no data sources and no funding mechanism, which is the gap this project works in.
 Source: [KPF](https://www.kpf.com/story/a-fix-for-42nd-street)
 
 ### 3. The busway that has not happened
@@ -59,8 +59,8 @@ Almost every proposal concentrates between 8th Avenue and Lexington: Times Squar
 **2. Nobody counts the residents.**
 Every vision is written for commuters, tourists and bus riders. The street has real addresses at both ends, Manhattan Plaza and Tudor City, and a working theatre district. 42nd is treated as a corridor, never as somewhere people live. The neighbour is the missing lens in the professional literature, which is exactly the lens a person who has actually walked it would bring.
 
-**3. Every plan is a cross section, not a length.**
-vision42 and KPF both propose one repeated street section for nearly two miles. But 42nd Street is a bus terminal, then a tourist plaza, then a park, then a library, then a train station, then an office canyon, then a housing estate, then the UN. A single section applied river to river is the error. A horizontal strip is the format that proves it, which is the whole reason the centrepiece works.
+**3. The visions are drawn, but the length of the street is not measured.**
+42nd Street is a bus terminal, then a tourist plaza, then a park, then a library, then a train station, then an office canyon, then a housing estate, then the UN. KPF's "A Fix for 42nd Street" recognises this and proposes a different intervention for each stretch: new parkland from the Hudson to 9th Avenue, a doubled pedestrian realm at Times Square, rush hour pedestrianisation between 5th and Park, bike lanes, trees and pocket parks east of Grand Central, tied together by a river to river streetcar ending in a ferry terminal at each end. vision42 proposed a single light rail and pedestrian section for the whole length. What neither publishes is the existing condition foot by foot: how wide the walk is at each point, how fast the bus actually moves there, who owns the ground beside it. A horizontal strip stationed along the street is the format that supplies it, which is the reason the centrepiece works.
 
 **4. The street wall is unmeasured.**
 Every proposal is about the roadway. Retail reporting covers corridors and vacancy rates, not frontage. Nobody has published a foot by foot inventory of what the ground floor of 42nd Street actually does, which is the thing a pedestrian feels every three seconds.
