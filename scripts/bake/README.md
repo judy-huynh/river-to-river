@@ -39,6 +39,9 @@ From the repo root:
     python3 scripts/bake/bus.py                 # the newest whole month into window.BUS, window.BUS_META
     python3 scripts/bake/bus.py --month 2026-07 # a named month
 
+    python3 scripts/bake/field_stations.py --check  # the six count stations in field/index.html, writes nothing
+    python3 scripts/bake/field_stations.py          # re-derive from plan/data.js and write them into the page
+
 `--check` exits 0 when the re-derived set equals what is baked, 1 when it differs. The shed permits
 and the crashes come from sources that change daily, so their check re-derives the set as of the
 baked day: a difference there means the source has moved and the set wants re-baking. Large sources

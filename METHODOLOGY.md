@@ -605,7 +605,7 @@ or data.ny.gov resource IDs.
 - **Pedestrian volume along the street does not exist.** The city counts at one point in 1.97
   miles. Everything else is a proxy. The gap is filled by original six-station counts, run in DOT's
   own AM / midday / PM windows and anchored to the city's counter so they scale against a
-  published number.
+  published number. The protocol is section 6a.
 - **"Pedestrians walk in the roadbed" cannot be shown from crash data.** Compared like for like,
   42nd Street is 27.0% against 24.0% citywide, not a significant difference. It needs direct
   observation: fixed-point photographs, one frame a minute.
@@ -614,6 +614,105 @@ or data.ny.gov resource IDs.
   plazas addressed on 42nd Street.
 - Injury counts have no denominator. The data says how many people were hurt, not how dangerous
   the street is per person walking it.
+
+## 6a. Method: the six-station pedestrian count (added 20 Sep 2026)
+
+No counts have been taken yet. This section is the protocol, and `field/index.html` is the
+instrument. Nothing on the sheet reads from it until counts exist and enter `plan/data.js` through
+a bake script of their own.
+
+**Stations.** Six, west to east. Five stand mid-block, as the city's counter does: half way between
+the facing edges of two cross streets that are neighbours in `window.AVES` (section 1a). The fifth
+in order is the city's counter itself, at the publisher's own point (section 3b). Each mid-block
+station is a point on `LINE42` interpolated between its baked vertices; the bake projects it back
+onto the line and stops if it does not return to the same station.
+
+| Station | Between | station_ft | lon | lat |
+|---|---|---|---|---|
+| West end | 12 Avenue and 11 Avenue | 519 | -73.999673 | 40.761410 |
+| 9 Avenue | Dyer Avenue and 9 Avenue | 2,538 | -73.993290 | 40.758705 |
+| Times Square | 7 Avenue and Broadway | 4,627 | -73.986681 | 40.755924 |
+| Bryant Park | Avenue of the Americas and 5 Avenue | 5,946 | -73.982508 | 40.754162 |
+| City counter | Park Avenue and Lexington Avenue | 7,796 | -73.976655 | 40.751695 |
+| East end | 2 Avenue and 1 Avenue | 9,553 | -73.971090 | 40.749358 |
+
+`scripts/bake/field_stations.py` derives the stations from `plan/data.js` and writes them into the
+page, because the page has to open with no network and so cannot load `plan/data.js`. The same run
+writes the table above, which is never typed by hand. `--check` compares both the page and the
+table with a fresh derivation. When the centreline is re-based the script is run again. A session
+copies its station's name, `station_ft`, lon and lat at the moment it starts, so a re-bake moves
+only the sessions taken after it, never one already saved on the phone.
+
+**Windows.** One hour inside each of the city's three windows: 08:00 to 09:00 inside 07:00 to
+09:00, 12:00 to 13:00 inside 12:00 to 14:00, 17:00 to 18:00 inside 16:00 to 19:00. The bake stops
+if an hour falls outside its window. The city takes its AM and PM counts on a weekday and its
+midday count on the adjacent Saturday (section 3b). The page states the city's day next to each
+hour, and every export row carries its start time, so the day a count was taken is on the record.
+When the phone clock is outside the chosen hour or on the other kind of day, the page says so
+before the session starts. It does not stop the count.
+
+**A session** is one station, one window, ten minutes, one observer. Three tallies are kept, one
+tap per person:
+
+- `sidewalk`: walking on the sidewalk, either direction, both sides
+- `roadbed`: walking in the roadbed along the street, not crossing it at a crosswalk
+- `still`: standing or sitting
+
+**What earns a tap.** The station is a screenline: a line across the street at `station_ft`,
+square to the centreline, from building line to building line. `sidewalk` and `roadbed` are
+screenline counts, the method the publisher describes for the city's counter (section 3b). A person
+is tapped once, at the moment they cross the line, in either direction: `sidewalk` when they cross
+it on either sidewalk, `roadbed` when they cross it on foot in the roadbed. A person who crosses
+twice is tapped twice. The stations are mid-block, so nobody in a crosswalk crosses the line.
+`still` is not a screenline count. It is people seen standing or sitting near the line, and the
+length of street it covers is not fixed by this protocol yet. Until it is, a `still` tally is not a
+flow, has no rate and is not comparable between stations.
+
+Every tap is timestamped. Undo removes the last tap. The page writes to the phone's local storage
+on every tap. The end of the ten minutes is signalled by vibration where the phone has it and by a
+tone armed by the Start tap, because an iPhone does not vibrate for a web page. An iPhone set to
+silent mutes that tone as well, so the page also shows the end: the clock row turns solid and reads
+that the session ended and was saved. The count does not depend on the cue. The session closes
+itself at ten minutes and the counters stop taking taps.
+
+Storage on the phone is limited, and Safari can clear a site's storage after about a week without a
+visit. Sessions are exported the day they are taken, and deleted from the phone once the export has
+been checked.
+
+**Minutes are the minutes watched.** While a session runs the page notes every 5 seconds that it is
+open and showing. A silence longer than 15 seconds (the phone locked, the page hidden or dropped)
+is time in which nobody could tap. It is kept as a gap with its start and end, the session is
+marked `interrupted`, and the gap is taken out of `minutes`. A session the phone dropped at a
+minute and a half and reopened half an hour later is saved with its taps, about 1.5 minutes and
+`interrupted: true`, not as a ten-minute count. A session ended early records the time up to the
+end, less any gaps. A rate is always `count / minutes`, for `sidewalk` and `roadbed` only: people
+crossing the screenline per minute watched. Silences of 15 seconds or less are not taken out.
+`--check` reads `MINUTES`, `BEAT` and `GAP` from the page and fails if the minutes and seconds
+written in this section no longer match them.
+
+**Export.** One JSON row per session and tally: `station_ft`, `lon`, `lat`, `window`, `kind`,
+`count`, `started_iso`, `minutes`, then `station` (the name), `interrupted`, `gaps` (ISO start and
+end of each) and `taps`, the ISO time of each tap. Each row keeps the lon/lat the session was taken
+at so the counts can be re-stationed against a new centreline. Export does not clear the phone, so
+two exports overlap. A row is unique on (`station_ft`, `started_iso`, `kind`) and a bake
+de-duplicates on that key. A bake can drop or down-weight rows where `interrupted` is true.
+
+**Why one station is the city's counter.** A ten-minute tally is a sample, and on its own it cannot
+be read as a volume. Counting at the city's own location, in the same sessions and by the same
+method as the other five, gives a ratio between each station and the counter that was measured by
+one observer in one way. That ratio is what lets the other five stations scale against the figure
+the city publishes for the window. Only the `sidewalk` tally enters that ratio, because the city's screenline covers the
+sidewalks. Without the counter station the six tallies could be compared
+with each other but with nothing published.
+
+**What this cannot say.** One observer, ten minutes, single days. The tallies are samples, not
+totals. The scaling assumes the ratio between a station and the counter holds across the whole
+window and that the observer's count at the counter relates to the city's as it does elsewhere.
+A weekday midday count is not like for like with the city's Saturday midday figure. The `still`
+tally is people seen standing or sitting during the ten minutes, not a count at one instant.
+An interrupted session has fewer minutes behind its rate, and taps made in the 15 seconds either
+side of a gap may belong to time that was not fully watched. The page knows only that it was open
+and showing, not that the observer was looking at the street.
 
 ## 7. How the work is checked
 
