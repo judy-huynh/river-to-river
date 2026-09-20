@@ -102,8 +102,8 @@ function busAt(ft,hour){
    a null width means the source has no measurement there, and it stays null. */
 function stationProfile(ft,hour){
   ft=Math.max(0,Math.min(LEN,Math.round(ft)));
-  /* bands share endpoints, so prefer the one that continues east. zero-length
-     fragments are skipped, a width read off under a foot of line is noise. */
+  /* bands share endpoints, so prefer the one that continues east. a band with no
+     length covers nothing: the sidewalk bake drops them, and none is read from any set. */
   const covering=(list,get)=>{
     const hit=list.filter(r=>{const [a,b]=get(r); return b>a&&ft>=a&&ft<=b;});
     return hit.find(r=>ft<get(r)[1])||hit[hit.length-1]||null;

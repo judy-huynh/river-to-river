@@ -13,6 +13,15 @@ assert.strictEqual(P.trees.all,0);
 assert.strictEqual(P.biggest.addr,'234 West 42 Street');
 assert.strictEqual(P.biggest.owner,'NYC Economic Development Corporation');
 
+/* every sidewalk band has a length: the bake drops a segment that stations to none (METHODOLOGY 3) */
+window.SIDEWALK.forEach(r=>assert.ok(r.b>r.a,`sidewalk band ${r.a} to ${r.b} has no length`));
+
+/* the station 903 bend, north side: the segment stationed 901 to 907 fails the bearing filter
+   now the heading is read at its midpoint. 901 reads the band ending there, 902 to 907 none */
+assert.ok(!window.SIDEWALK.some(r=>r.s===1&&r.a===901&&r.b===907));
+assert.strictEqual(S.stationProfile(901).north,5.9);
+for(let ft=902;ft<=907;ft++) assert.strictEqual(S.stationProfile(ft).north,null);
+
 /* out of range clamps, and a station with no measurement stays null rather than guessed */
 const LEN=window.LINE42[window.LINE42.length-1][0];
 assert.strictEqual(S.stationProfile(-50).ft,0);

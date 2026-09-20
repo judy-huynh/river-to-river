@@ -177,28 +177,36 @@ the data. Every run prints the file's byte size and sha256.
 1. **Clip** to a 55 ft buffer around `LINE42`, tested at each segment's midpoint. Returns 191
    segments.
 2. **Bearing filter.** Keep only segments whose bearing is within 30 degrees of the local
-   centreline heading (modulo 180), read at the segment's from-station. This step is
-   load-bearing: the naive buffer is nearly half avenue sidewalk running north-south. 84 segments
-   dropped, **107 survive**. One survivor is sensitive to where the heading is read: the
-   segment stationed 901 to 907, at the station 903 bend, passes at its from-station and would
-   fail at its midpoint (28.5 degrees against 31.6). The bake prints any such segment.
-3. **Station and side** each survivor as in section 1. Stations are in the feet baked on the
+   centreline heading (modulo 180). The heading is read at the station of the segment's midpoint,
+   the same place the clip is tested. This step is load-bearing: the naive buffer is nearly half
+   avenue sidewalk running north-south. 85 segments dropped, 106 remain. One segment is sensitive
+   to where the heading is read: the one stationed 901 to 907, on the north side at the station
+   903 bend, is 31.6 degrees off at its midpoint and 28.5 at its from-station. It is dropped. The
+   bake prints any such segment.
+3. **Drop segments with no stationed length.** A segment whose two ends round to the same
+   station has no band to draw and covers none of the street, and a bearing taken on it is noise.
+   6 dropped, **100 survive**. Four are source fragments under a foot long lying just past the
+   west end of `LINE42`, which station at 0; one is at station 6,499 and one at 7,953. The bake
+   prints the count and the stations. Applying this test before the bearing filter keeps the same
+   100.
+4. **Station and side** each survivor as in section 1. Stations are in the feet baked on the
    `LINE42` vertices; offsets are in local flat feet. Over the 10,411 ft baked length the library's
    flat feet come to 0.17 percent shorter and an independent WGS84 ellipsoid scale to 0.22 percent
    longer. The bake prints both.
-4. **Coverage** is computed per side by merging overlapping bands: 83% of the north side, 85% of
-   the south. The page states this.
+5. **Coverage** is computed per side by merging overlapping bands: 8,603 ft of the north side
+   (83%) and 8,819 ft of the south (85%). The page states the percentages.
 
-Results: median 19.1 ft, maximum 34.3 ft, **minimum 5.6 ft (south side, station 1,455, between
-11th and 10th Avenue)**.
+Results, computed by the page over the 100 segments, each counted once whatever its length:
+median 18.9 ft (the mean of the two middle widths, 18.8 and 19.0), maximum 34.3 ft, **minimum
+5.6 ft (south side, station 1,455, between 11th and 10th Avenue)**.
 
-Known weakness, kept so the set reproduces exactly: 6 of the 107 survivors are zero-length after
-rounding (from-station equals to-station). Four are source fragments under a foot long lying just
-past the west end of `LINE42`, which station at 0; the other two sit at stations 6,499 and 7,953.
-A bearing taken on a fragment that short is noise, so the filter does not mean much for them, and
-each counts as one segment in the unweighted median. The bake prints this count and the
-stations. Dropping them, and reading the heading at the midpoint like the clip does, would change
-the 107 and is left as a separate, documented data change.
+Changed 20 Sep 2026. Until then the heading was read at the from-station and the six segments
+with no length were kept, which gave 107 segments, a median of 19.1 ft and 8,609 ft of north
+side coverage. The maximum, the minimum, the south side coverage and both rounded percentages
+are the same under either method. On the station card the change shows only at stations 901 to
+907, north side, where the dropped bend segment had given 7.1 ft: station 901 now reads the
+neighbouring band and 902 to 907 read as having no measurement. The known-good check at station
+4,000 reads 20.2 ft north and 25.2 ft south, as before.
 
 Reproduce with `python3 scripts/bake/sidewalk.py --check`, which re-derives the set from the
 source file and compares it with what is baked. The stationing library every bake script shares is
@@ -224,9 +232,10 @@ lands on no lot and lies farther from the centreline than the deepest lot drawn 
 ignored: it is off the sheet, not a place on the street.
 
 1. **Sidewalk and roadway at a station** are the baked band that contains it, per side. Bands that
-   share an endpoint resolve to the one continuing east. Zero-length fragments (section 3) are
-   never used. Where no band contains the station the value is left empty and the card says it is
-   not measured; nothing is interpolated or carried over from a neighbour.
+   share an endpoint resolve to the one continuing east. A band with no length is never used;
+   the sidewalk bake drops them (section 3). Where no band contains the station the value is
+   left empty and the card says it is not measured; nothing is interpolated or carried over
+   from a neighbour.
 2. **The cross-section bar** is drawn to scale from those widths. A part with no measurement is
    drawn as a hatched blank of fixed size, and the caption then says only the measured parts are
    to scale. Where no part is measured the whole bar is hatched and the caption says so.

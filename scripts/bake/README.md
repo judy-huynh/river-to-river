@@ -103,5 +103,7 @@ changed them (a fetch that times out is tried again, three times in all), `group
 
 ## Proof
 
-`sidewalk.py` was written after `window.SIDEWALK` was already baked, and reproduces it record for
-record. `--check` repeats that comparison on every run.
+`sidewalk.py` was written after `window.SIDEWALK` was already baked, and first reproduced that set
+record for record. The method then changed on purpose (`METHODOLOGY.md` section 3 states the old
+and new counts), and the baked set is the script's own output. `--check` re-derives it and
+compares on every run.

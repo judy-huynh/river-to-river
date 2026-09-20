@@ -41,12 +41,13 @@ def fetch():
 
 
 def bake(features, line):
-    """Returns (rows, clipped count, bend-sensitive rows). Rows are in the SIDEWALK record shape."""
+    """Returns (rows, clipped count, count within the bearing, zero-length stations,
+    bend-sensitive rows). Rows are in the SIDEWALK record shape."""
     lons = [v[1] for v in line.verts]
     lats = [v[2] for v in line.verts]
     pad = 0.002  # degrees, far wider than the clip; only there to skip the other 460,000
     box = (min(lons) - pad, min(lats) - pad, max(lons) + pad, max(lats) + pad)
-    clipped, rows, sensitive = 0, [], []
+    clipped, aligned, rows, zero, sensitive = 0, 0, [], [], []
     for f in features:
         g = f.get('geometry')
         if not g or g['type'] != 'LineString':
@@ -61,31 +62,36 @@ def bake(features, line):
             continue
         clipped += 1
         a, b = line.band([p, q])
-        # heading is read at the from-station. One segment at the station 903 bend
-        # passes here and would fail against the heading at its midpoint.
+        # heading is read at the midpoint station, the same place the clip is tested
         brg = line.bearing(p, q)
-        at_from = station.axis_diff(brg, line.heading_at(a))
         at_mid = station.axis_diff(brg, line.heading_at((a + b) / 2))
+        at_from = station.axis_diff(brg, line.heading_at(a))
         if (at_from > BEARING_DEG) != (at_mid > BEARING_DEG):
             sensitive.append((round(a), round(b), at_from, at_mid))
-        if at_from > BEARING_DEG:
+        if at_mid > BEARING_DEG:
+            continue
+        aligned += 1
+        # a segment that stations to no length has no band to draw or to cover the street with,
+        # and a bearing taken on it is noise. Either order of the two tests keeps the same rows.
+        if round(a) == round(b):
+            zero.append(round(a))
             continue
         rows.append({'a': round(a), 'b': round(b), 'w': f['properties']['width'], 's': side,
                      'c': [[round(p[0], 5), round(p[1], 5)], [round(q[0], 5), round(q[1], 5)]]})
     rows.sort(key=lambda r: (r['a'], r['b']))  # stable, ties keep source order
-    return rows, clipped, sensitive
+    return rows, clipped, aligned, sorted(zero), sensitive
 
 
 def main():
     line = station.load_line()
-    rows, clipped, sensitive = bake(fetch(), line)
-    print('clipped to %d ft: %d   bearing within %d deg: %d   dropped: %d'
-          % (CLIP_FT, clipped, BEARING_DEG, len(rows), clipped - len(rows)))
-    zero = [r['a'] for r in rows if r['a'] == r['b']]
-    print('zero-length after rounding (a == b): %d, at stations %s' % (len(zero), zero))
+    rows, clipped, aligned, zero, sensitive = bake(fetch(), line)
+    print('clipped to %d ft: %d   bearing within %d deg at the midpoint: %d   dropped: %d'
+          % (CLIP_FT, clipped, BEARING_DEG, aligned, clipped - aligned))
+    print('zero-length after rounding (a == b), dropped: %d, at stations %s   kept: %d'
+          % (len(zero), zero, len(rows)))
     for a, b, at_from, at_mid in sensitive:
-        print('heading-sensitive: %d to %d is %.1f deg off at its from-station, %.1f at its midpoint'
-              % (a, b, at_from, at_mid))
+        print('heading-sensitive: %d to %d is %.1f deg off at its midpoint, %.1f at its from-station'
+              % (a, b, at_mid, at_from))
     # every figure METHODOLOGY.md quotes about scale comes from these two lines
     for label, ft in (('library flat feet', line.flat_length()), ('WGS84 ellipsoid', line.ellipsoid_length())):
         print('centreline %d ft baked, %.1f ft in %s, %.2f percent apart'

@@ -85,7 +85,10 @@ const SW=window.SIDEWALK||[];
 const SW_STATS=(()=>{
   if(!SW.length) return null;
   const w=SW.map(r=>r.w).sort((a,b)=>a-b);
-  const med=w[Math.floor(w.length/2)];
+  /* an even count has two middle widths, and the median is their mean, to the source's tenth of a foot.
+     worked in whole tenths so a mean ending in 5 hundredths always rounds up */
+  const t10=i=>Math.round(w[i]*10);
+  const med=Math.round((t10(Math.floor((w.length-1)/2))+t10(Math.floor(w.length/2)))/2)/10;
   const cover=side=>{const segs=SW.filter(r=>r.s===side).map(r=>[r.a,r.b]).sort((x,y)=>x[0]-y[0]);
     const m=[]; segs.forEach(([a,b])=>{ if(m.length&&a<=m[m.length-1][1]) m[m.length-1][1]=Math.max(m[m.length-1][1],b); else m.push([a,b]); });
     return m.reduce((t,[a,b])=>t+(b-a),0);};
