@@ -88,7 +88,7 @@ const ROAD_STATS=(()=>{
 
 /* ── stationing ───────────────────────────────────────────────────────── */
 /* the lookups live in station.js so node can load and test them without a page */
-const {AVES, TREE_REACH, REACH, LOT_BAND, LOT_BY_BBL, project, stationProfile}=window.STATION;
+const {AVES, TREE_REACH, COUNT_REACH, REACH, LOT_BAND, LOT_BY_BBL, project, stationProfile}=window.STATION;
 
 /* ── map ──────────────────────────────────────────────────────────────── */
 mapboxgl.accessToken=TOKEN;
@@ -459,13 +459,29 @@ const aveShort=n=>AVE_FULL[n]||n;
 const aveName=n=>aveShort(n)+' Avenue';
 const ON_42=/\b42(nd)?\b/i;
 const feet=v=>v==null?'not measured here':v+' ft';
+/* '2026-05-20' to '20 May 2026', '2026-05' to 'May 2026'. no Date object, so no timezone slip. */
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const day=iso=>{const [y,m,d]=iso.split('-'); return (d?+d+' ':'')+MON[m-1]+' '+y;};
+const srcDate=k=>(window.SOURCE_DATE||{})[k]?`, updated ${day(window.SOURCE_DATE[k])}`:'';
+const away=x=>x.dir?`${commas(x.dist)} ft ${x.dir}`:'at this station';
+/* a count window from the baked hours, 24 hour clock in: 'weekday 4 to 7pm' */
+const hr=h=>(h%12||12)+(h<12?'am':'pm');
+const span=w=>w?`${w.day} ${hr(w.from).slice(0,(w.from<12)===(w.to<12)?-2:undefined)} to ${hr(w.to)}`:'PM';
+const PM_WIN=span((window.PED_COUNT||{}).windows&&window.PED_COUNT.windows.pm);
+const block=x=>x.west===x.east?`at ${aveShort(x.west)}`:`${aveShort(x.west)} to ${aveShort(x.east)}`;
 /* source, date and caveat travel with the figures, whichever layers are on */
 /* the rendered file on GitHub. a relative .md link is not served the same way by every host. */
 const METHOD='https://github.com/judy-huynh/river-to-river/blob/main/METHODOLOGY.md';
 const NOTE_WALK=`Walk widths are gross concrete. Sheds, stairs, newsstands and kiosks are not deducted, `
   +`so each width is an upper bound, not a clear width. Sidewalks: NYC planimetric sidewalk polygons `
   +`via Sidewalk Widths NYC, source file dated 20 Apr 2020. Roadway: NYC CSCL street centerline. `
-  +`Trees: NYC Parks Forestry Tree Points.`;
+  +`Trees: NYC Parks Forestry Tree Points. `
+  +`Benches: NYC DOT Seating Locations${srcDate('BENCHES')}, ${(window.BENCHES||[]).length} on the street, `
+  +`distance measured along it. The source holds only benches DOT placed. Seating in parks and plazas, `
+  +`or put out by a building or a business improvement district, is not in it. `
+  +`Pedestrian count: NYC DOT Bi-Annual Pedestrian Counts${srcDate('PED_COUNT')}. The figure is the total for `
+  +`${PM_WIN} on one count day, both sidewalks, not an average. Shown within ${COUNT_REACH} ft of the `
+  +`counter and only on its own block.`;
 const NOTE_LOT=`Unbuilt floor area is lot area &times; the base floor area ratio of the zoning district, minus `
   +`floor area built. Special district rules are not applied, and a landmarked lot may not be able `
   +`to use it. Lots: NYC MapPLUTO.`;
@@ -554,6 +570,9 @@ function stationHTML(P){
    +`<div><dt><i class="key-r"></i>Roadway</dt><dd>${P.road?`${P.road.w} ft &middot; ${P.road.lanes} moving + ${P.road.park} parked`:feet(null)}</dd></div>`
    +`<div><dt><i class="key-n"></i>South walk</dt><dd>${feet(P.south)}</dd></div>`
    +`<div><dt>Trees within ${TREE_REACH} ft</dt><dd>${P.trees.all}${P.trees.all?`<span>${P.trees.n} north, ${P.trees.s} south</span>`:''}</dd></div>`
+   +`<div><dt>Nearest DOT bench</dt><dd>${P.bench?`${away(P.bench)}<span>${P.bench.side==='n'?'north':'south'} side, ${block(P.bench)}`
+     +`${P.bench.installed?`, installed ${day(P.bench.installed)}`:''}</span>`:'no DOT bench recorded on the street'}</dd></div>`
+   +(P.count?`<div><dt>Pedestrians counted</dt><dd>${commas(P.count.pm)}<span>${span(P.count.win)}, one day in ${day(P.count.p)}, counter ${away(P.count)}, ${block(P.count)}</span></dd></div>`:'')
    +`</dl>`+note(NOTE_WALK)
    +lotList('North',P.lots.n)+lotList('South',P.lots.s)
    +(P.lots.n.length+P.lots.s.length?note(NOTE_LOT):'');
@@ -681,8 +700,9 @@ function syncRuler(){
   win.style.left=(lo/LEN*100)+'%';
   win.style.width=Math.max(.5,(hi-lo)/LEN*100)+'%';
   const mid=(lo+hi)/2, ave=AVES.reduce((x,y)=>Math.abs(y[0]-mid)<Math.abs(x[0]-mid)?y:x);
-  $('#rulerMid').textContent = mid<120?'at the Hudson' : mid>LEN-120?'at the East River'
-    : `near ${ave[1]} Avenue · ${commas(mid)} ft from the Hudson`;
+  /* says it is the map, so it is not read as the place of the open station card */
+  $('#rulerMid').textContent = 'map view '+(mid<120?'at the Hudson' : mid>LEN-120?'at the East River'
+    : `near ${ave[1]} Avenue · ${commas(mid)} ft from the Hudson`);
 }
 let VIEW=[0,LEN];
 (function drag(){

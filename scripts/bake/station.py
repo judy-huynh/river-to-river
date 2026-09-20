@@ -52,6 +52,29 @@ def write_global(name, value, comment=None, path=DATA_JS):
     return how
 
 
+# a record is on the street when its source names East or West 42 Street, however it abbreviates
+ON_42 = re.compile(r'^(E|W|EAST|WEST)\s+42(ND)?\s+(ST|STREET)$')
+
+
+def on_42(name):
+    """True when a source's street name field reads East or West 42 Street."""
+    return bool(ON_42.match(' '.join((name or '').upper().split())))
+
+
+SOURCE_DATE_COMMENT = """/* The date each publisher last changed its rows, read from the portal when the set was baked.
+   Kept apart from the sets so a bake still compares record for record. */"""
+
+
+def stamp(name, day, path=DATA_JS):
+    """Record the source date of one baked global in window.SOURCE_DATE."""
+    try:
+        dates = read_global('SOURCE_DATE', path)
+    except KeyError:
+        dates = {}
+    dates[name] = day
+    return write_global('SOURCE_DATE', dict(sorted(dates.items())), SOURCE_DATE_COMMENT, path)
+
+
 def _comment_start(lines, at):
     """Index of the first line of the /* */ block sitting directly above lines[at]."""
     if at == 0 or not lines[at - 1].rstrip().endswith('*/'):

@@ -32,4 +32,14 @@ for(let ft=0;ft<=LEN;ft+=100){
 /* an L-shaped lot is listed along its frontage, not along its rear arm: at 6,500 ft only
    501 5 Avenue faces the street on the south side */
 assert.deepStrictEqual(S.stationProfile(6500).lots.s.map(p=>p.addr),['501 5 Avenue']);
+/* the nearest bench is never farther than any other. the counter speaks only inside its reach
+   and only on its own block, Park (7,520) to Lexington (8,021) */
+for(let ft=0;ft<=LEN;ft+=50){
+  const Q=S.stationProfile(ft);
+  assert.strictEqual(Q.bench.dist,Math.min(...window.BENCHES.map(b=>Math.abs(b.ft-ft))));
+  const d=Math.abs(window.PED_COUNT.ft-ft), onBlock=ft>=7520&&ft<=8021;
+  assert.strictEqual(Q.count!==null,d<=S.COUNT_REACH&&onBlock);
+}
+const C=S.stationProfile(window.PED_COUNT.ft).count, last=window.PED_COUNT.periods[window.PED_COUNT.periods.length-1];
+assert.deepStrictEqual([C.p,C.pm,C.dist],[last.p,last.pm,0]);
 console.log('station checks pass');

@@ -40,6 +40,9 @@ depends on Mapbox for the basemap and on nothing else.
 | `TREES` | NYC Parks Forestry Tree Points | 281 street trees, stationed, with species, trunk diameter, condition |
 | `ROAD` | NYC CSCL street centerline (DoITT/OTI) | 26 segments with roadway width, moving lanes, parking lanes |
 | `SIDEWALK` | Sidewalk Widths NYC (Meli Harvey), derived from the NYC planimetric sidewalk polygons `vfx9-tbb6` | See section 3 |
+| `BENCHES` | NYC DOT Seating Locations `esmy-s8q5` | 2 benches recorded on 42 Street, stationed. See section 3b |
+| `PED_COUNT` | NYC DOT Bi-Annual Pedestrian Counts `cqsj-cfgu` | The one count location on the street with its whole series, stationed. See section 3b |
+| `SOURCE_DATE` | The open data portal's own metadata | The date each publisher last changed its rows, read at bake time |
 
 Derived figures computed in the page, not typed:
 
@@ -99,8 +102,9 @@ Two cautions that are printed on the sheet:
 
 ## 3a. Spatial step: the station card (added 19 Sep 2026)
 
-No new dataset. The card reads the five baked globals at one station, through one pure function,
-`stationProfile(ft)` in `plan/station.js`. That file has no DOM in it, so it loads in node, and
+No new dataset. The card reads the five baked globals (since joined by the two in section 3b) at
+one station, through one pure function, `stationProfile(ft)` in `plan/station.js`. That file has
+no DOM in it, so it loads in node, and
 `node scripts/check/station.js` re-runs the known-good check at 4,000 ft. A station comes from a
 press on the ruler, the arrow keys, the `?st=` link, or a click on the map. A map click is
 stationed by the same perpendicular projection as section 1, ported to the page from
@@ -138,6 +142,72 @@ ignored: it is off the sheet, not a place on the street.
    layers are switched on. The MapPLUTO, CSCL and Tree Points release dates are not recorded in
    `data.js`, so the card names those sources without a date. Recording them belongs to the
    bake of each set.
+
+## 3b. Benches and the pedestrian counter (added 19 Sep 2026)
+
+Two small sets, each through its own bake script, both read from NYC Open Data through
+`scripts/bake/opendata.py`. They are fetched fresh on every run, not cached, and each run prints
+the row count, byte size and sha256 of what it read and the date the publisher last changed the
+rows. That date is baked into `SOURCE_DATE` so the page can print it.
+
+**Benches** (`scripts/bake/benches.py`, `window.BENCHES`). NYC DOT Seating Locations, one point
+per bench, rows last updated 8 Sep 2026.
+
+1. **Select** by the street the source records the bench on: `on_street` is East or West 42
+   Street, in Manhattan (`on_42` in `scripts/bake/station.py`, shared with the counter). The same
+   kind of rule as the lots. Of 747 Manhattan benches, **2** pass. A row with no point cannot be
+   stationed: the run prints how many there are (0) and stops if one of them is on 42 Street.
+2. **Station and side** each by perpendicular projection as in section 1, keeping the bench's own
+   lon/lat. They stand at stations 5,616 (6th to 5th Avenue) and 6,625 (5th to Madison), both
+   on the south side, 37 and 40 ft off the centreline. The computed side agrees with the
+   source's own `side_of_st` for both. Installed 4 May 2025 and 20 May 2025. No bench stands
+   west of station 5,616, so none west of 6th Avenue (station 5,480).
+3. **Cross-check**, printed on every run: any DOT bench within 100 ft of the centreline that the
+   street rule left out. There are 0. The nearest other bench is on 3rd Avenue, 143 ft off.
+
+The set holds only benches in this DOT programme. Seating in Bryant Park, in plazas, or put out
+by a building or a business improvement district is not in it. So the card labels the row
+"Nearest DOT bench", and the note under the figures says what the source leaves out. The distance
+is to the nearest DOT bench, not to the nearest place to sit.
+
+**Pedestrian counter** (`scripts/bake/ped_count.py`, `window.PED_COUNT`). NYC DOT Bi-Annual
+Pedestrian Counts, rows last updated 21 Jul 2026. One row per location, one column per period and
+time window.
+
+1. **Select** locations whose `street_nam` is East or West 42 Street in Manhattan. Of 36
+   Manhattan locations, **1** passes: location 42, East 42 Street from Park Avenue to Lexington
+   Avenue. The bake stops with an error if that is ever not exactly one.
+2. **Station** its point: station 7,796, on the centreline (0 ft off), so it has no side. The
+   publisher describes the method as a screenline at mid-block covering both sidewalks.
+3. **Read the series.** The publisher's column names are not regular (`may_07_pm`, `may_22_p_m`,
+   `oct24_am`, `june_24_md`), so they are parsed by pattern into year-month periods with AM, MD
+   and PM values, and the bake stops if a dated column is not understood. 37 periods, May 2007 to
+   May 2026, all with three values. There is no period between May 2019 and October 2020. The
+   latest, May 2026, is AM 7,285, MD 6,138, PM 16,297. The source writes a count it did not
+   collect as 0, so a 0 is baked as null. This location has none.
+4. **The windows.** Each figure is a total over a window of hours, not a peak hour and not a day.
+   The hours are not in the rows. They are in the publisher's readme
+   (`nyc.gov/html/dot/downloads/pdf/bi-annual-ped-count-readme.pdf`, read 19 Sep 2026): counts
+   are taken on one weekday and an adjacent Saturday, 7 to 9am and 4 to 7pm on the weekday, 12 to
+   2pm on the Saturday. So AM and PM are the same weekday, MD is a different day, and a period is
+   two single count days, not an average. One day's weather or an event moves it. The hours are
+   stated once, as `WINDOWS` in `ped_count.py`, baked into `PED_COUNT.windows`, and the page
+   prints the window from there.
+
+**On the station card.** `stationProfile` adds two things. The nearest bench: the bench with the
+smallest difference in station, either side, with the distance measured along the street and
+not as a radius, its side, the avenues either side of it, and its install date. The counter: when
+the station is within 300 ft of it along the street (`COUNT_REACH`) and on the counter's own
+block, the weekday 4 to 7pm figure of the latest period that has one, with the window, the
+period and the distance to the counter. The reach is clipped at the avenues either side of the
+counter (`COUNT_SPAN`), so with Park at 7,520 and Lexington at 8,021 the count shows from 7,520
+to 8,021 and not on the next block. Elsewhere the card shows no count, because one counter does
+not describe the rest of the street (section 6). Both are checked in
+`node scripts/check/station.js`.
+
+Reproduce with `python3 scripts/bake/benches.py --check` and
+`python3 scripts/bake/ped_count.py --check`. A check compares the records; a newer source date
+alone is reported but does not fail it.
 
 ## 4. The lot rule, and what is being corrected
 
@@ -177,10 +247,10 @@ or data.ny.gov resource IDs.
 | Question it answers | Dataset | ID | What it holds on 42nd Street |
 |---|---|---|---|
 | How fast does the bus move | MTA Bus Route Segment Speeds, 2025+ (2023-24 baseline `58t6-89vi`) | `kufs-yh3x` | M42 by segment, hour and direction. May 2026 Wednesdays: about 4.1 mph from 11am to 6pm, 2.98 mph westbound Park to 7th at 5pm |
-| How many people are here | NYC DOT Bi-Annual Pedestrian Counts | `cqsj-cfgu` | **One** location on the whole street (Park to Lexington, station 7,796), May 2007 to May 2026. May 2026 PM peak 16,297 |
+| How many people are here | NYC DOT Bi-Annual Pedestrian Counts | `cqsj-cfgu`, **baked, section 3b** | **One** location on the whole street (Park to Lexington, station 7,796), May 2007 to May 2026. May 2026 weekday 4 to 7pm total 16,297, one count day |
 | | MTA Subway Hourly Ridership | `5wq4-mkjj` | Entries at the three 42nd Street complexes, by hour. Entries only |
 | | NYC DOT Pedestrian Mobility Plan | `fwpa-qxaf` | A priority **tier**, not a count. All 34 de-duplicated segments rank in the top two tiers |
-| Where can you stop | NYC DOT Seating Locations | `esmy-s8q5` | 2 benches, both installed May 2025, none west of 6th Avenue |
+| Where can you stop | NYC DOT Seating Locations | `esmy-s8q5`, **baked, section 3b** | 2 benches, both installed May 2025, none west of 6th Avenue |
 | | Street Seats `5ar6-qxhs`, Open Streets `uiay-nctu`, Dining Out NYC `fpeh-f7ci` | | 0, 0, and 0 roadway dining licences on the street |
 | What is in the way | DOB NOW Approved Permits (legacy `ipu4-2q9a`) | `rbx6-tga4` | Sidewalk sheds with renewal chains datable to the day |
 | | DOT Street Construction Permits | `tqtj-sjs8` | Active permits by block face. No geometry, joins by from/to street |

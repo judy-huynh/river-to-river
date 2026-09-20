@@ -14,6 +14,12 @@ From the repo root:
     python3 scripts/bake/owner_case.py --check  # owner names already re-cased, writes nothing
     python3 scripts/bake/owner_case.py          # re-case the owner names in window.LOTS_POLY
 
+    python3 scripts/bake/benches.py --check     # DOT benches on 42 Street, writes nothing
+    python3 scripts/bake/benches.py             # re-derive and write window.BENCHES
+
+    python3 scripts/bake/ped_count.py --check   # the one DOT pedestrian counter, writes nothing
+    python3 scripts/bake/ped_count.py           # re-derive and write window.PED_COUNT
+
 `--check` exits 0 when the re-derived set equals what is baked, 1 when it differs. Large sources
 download once to a `river-to-river` folder in the system temp directory (on macOS that is under
 `/var/folders`, not `/tmp`), never into the repo. Set `R2R_CACHE` to use another folder, for
@@ -34,6 +40,8 @@ is pinned to a commit, and a run prints the file's byte size and sha256.
 | `axis_diff(a, b)` | Angle between two bearings as undirected axes, 0 to 90 |
 | `read_global(name)` | The parsed value of one `window.<name>=` line |
 | `write_global(name, value, comment=None)` | Replaces that line in place or appends it. Returns `replaced`, `appended` or `unchanged` |
+| `on_42(name)` | True when a source's street name field reads East or West 42 Street. The one street rule for point sets |
+| `stamp(name, day)` | Records a source's last-updated date under `window.SOURCE_DATE` |
 
 The module-level `project`, `band` and `heading_at` use `LINE42`. To station against another
 centreline, build a `Line` and call the same methods on it.
@@ -41,6 +49,10 @@ centreline, build a `Line` and call the same methods on it.
 Stations are interpolated between the stations already baked on the centreline vertices, so a
 record always agrees with `LINE42` as the page reads it. Stations are returned unrounded. The bake
 script rounds.
+
+`opendata.py` reads a Socrata portal: `rows(domain, id, where)` returns the matching rows and
+prints their count, size and sha256, `updated(domain, id)` returns the date the publisher last
+changed them. Small sets are fetched fresh on every run, not cached.
 
 ## Rules for `write_global`
 
