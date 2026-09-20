@@ -8,6 +8,7 @@
 const LINE=window.LINE42, LOTS=window.LOTS_POLY, TREES=window.TREES, ROAD=window.ROAD;
 const SW=window.SIDEWALK||[];
 const BENCHES=window.BENCHES||[], PED=window.PED_COUNT||null, BUS=window.BUS||[];
+const TIER=window.PED_TIER||[];
 const LEN=LINE[LINE.length-1][0];
 const AVES=[[0,'12th'],[903,'11th'],[1890,'10th'],[2699,'9th'],[3473,'8th'],[4542,'7th'],[5480,'6th'],
   [6417,'5th'],[6932,'Mad'],[7520,'Park'],[8021,'Lex'],[8940,'3rd'],[9730,'2nd'],[10411,'1st']];
@@ -85,6 +86,8 @@ function stationProfile(ft,hour){
   };
   const walk=s=>{const r=covering(SW.filter(x=>x.s===s),x=>[x.a,x.b]); return r?r.w:null;};
   const rd=covering(ROAD.features.map(f=>f.properties),x=>[x.a,x.b]);
+  /* the plan's tier for the segment under the station. null past either end of the source. */
+  const tr=covering(TIER,x=>[x.a,x.b]);
   let w=AVES[0], e=AVES[AVES.length-1];
   AVES.forEach(a=>{ if(a[0]<=ft) w=a; });
   e=AVES.find(a=>a[0]>=ft)||e;
@@ -109,6 +112,7 @@ function stationProfile(ft,hour){
     north:walk(1), south:walk(-1),
     road:rd?{w:rd.w, lanes:rd.lanes, park:rd.park, dir:rd.dir}:null,
     trees:{n:near.filter(t=>t.side==='n').length, s:near.filter(t=>t.side==='s').length, all:near.length},
+    tier:tr?{rank:tr.rank, name:tr.tier}:null,
     bench, count, bus:hour==null?null:busAt(ft,hour), lots:{n,s}, biggest};
 }
 

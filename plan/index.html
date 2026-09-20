@@ -11,19 +11,35 @@
 
 <header class="head">
   <div class="head__id">
-    <span class="brand">River to River</span>
-    <h1>42nd Street</h1>
+    <h1>River to River</h1>
+    <p class="head__subject">42nd Street, Manhattan</p>
     <span class="kicker" id="devline" hidden>Sheet 01 &middot; existing conditions &middot; <span id="stamp"></span></span>
   </div>
   <dl class="head__meta">
-    <div><dt>Extent</dt><dd>Hudson to East River, 1.97 mi</dd></div>
+    <div><dt>Extent</dt><dd id="metaExtent">Hudson to East River</dd></div>
     <div><dt>Lots</dt><dd id="metaLots"></dd></div>
     <div><dt>Trees</dt><dd id="metaTrees"></dd></div>
-    <div><dt>Sources</dt><dd>MapPLUTO &middot; NYC Parks &middot; OSM</dd></div>
+    <div><dt>Sources</dt><dd>MapPLUTO &middot; NYC Parks &middot; NYC DOT &middot; MTA &middot; OSM</dd></div>
   </dl>
+  <button class="mini" type="button" id="introOpen" aria-controls="intro" aria-expanded="false">How to use</button>
 </header>
 
 <main class="sheet">
+
+  <!-- ══════════ the first screen. plain instruction only, shut for good once dismissed ══════════ -->
+  <section class="intro" id="intro" aria-labelledby="introTitle">
+    <h2 class="micro" id="introTitle">What this is</h2>
+    <p>Public records about 42nd Street, Manhattan, measured in feet along the street from the Hudson River to the East River.</p>
+    <ol>
+      <li>Pick a question from the list.</li>
+      <li>Drag along the bar under the map to move along the street.</li>
+      <li>Click or tap anywhere on the street to see what is recorded at that spot.</li>
+    </ol>
+    <button class="intro__go" type="button" id="introGo">Start</button>
+  </section>
+  <!-- the one rule for whether it opens: ?intro=1 always; never once shut, or on a link that points at something -->
+  <script>(function(){ var q=location.search, done=false; try{ done=localStorage.getItem('r2r.intro')==='done'; }catch(e){}
+    document.getElementById('intro').hidden=!(/[?&]intro=1(&|$)/.test(q)||(!done&&!/[?&](st|lot|q|hr|on)=/.test(q))); })();</script>
 
   <!-- ══════════ the rail. each row is a question, grouped People, Movement, Built ══════════ -->
   <aside class="layers" id="layers" aria-label="Questions about the street">

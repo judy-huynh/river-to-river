@@ -20,6 +20,9 @@ From the repo root:
     python3 scripts/bake/ped_count.py --check   # the one DOT pedestrian counter, writes nothing
     python3 scripts/bake/ped_count.py           # re-derive and write window.PED_COUNT
 
+    python3 scripts/bake/ped_tier.py --check    # DOT pedestrian priority tier by segment, writes nothing
+    python3 scripts/bake/ped_tier.py            # re-derive and write window.PED_TIER, window.PED_TIER_META
+
     python3 scripts/bake/bus.py --check         # M42 weekday speeds for the baked month, writes nothing
     python3 scripts/bake/bus.py                 # the newest whole month into window.BUS, window.BUS_META
     python3 scripts/bake/bus.py --month 2026-07 # a named month
@@ -56,7 +59,7 @@ script rounds.
 
 `opendata.py` reads a Socrata portal: `rows(domain, id, where)` returns the matching rows and
 prints their count, size and sha256, `updated(domain, id)` returns the date the publisher last
-changed them. Small sets are fetched fresh on every run, not cached.
+changed them, `grouped(domain, id, by)` returns row counts grouped by the named columns. Small sets are fetched fresh on every run, not cached.
 
 ## Rules for `write_global`
 

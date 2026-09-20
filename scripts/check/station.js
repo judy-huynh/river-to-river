@@ -59,4 +59,13 @@ assert.strictEqual(S.stationProfile(lastE+1,17).bus.e,null);
 const meet=window.BUS.find(r=>r.dir==='E'&&r.a>0).a;
 assert.strictEqual(S.stationProfile(meet,17).bus.e.a,meet);
 assert.strictEqual(S.stationProfile(window.BUS.find(r=>r.dir==='W'&&r.a>100).a,17).bus.w.b,window.BUS.find(r=>r.dir==='W'&&r.a>100).a);
+/* the priority tier at a station is the tier of the one source segment that covers it, and
+   past either end of the source there is none */
+for(let ft=0;ft<=LEN;ft+=50){
+  const T=S.stationProfile(ft).tier, hit=window.PED_TIER.filter(r=>ft>=r.a&&ft<=r.b);
+  assert.strictEqual(T!==null,hit.length>0);
+  if(T) assert.ok(hit.some(r=>r.rank===T.rank&&r.tier===T.name));
+}
+assert.strictEqual(new Set(window.PED_TIER.map(r=>r.id)).size,window.PED_TIER.length);
+assert.strictEqual(S.stationProfile(0).tier,null);
 console.log('station checks pass');

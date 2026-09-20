@@ -34,6 +34,15 @@ def rows(domain, rid, where=None, limit=50000):
     return out
 
 
+def grouped(domain, rid, by):
+    """Row counts of one resource grouped by the named columns, over the whole set."""
+    q = {'$select': '%s,count(*) as n' % by, '$group': by, '$order': by}
+    url = 'https://%s/resource/%s.json?%s' % (domain, rid, urllib.parse.urlencode(q))
+    raw = _get(url)
+    print('source %s  %d bytes  sha256 %s' % (url, len(raw), hashlib.sha256(raw).hexdigest()))
+    return json.loads(raw.decode('utf-8'))
+
+
 def updated(domain, rid):
     """ISO date (UTC) the publisher last changed the rows, from the portal's own metadata."""
     meta = json.loads(_get('https://%s/api/views/%s.json' % (domain, rid)).decode('utf-8'))

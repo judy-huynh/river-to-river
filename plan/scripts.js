@@ -8,6 +8,7 @@
      BUS        MTA Bus Route Segment Speeds, M42 by leg, hour and direction
      BENCHES    NYC DOT Seating Locations on 42 Street
      PED_COUNT  NYC DOT Bi-Annual Pedestrian Counts, the one location on 42 Street
+     PED_TIER   NYC DOT Pedestrian Mobility Plan, the priority tier of each segment
    ═══════════════════════════════════════════════════════════════════════ */
 (() => {
 'use strict';
@@ -158,6 +159,17 @@ const PED_STATS=PED&&PED_LAST?(()=>{
   return {n:v.length, first:v[0], hi:v.reduce((x,y)=>y.pm>x.pm?y:x), lo:v.reduce((x,y)=>y.pm<x.pm?y:x),
     hole:months(...hole)>PED_GAP_MONTHS?hole:null};
 })():null;
+/* the DOT priority tier, summarised once. runs are consecutive segments of one tier merged,
+   on is each tier found on the street, blank is where the source has no segment. */
+const TIER=window.PED_TIER||[], TIER_META=(window.PED_TIER_META||{}).tiers||[];
+const TIER_STATS=TIER.length?(()=>{
+  const runs=[]; TIER.forEach(r=>{ const m=runs[runs.length-1];
+    if(m&&m[2]===r.rank&&r.a<=m[1]) m[1]=Math.max(m[1],r.b); else runs.push([r.a,r.b,r.rank]); });
+  const blank=[]; let at0=0; runs.forEach(([a,b])=>{ if(a>at0) blank.push([at0,a]); at0=Math.max(at0,b); });
+  if(at0<LEN) blank.push([at0,LEN]);
+  const on=[...new Map(TIER.map(r=>[r.rank,{rank:r.rank,tier:r.tier}])).values()].sort((x,y)=>x.rank-y.rank);
+  return {runs, blank, on};
+})():null;
 /* the PM series as a line against time, from a zero baseline. a period with no figure breaks the
    line, and so does a hole between two periods: nothing is drawn across time that was not counted. */
 const spark=(W,H)=>{
@@ -219,9 +231,24 @@ map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
    the right edge on a phone. re-fit once, on load, and again on resize until the
    reader touches the map. */
 let userMoved=false;
-map.on('dragstart',()=>{userMoved=true;}); map.on('zoomstart',()=>{userMoved=true;});
-const refit=()=>{ if(userMoved||!MAP_OK) return;
-  try{ map.resize(); map.fitBounds(STREET_BOUNDS,{...FIT,duration:0}); }catch(e){} };
+/* the view that lays the whole street across the map's WIDTH. fitBounds fits the upright
+   lon/lat box of a diagonal line, so it was limited by the map's height and the street shrank
+   to a speck on a short window. turned to the bearing the street is one thin horizontal line,
+   so the zoom comes from its length and the width left inside the side padding. */
+const streetView=()=>{
+  const a=at(0), b=at(LEN), R=Math.PI/180, lat=(a[1]+b[1])/2;
+  const dx=(b[0]-a[0])*R*Math.cos(lat*R), dy=(b[1]-a[1])*R;
+  const metres=6378137*Math.hypot(dx,dy);                       /* end to end, flat at this latitude */
+  const px=Math.max(120,map.getContainer().clientWidth-FIT.padding.left-FIT.padding.right);
+  const zoom=Math.log2(2*Math.PI*6378137*Math.cos(lat*R)*px/(512*metres));
+  return {center:[(a[0]+b[0])/2,lat], zoom:Math.min(FIT.maxZoom,zoom), bearing:BEARING};
+};
+/* only the reader's own hand counts. the fit itself fires zoomstart, with no originalEvent. */
+map.on('dragstart',()=>{userMoved=true;}); map.on('zoomstart',e=>{ if(e.originalEvent) userMoved=true; });
+/* the canvas is always matched to its box. the street is only fitted again while the reader
+   has not moved the map. */
+const refit=()=>{ if(!MAP_OK) return;
+  try{ map.resize(); if(!userMoved) map.jumpTo(streetView()); }catch(e){} };
 map.on('load',refit);
 let _fitT; addEventListener('resize',()=>{clearTimeout(_fitT); _fitT=setTimeout(refit,160);});
 map.dragRotate.disable(); map.touchZoomRotate.disableRotation();
@@ -270,7 +297,7 @@ const TREE_ROW=
   };
 const LAYERS=[
   {
-    id:'people', group:'People', short:'Count', name:'How many people are here?', has:!!PED_STATS, ruler:true,
+    id:'people', group:'People', short:'Count', name:'How many people are here?', has:!!PED_STATS,
     get fig(){ return [commas(PED_LAST.pm), day(PED_LAST.p)]; },
     /* the bake stops unless the source has exactly one location on 42 Street, so this is the whole set */
     get sub(){ return `${PM_WIN} &middot; the city counts at one place on the street`; },
@@ -298,7 +325,7 @@ const LAYERS=[
     }
   },
   {
-    id:'benches', group:'People', short:'Benches', name:'Where can you stop?', has:!!BENCH_STATS, ruler:true,
+    id:'benches', group:'People', short:'Benches', name:'Where can you stop?', has:!!BENCH_STATS,
     get fig(){ return [commas(BENCHES.length), `DOT bench${BENCHES.length===1?'':'es'}`]; },
     get sub(){ return `none west of ${aveName(BENCH_STATS.west)} or east of ${aveName(BENCH_STATS.east)}`; },
     on:false, open:false, ids:['benchDots'],
@@ -319,7 +346,7 @@ const LAYERS=[
     }
   },
   {
-    id:'bus', group:'Movement', short:'Bus', name:'How fast does the bus move?', has:!!BUS_STATS, hour:true, ruler:true,
+    id:'bus', group:'Movement', short:'Bus', name:'How fast does the bus move?', has:!!BUS_STATS, hour:true,
     /* getters: the shut row follows the hour slider */
     get fig(){ const v=busCorridor(SEL.hour);
       return [v!=null?v.toFixed(2):'none', `${v!=null?'mph':'no buses measured'}, ${hourSpan(SEL.hour)}`]; },
@@ -524,8 +551,6 @@ function toggle(L){
   L.on=!L.on; L._row.dataset.on=L.on; L._sw.setAttribute('aria-pressed',L.on);
   if(L.on&&!L.open) setOpen(L,true);
   paint(L);
-  /* some rows also draw on the ruler, and the bus hour is part of the link */
-  if(L.ruler) buildRuler();
   link();
 }
 
@@ -775,6 +800,8 @@ const NOTE_WALK=`Walk widths are gross concrete. Sheds, stairs, newsstands and k
   +`Pedestrian count: NYC DOT Bi-Annual Pedestrian Counts${srcDate('PED_COUNT')}. The figure is the total for `
   +`${PM_WIN} on one count day, both sidewalks, not an average. Shown within ${COUNT_REACH} ft of the `
   +`counter and only on its own block.`
+  +(TIER_STATS?` Priority tier: NYC DOT Pedestrian Mobility Plan${srcDate('PED_TIER')}. A tier is the plan's rank `
+  +`for the street segment, 1 the highest. It is not a count of people.`:'')
   +(BUS_STATS?` Bus: MTA Bus Route Segment Speeds, ${BUS_META.route}, weekdays in ${busMonth()}${srcDate('BUS')}. `
   +`A speed is the average over a whole leg between two timepoints, not a reading at this station. `
   +`A leg with a timepoint off 42nd Street is left out, so some stations have none.`:'');
@@ -880,6 +907,7 @@ function stationHTML(P){
    +(P.bus?`<div><dt>M42 bus here, ${hourSpan(P.bus.hour)}</dt><dd>${[P.bus.e,P.bus.w].some(Boolean)?[P.bus.e,P.bus.w].filter(Boolean).map(r=>
        `${r.mph!=null?r.mph.toFixed(2)+' mph':'no buses measured'} ${DIRS[r.dir]}<span>whole leg, ${legName(r)}, ${commas(r.b-r.a)} ft</span>`).join('')
        :'no M42 speed kept here'}</dd></div>`:'')
+   +(TIER_STATS?`<div><dt>DOT pedestrian priority tier</dt><dd>${P.tier?`${P.tier.name}<span>tier ${P.tier.rank} of ${TIER_META.length}, a planning rank, not a count</span>`:'no tier in the source here'}</dd></div>`:'')
    +(P.count?`<div><dt>Pedestrians counted</dt><dd>${commas(P.count.pm)}<span>${span(P.count.win)}, one day in ${day(P.count.p)}, counter ${away(P.count)}, ${block(P.count)}</span></dd></div>`:'')
    +`</dl>`+note(NOTE_WALK)
    +lotList('North',P.lots.n)+lotList('South',P.lots.s)
@@ -921,10 +949,57 @@ $('#readout').addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDef
 
 /* ── ruler ────────────────────────────────────────────────────────────── */
 const NS='http://www.w3.org/2000/svg';
+/* the evidence the ruler carries, top to bottom. each band has a caption and a bar drawn to the
+   street's own scale. wide marks a band left off a narrow ruler, which shows fewer bands, never
+   thinner ones. ink and the colours already on the sheet, nothing new. */
+/* colours are read from the tokens in style.css, so the sheet has one source for them */
+const token=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const INK=token('--ink'), PAPER=token('--paper'), LABEL=token('--ink-label'), LEAF=token('--leaf'), ALARM=token('--alarm');
+/* four ink strengths, strongest first, and the lowest tier an outline. every bar is ruled in
+   ink, as the bus bars are, so a pale tier still stands off the ruler. */
+const TIER_INK={1:'--ink-70',2:'--ink-30',3:'--hair-2',4:'--hair'};
+const tierFill=rank=>({fill:TIER_INK[rank]?token(TIER_INK[rank]):'none',stroke:INK,'stroke-width':.6});
+const blankLine=(add,X,a,b,y)=>add('line',{x1:X(a),x2:X(b),y1:y,y2:y,stroke:INK,'stroke-opacity':.5,'stroke-width':.8,'stroke-dasharray':'2 3'});
+const RULER_BANDS=[
+  { id:'tier', has:!!TIER_STATS,
+    /* a tier is the plan's rank for a segment. the caption never calls it demand or a count. */
+    caption:()=>[t=>`${t.tier}, tier ${t.rank} of ${TIER_META.length}`, t=>`${t.rank} ${t.tier}`].map(say=>
+      [{t:'DOT pedestrian priority tier'}, ...TIER_STATS.on.map(t=>({sw:tierFill(t.rank), t:say(t)}))]),
+    draw(add,X,y,h){
+      TIER_STATS.runs.forEach(([a,b,rank])=>add('rect',{x:X(a)+.5,y,width:Math.max(1,X(b)-X(a)-1),height:h,...tierFill(rank)}));
+      TIER_STATS.blank.forEach(([a,b])=>blankLine(add,X,a,b,y+h/2)); } },
+  { id:'bus', has:!!BUS_STATS,
+    /* every stop of the ramp is keyed, and the name says a speed is a leg's average, so the band
+       reads with the bus row shut */
+    caption:()=>{ const R=BUS_RAMP, n=R.length-1, bar=c=>({fill:c,stroke:INK,'stroke-width':.6}),
+        name=long=>({t:`${BUS_META.route} bus, ${long?'average speed over each leg':'speed by leg'}, ${hourSpan(SEL.hour)}`}),
+        key=unit=>R.map(([v,c],i)=>({sw:bar(c), t:`${v}${unit||i===0||i===n?' mph':''}${i===0?' or less':i===n?' and over':''}`}));
+      return [[name(1),...key(1),{t:'westbound above, eastbound below'}],[name(1),...key(0)],[name(0),...key(0)]]; },
+    /* either side of the band as on the street. one bar per leg at true length. where no leg is
+       kept, a dashed blank. */
+    draw(add,X,y,h){ const Y={W:y,E:y+h/2+1}, bh=h/2-1;
+      BUS.filter(r=>r.h===SEL.hour).forEach(r=>add('rect',{x:X(r.a)+.5,y:Y[r.dir],width:Math.max(1,X(r.b)-X(r.a)-1),height:bh,
+        fill:r.mph!=null?busColour(r.mph):'none',stroke:INK,'stroke-width':.6}));
+      Object.entries(BUS_STATS.blank).forEach(([d,list])=>list.forEach(([a,b])=>blankLine(add,X,a,b,Y[d]+bh/2))); } },
+  { id:'trees', has:TREES.length>0, wide:true,
+    caption:()=>[[{t:'Street trees'},{sw:{fill:ALARM,'fill-opacity':.45}, t:`over ${TREE_GAP_MIN} ft with none`}]],
+    draw(add,X,y,h){
+      TREE_GAPS.forEach(([a,b])=>add('rect',{x:X(a),y,width:X(b)-X(a),height:h,fill:ALARM,'fill-opacity':.45}));
+      TREES.forEach(t=>add('rect',{x:X(t.ft),y,width:1,height:h,fill:LEAF,'fill-opacity':.9})); } },
+  { id:'marks', has:!!(BENCH_STATS||PED_STATS),
+    /* each bench solid, the counter a ring, as on the map */
+    caption:()=>[[...(BENCH_STATS?[{dot:{fill:INK}, t:`DOT bench${BENCHES.length===1?'':'es'}`}]:[]),
+      ...(PED_STATS?[{dot:{fill:PAPER,stroke:INK,'stroke-width':1.5}, ring:true, t:'DOT pedestrian counter'}]:[])]],
+    draw(add,X,y,h){ const cy=y+h/2;
+      add('line',{x1:0,x2:X(LEN),y1:cy,y2:cy,stroke:INK,'stroke-opacity':.13,'stroke-width':1});
+      if(BENCH_STATS) BENCHES.forEach(b=>add('circle',{cx:X(b.ft),cy,r:3,fill:INK}));
+      if(PED_STATS) add('circle',{cx:X(PED.ft),cy,r:4,fill:PAPER,stroke:INK,'stroke-width':1.5}); } }
+];
+
 function buildRuler(){
   const host=$('#ruler'), svg=$('#rulerSvg');
-  const W=Math.max(320,Math.round(host.clientWidth||960)), H=58, X=ft=>ft/LEN*W;
-  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.innerHTML='';
+  const W=Math.max(320,Math.round(host.clientWidth||960)), X=ft=>ft/LEN*W;
+  svg.innerHTML='';
   const add=(n,a)=>{const e=document.createElementNS(NS,n); for(const k in a) e.setAttribute(k,a[k]); svg.appendChild(e); return e;};
   const MONO='ui-monospace,SFMono-Regular,Menlo,monospace';
   /* measure for real. an advance-width estimate was close enough on a wide screen
@@ -938,61 +1013,87 @@ function buildRuler(){
     if(!w) w=txt.length*px*.66;
     return {node:t, w};
   };
+  /* the height one line of label really takes here. a reader's minimum font size can make it
+     taller than asked for, and every row below is set out from it. */
+  const PX=11, LH=(()=>{ const {node}=label('Xg',PX); let h=0; try{ h=node.getBBox().height; }catch(e){}
+    node.remove(); return Math.ceil(Math.max(h,PX*1.2)); })();
+  const BAR=10, GAP=6, PAD=2;   /* PAD keeps a descender off the bar under it */
+  /* a narrow ruler shows fewer bands rather than smaller ones */
+  const NARROW=W<620;
+  const bands=RULER_BANDS.filter(B=>B.has&&!(NARROW&&B.wide));
+  /* a caption is a run of parts, left to right: words, with a swatch, dot or ring before them
+     when they are a key. a band offers its caption long and then shorter, and the first that
+     fits the ruler on one line is drawn. if none fits, the shortest is wrapped onto more lines
+     and the ruler grows, so a key is never dropped or left half said. */
+  const MARK=15, SEP=12;
+  const sized=parts=>parts.map(p=>{ const {node,w}=label(p.t,PX); node.remove(); return {...p,w:(p.sw||p.dot?MARK:0)+w}; });
+  const lines=forms=>{
+    const all=forms.map(sized), one=all.find(f=>f.reduce((x,p)=>x+p.w+SEP,4-SEP)<=W-4);
+    if(one) return [one];
+    const out=[[]]; let x=4;
+    all[all.length-1].forEach(p=>{ const row=out[out.length-1];
+      if(row.length&&x+p.w>W-4){ out.push([p]); x=4+p.w+SEP; } else { row.push(p); x+=p.w+SEP; } });
+    return out;
+  };
+  const caption=(rows,y)=>rows.forEach((parts,k)=>{
+    let x=4; const top=y+k*LH, mid=top+LH/2;
+    parts.forEach(p=>{
+      const {node}=label(p.t,PX), mark=p.sw||p.dot?MARK:0;
+      if(p.sw) add('rect',{x,y:mid-4,width:10,height:8,...p.sw});
+      if(p.dot) add('circle',{cx:x+5,cy:mid,r:p.ring?4:3,...p.dot});
+      node.setAttribute('x',x+mark); node.setAttribute('y',top+LH-3); node.setAttribute('fill',LABEL);
+      x+=p.w+SEP;
+    });
+  });
+  /* rows from the top: hub names, then a caption and a bar per band, then the axis and avenues */
+  const top=NARROW?4:LH+4;
+  let y=top;
+  const set=bands.map(B=>{ const rows=lines(B.caption()), at=y; y+=rows.length*LH+PAD+BAR+GAP; return {B,rows,y:at}; });
+  const axis=y+8, H=axis+8+LH+4;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); host.style.height=H+'px';
+  /* the station mark is ruled through the bars and the axis only, never through a caption */
+  const inked=[...set.map(({rows,y})=>[y+rows.length*LH+PAD-1,y+rows.length*LH+PAD+BAR+1]),[axis-6,axis+6]];
+  host.style.setProperty('--mark-dot',(axis-4)+'px');   /* its dot rides the axis, clear of the hub names */
+  host.style.setProperty('--mark-rule',`linear-gradient(to bottom,${inked.map(([a,b])=>
+    `transparent ${a}px,currentColor ${a}px,currentColor ${b}px,transparent ${b}px`).join(',')})`);
 
   /* the four hubs, shaded. label only where it genuinely fits inside its own band. */
   /* Below ~620px the four hub bands are each a few pixels wide and their names
      cannot be placed without crowding or clipping. Draw the shading, drop the
      names: the bands still read as the four busy stretches. */
-  const HUB_LABELS = W >= 620;
   let hubRight=-1e9;
   HUBS.forEach(([a,b,name])=>{
     const x=X(a), w=X(b)-X(a);
-    add('rect',{x,y:0,width:w,height:H,fill:'#14120F','fill-opacity':.06});
-    if(!HUB_LABELS) return;
+    add('rect',{x,y:0,width:w,height:H,fill:INK,'fill-opacity':.06});
+    if(NARROW) return;
     const {node,w:tw}=label(name.toUpperCase(),10,.4);
     const half=tw/2, cx=Math.min(Math.max(x+w/2,half+3),W-half-3);
     if(tw<=W-6 && cx-half > hubRight+8){
-      node.setAttribute('x',cx); node.setAttribute('y',14);
+      node.setAttribute('x',cx); node.setAttribute('y',LH-1);
       node.setAttribute('text-anchor','middle'); node.setAttribute('fill','rgba(20,18,15,.5)');
       hubRight=cx+half;
     } else node.remove();
   });
 
-  /* trees along the bottom, and the stretches with none */
-  TREE_GAPS.forEach(([a,b])=>add('rect',{x:X(a),y:H-8,width:X(b)-X(a),height:5,fill:'#FF5A36','fill-opacity':.45}));
-  TREES.forEach(t=>add('rect',{x:X(t.ft),y:H-8,width:1,height:5,fill:'#2E9E4F','fill-opacity':.9}));
+  set.forEach(({B,rows,y})=>{ caption(rows,y); B.draw(add,X,y+rows.length*LH+PAD,BAR); });
 
-  add('line',{x1:0,x2:W,y1:27,y2:27,stroke:'#14120F','stroke-opacity':.3,'stroke-width':.8});
-
-  /* the bus at the chosen hour, either side of the axis as on the street: westbound above,
-     eastbound below. one bar per leg at true length. where no leg is kept, a dashed blank. */
-  if(BUS_STATS&&row('bus').on){
-    const Y={W:17,E:33};
-    BUS.filter(r=>r.h===SEL.hour).forEach(r=>add('rect',{x:X(r.a)+.5,y:Y[r.dir],width:Math.max(1,X(r.b)-X(r.a)-1),height:4,
-      fill:r.mph!=null?busColour(r.mph):'none',stroke:'#14120F','stroke-width':.6}));
-    Object.entries(BUS_STATS.blank).forEach(([d,list])=>list.forEach(([a,b])=>
-      add('line',{x1:X(a),x2:X(b),y1:Y[d]+2,y2:Y[d]+2,stroke:'#14120F','stroke-opacity':.5,'stroke-width':.8,'stroke-dasharray':'2 3'})));
-  }
-
-  /* on the axis, while their rows are on: each bench solid, the counter a ring, as on the map */
-  if((row('benches')||{}).on) BENCHES.forEach(b=>add('circle',{cx:X(b.ft),cy:27,r:3,fill:'#14120F'}));
-  if((row('people')||{}).on) add('circle',{cx:X(PED.ft),cy:27,r:4,fill:'#FCFAF5',stroke:'#14120F','stroke-width':1.5});
-
+  add('line',{x1:0,x2:W,y1:axis,y2:axis,stroke:INK,'stroke-opacity':.3,'stroke-width':.8});
   /* avenues, decluttered left to right: a label is drawn only if it clears the
      last one drawn, so nothing ever collides no matter how narrow the window */
-  const PX=11; let lastRight=-1e9;
+  let lastRight=-1e9;
   AVES.forEach(([ft,name])=>{
     const x=X(ft);
-    add('line',{x1:x,x2:x,y1:21,y2:33,stroke:'#14120F','stroke-opacity':.35,'stroke-width':.8});
+    add('line',{x1:x,x2:x,y1:axis-5,y2:axis+5,stroke:INK,'stroke-opacity':.35,'stroke-width':.8});
     const {node,w:tw}=label(name,PX);
     const half=tw/2;
     let tx=x, anchor='middle';
-    if(x-half<2){ tx=2; anchor='start'; }
-    else if(x+half>W-2){ tx=W-2; anchor='end'; }
+    /* the end labels stand in from the edge, clear of the view window's border */
+    if(x-half<6){ tx=6; anchor='start'; }
+    else if(x+half>W-6){ tx=W-6; anchor='end'; }
     const left = anchor==='start' ? tx : anchor==='end' ? tx-tw : x-half;
     if(left > lastRight+7){
-      node.setAttribute('x',tx); node.setAttribute('y',46);
-      node.setAttribute('text-anchor',anchor); node.setAttribute('fill','rgba(20,18,15,.58)');
+      node.setAttribute('x',tx); node.setAttribute('y',axis+6+LH-3);
+      node.setAttribute('text-anchor',anchor); node.setAttribute('fill',LABEL);
       lastRight=left+tw;
     } else node.remove();
   });
@@ -1031,7 +1132,7 @@ let VIEW=[0,LEN];
   const r=$('#ruler'); let down=false,cap=false,sx=0;
   const ftAt=e=>{const box=r.getBoundingClientRect();
     return Math.max(0,Math.min(LEN,(e.clientX-box.left)/box.width*LEN));};
-  const go=e=>map.easeTo({center:at(ftAt(e)),duration:down&&cap?0:600,bearing:BEARING});
+  const go=e=>{ userMoved=true; map.easeTo({center:at(ftAt(e)),duration:down&&cap?0:600,bearing:BEARING}); };
   r.addEventListener('pointerdown',e=>{down=true;cap=false;sx=e.clientX;go(e);});
   r.addEventListener('pointermove',e=>{ if(!down) return;
     if(!cap&&Math.abs(e.clientX-sx)>4){cap=true; try{r.setPointerCapture(e.pointerId);}catch(err){}}
@@ -1048,7 +1149,7 @@ let VIEW=[0,LEN];
     if(e.key==='Escape'&&SEL.st!=null){ select({st:null,lot:null}); return; }
     if(to===undefined) return;
     e.preventDefault(); select({st:to,lot:null});
-    if(SEL.st<VIEW[0]||SEL.st>VIEW[1]) map.easeTo({center:at(SEL.st),duration:300,bearing:BEARING});
+    if(SEL.st<VIEW[0]||SEL.st>VIEW[1]){ userMoved=true; map.easeTo({center:at(SEL.st),duration:300,bearing:BEARING}); }
   });
 })();
 
@@ -1064,6 +1165,7 @@ let VIEW=[0,LEN];
     el.textContent = d ? 'built '+new Date(d).toISOString().slice(0,16).replace('T',' ') : 'build unknown';
   }).catch(()=>{ el.textContent='build unknown'; });
 })();
+$('#metaExtent').textContent=`Hudson to East River, ${(LEN/5280).toFixed(2)} mi`;
 $('#metaLots').textContent=LOTS.features.length+' lots';
 $('#metaTrees').textContent=TREES.length+' trees';
 $('#ruler').setAttribute('aria-valuemax',LEN);
@@ -1077,6 +1179,20 @@ $('#ruler').setAttribute('aria-valuemax',LEN);
   if(want){ LAYERS.forEach(L=>{ L.open=L===want; }); if(!qs.has('on')) want.on=true; }
 })();
 buildPanel(); buildRuler();
+(()=>{ /* the first screen. shut once, it stays shut on this browser. ?intro=1 opens it again,
+     and so does the button in the title block. storage can be blocked, so it is only tried. */
+  const card=$('#intro'), KEY='r2r.intro'; if(!card) return;
+  /* the strip takes height from the map and gives it back, so the map is measured again */
+  const show=open=>{ card.hidden=!open; $('#introOpen').setAttribute('aria-expanded',open); refit(); };
+  const shut=()=>{ show(false); try{ localStorage.setItem(KEY,'done'); }catch(e){}
+    const f=$('.layer__head'); if(f) f.focus({preventScroll:true}); };
+  /* whether it opens is decided once, by the script beside the card in index.html */
+  show(!card.hidden);
+  $('#introGo').onclick=shut;
+  /* Escape shuts it from anywhere on the page, since focus does not start inside it */
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!card.hidden){ e.preventDefault(); shut(); } });
+  $('#introOpen').onclick=()=>{ show(card.hidden); if(!card.hidden) $('#introGo').focus(); };
+})();
 (()=>{ /* a row opened by the link is brought to the top of the rail. only the rail is scrolled,
      never the page, so a stacked layout stays where the station link puts it. */
   const L=LAYERS.find(o=>o.open), rail=$('#layerList'); if(!L||!rail) return;

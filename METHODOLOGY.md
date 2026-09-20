@@ -43,6 +43,7 @@ depends on Mapbox for the basemap and on nothing else.
 | `BENCHES` | NYC DOT Seating Locations `esmy-s8q5` | 2 benches recorded on 42 Street, stationed. See section 3b |
 | `PED_COUNT` | NYC DOT Bi-Annual Pedestrian Counts `cqsj-cfgu` | The one count location on the street with its whole series, stationed. See section 3b |
 | `BUS`, `BUS_META` | MTA Bus Route Segment Speeds `kufs-yh3x` (data.ny.gov) | M42 weekday speed by leg, hour and direction for one month, each leg a from/to band. See section 3c |
+| `PED_TIER`, `PED_TIER_META` | NYC DOT Pedestrian Mobility Plan `fwpa-qxaf` | The plan's priority tier for each of 34 segments of the street, each a from/to band, and the plan's five tiers citywide. A rank, not a count. See section 3d |
 | `SOURCE_DATE` | The open data portal's own metadata | The date each publisher last changed its rows, read at bake time |
 
 Derived figures computed in the page, not typed:
@@ -289,6 +290,65 @@ whole leg's. `node scripts/check/station.js` checks this.
 
 Reproduce with `python3 scripts/bake/bus.py --check`.
 
+## 3d. The DOT pedestrian priority tier (added 19 Sep 2026)
+
+`scripts/bake/ped_tier.py`, `window.PED_TIER` and `window.PED_TIER_META`. NYC DOT Pedestrian
+Mobility Plan, NYC Open Data `fwpa-qxaf`, rows last updated 6 Mar 2026. One line per street
+segment, with the tier the plan puts the segment in: 1 Global, 2 Regional, 3 Neighborhood,
+4 Community, 5 Baseline. **A tier is a planning rank. It is not a count of people and the sheet
+never calls it demand or volume.**
+
+1. **Select** by the exact street name: `street` is East or West 42 Street, in Manhattan
+   (`on_42`, the same rule as the benches and the counter). The run fetches loosely on purpose,
+   every Manhattan row whose street contains "42 ST", and prints what the exact rule leaves
+   out, so the trap stays visible: of 81 rows, 32 are West 142 Street. **49** rows are on 42nd
+   Street.
+2. **De-duplicate** on `segmentid`. The source repeats some segments: 49 rows hold **34**
+   unique ids. The tell is the length. The 49 rows sum to 15,125 ft of `shape_leng` on a street
+   10,411 ft long; the 34 unique segments sum to 10,342 ft. A repeated id is dropped only when
+   every repeat has the same geometry, rank and tier, and the bake stops if one ever differs.
+3. **Station** each segment as a from/to band: both ends by perpendicular projection as in
+   section 1, low station first, keeping the two ends' own lon/lat (`c`, west end first) so the
+   set can be re-based. Every segment is a single line; the bake stops on one with more than
+   one part, because its ends would not be defined. The farthest end is 39 ft off the
+   centreline, at the east end.
+4. **Coverage**, printed on every run: the 34 bands run from station 54 to station 10,363 with
+   no gap and no overlap between neighbours, 10,309 ft stationed. The first 54 ft and the last
+   48 ft have no segment in the source and are drawn blank.
+5. **What it holds.** Two tiers. Regional from 54 to 2,746, **Global from 2,746 to 7,988
+   (5,242 ft unbroken, from 47 ft east of 9th Avenue to 33 ft west of Lexington Avenue)**, Regional from 7,988 to 10,363.
+6. **The five tiers citywide** are read in the same run by a grouped query (`opendata.grouped`)
+   and baked as `PED_TIER_META.tiers` with their source row counts: 851 Global, 4,487 Regional,
+   22,769 Neighborhood, 34,195 Community, 64,975 Baseline. These are raw rows, repeats included.
+   The page reads "tier 1 of 5" from this list, not from prose.
+
+**On the ruler.** The ruler carries four bands, each with a caption and a bar on the street's own
+scale, drawn whether or not any rail row is on: the priority tier (consecutive segments of one
+tier merged into runs, ink at two strengths, captioned "DOT pedestrian priority tier"), the M42
+speed at the hour the slider is on (section 3c, one bar per leg, westbound above eastbound, dashed
+where no leg is kept), street trees with the stretches of over 400 ft with none, and the DOT
+benches (solid) with the pedestrian counter (ring). The ruler's height is computed from the bands
+drawn and from the label height measured in the reader's browser. Under 620 px the tree band is
+left off: a narrow ruler shows fewer bands, never thinner ones. Window height does not change the bands. A caption's key is drawn long,
+then short, whichever fits on one line. If neither fits, the short one wraps onto more lines and
+the ruler grows, so a key is never dropped. The bus band is keyed by the two ends of the speed
+ramp (the mph values are read from the ramp, multiples of the 3.1 mph walking pace), and its
+caption says the speed is each leg's average, since the band is drawn with the bus row shut.
+
+**The opening view.** The map opens turned to the street's bearing with the whole centreline
+across its width, so the street sits over the ruler on the same scale direction. The zoom is
+computed from the end to end distance of LINE42 and the map's width inside its side padding,
+capped at the same maximum zoom as before. It is not a fit to the lon/lat bounding box: that box
+is upright while the street is diagonal, so the box fit was limited by the map's height and the
+street shrank on short windows. The view is computed again on load, on resize and when the first
+screen opens or shuts, until the reader moves the map.
+
+**On the station card.** `stationProfile` adds the tier of the segment that covers the station,
+with its rank out of the number of tiers in `PED_TIER_META`, or says the source has none there.
+This is how the band is read by tap and keyboard. Checked in `node scripts/check/station.js`.
+
+Reproduce with `python3 scripts/bake/ped_tier.py --check`.
+
 ## 4. The lot rule, and what is being corrected
 
 The rule, settled 19 Sep 2026: **a lot is in the set if it is addressed on 42nd Street.** No
@@ -329,7 +389,7 @@ or data.ny.gov resource IDs.
 | How fast does the bus move | MTA Bus Route Segment Speeds, 2025+ (2023-24 baseline `58t6-89vi`) | `kufs-yh3x`, **baked, section 3c** | M42 by segment, hour and direction. May 2026 Wednesdays: about 4.1 mph from 11am to 6pm, 2.98 mph westbound Park to 7th at 5pm |
 | How many people are here | NYC DOT Bi-Annual Pedestrian Counts | `cqsj-cfgu`, **baked, section 3b** | **One** location on the whole street (Park to Lexington, station 7,796), May 2007 to May 2026. May 2026 weekday 4 to 7pm total 16,297, one count day |
 | | MTA Subway Hourly Ridership | `5wq4-mkjj` | Entries at the three 42nd Street complexes, by hour. Entries only |
-| | NYC DOT Pedestrian Mobility Plan | `fwpa-qxaf` | A priority **tier**, not a count. All 34 de-duplicated segments rank in the top two tiers |
+| | NYC DOT Pedestrian Mobility Plan | `fwpa-qxaf`, **baked, section 3d** | A priority **tier**, not a count. All 34 de-duplicated segments rank in the top two tiers |
 | Where can you stop | NYC DOT Seating Locations | `esmy-s8q5`, **baked, section 3b** | 2 benches, both installed May 2025, none west of 6th Avenue |
 | | Street Seats `5ar6-qxhs`, Open Streets `uiay-nctu`, Dining Out NYC `fpeh-f7ci` | | 0, 0, and 0 roadway dining licences on the street |
 | What is in the way | DOB NOW Approved Permits (legacy `ipu4-2q9a`) | `rbx6-tga4` | Sidewalk sheds with renewal chains datable to the day |
