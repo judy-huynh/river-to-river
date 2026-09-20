@@ -7,7 +7,7 @@
 'use strict';
 const LINE=window.LINE42, LOTS=window.LOTS_POLY, TREES=window.TREES, ROAD=window.ROAD;
 const SW=window.SIDEWALK||[];
-const BENCHES=window.BENCHES||[], PED=window.PED_COUNT||null;
+const BENCHES=window.BENCHES||[], PED=window.PED_COUNT||null, BUS=window.BUS||[];
 const LEN=LINE[LINE.length-1][0];
 const AVES=[[0,'12th'],[903,'11th'],[1890,'10th'],[2699,'9th'],[3473,'8th'],[4542,'7th'],[5480,'6th'],
   [6417,'5th'],[6932,'Mad'],[7520,'Park'],[8021,'Lex'],[8940,'3rd'],[9730,'2nd'],[10411,'1st']];
@@ -64,9 +64,18 @@ const COUNT_SPAN=PED?[Math.max(PED.ft-COUNT_REACH,flank(PED.ft)[0][0]), Math.min
 /* the counter's newest period that has a PM figure. null when the series has none. */
 const PED_LAST=PED?[...PED.periods].reverse().find(p=>p.pm!=null)||null:null;
 
+/* the bus leg that covers a station, per direction, at one hour. a leg is one bar: the speed
+   is the whole leg's, never a reading at the station. where two legs meet, the one the bus is
+   entering. null where no kept leg reaches. */
+function busAt(ft,hour){
+  const pick=d=>{const hit=BUS.filter(r=>r.dir===d&&r.h===hour&&ft>=r.a&&ft<=r.b);
+    return (d==='E'?hit.find(r=>ft<r.b):hit.find(r=>ft>r.a))||hit[0]||null;};
+  return {hour, e:pick('E'), w:pick('W')};
+}
+
 /* everything known at one station. pure: data in, plain object out, no DOM.
    a null width means the source has no measurement there, and it stays null. */
-function stationProfile(ft){
+function stationProfile(ft,hour){
   ft=Math.max(0,Math.min(LEN,Math.round(ft)));
   /* bands share endpoints, so prefer the one that continues east. zero-length
      fragments are skipped, a width read off under a foot of line is noise. */
@@ -100,10 +109,10 @@ function stationProfile(ft){
     north:walk(1), south:walk(-1),
     road:rd?{w:rd.w, lanes:rd.lanes, park:rd.park, dir:rd.dir}:null,
     trees:{n:near.filter(t=>t.side==='n').length, s:near.filter(t=>t.side==='s').length, all:near.length},
-    bench, count, lots:{n,s}, biggest};
+    bench, count, bus:hour==null?null:busAt(ft,hour), lots:{n,s}, biggest};
 }
 
-const api={AVES, TREE_REACH, COUNT_REACH, COUNT_SPAN, FRONT_TOL, REACH, LOT_BAND, crossing, LOT_BY_BBL, project, stationProfile};
+const api={AVES, TREE_REACH, COUNT_REACH, COUNT_SPAN, FRONT_TOL, REACH, LOT_BAND, crossing, LOT_BY_BBL, project, busAt, stationProfile};
 window.STATION=api;
 if(typeof module!=='undefined'&&module.exports) module.exports=api;
 })();

@@ -42,6 +42,7 @@ depends on Mapbox for the basemap and on nothing else.
 | `SIDEWALK` | Sidewalk Widths NYC (Meli Harvey), derived from the NYC planimetric sidewalk polygons `vfx9-tbb6` | See section 3 |
 | `BENCHES` | NYC DOT Seating Locations `esmy-s8q5` | 2 benches recorded on 42 Street, stationed. See section 3b |
 | `PED_COUNT` | NYC DOT Bi-Annual Pedestrian Counts `cqsj-cfgu` | The one count location on the street with its whole series, stationed. See section 3b |
+| `BUS`, `BUS_META` | MTA Bus Route Segment Speeds `kufs-yh3x` (data.ny.gov) | M42 weekday speed by leg, hour and direction for one month, each leg a from/to band. See section 3c |
 | `SOURCE_DATE` | The open data portal's own metadata | The date each publisher last changed its rows, read at bake time |
 
 Derived figures computed in the page, not typed:
@@ -209,6 +210,61 @@ Reproduce with `python3 scripts/bake/benches.py --check` and
 `python3 scripts/bake/ped_count.py --check`. A check compares the records; a newer source date
 alone is reported but does not fail it.
 
+## 3c. How fast the bus moves (added 19 Sep 2026)
+
+`scripts/bake/bus.py`, `window.BUS` and `window.BUS_META`. MTA Bus Route Segment Speeds,
+data.ny.gov `kufs-yh3x`, route M42, rows last updated 31 Aug 2026. The publisher has already
+averaged the rows: one row per month, day of the week, hour, direction and leg between two
+timepoints, with a road distance, a mean travel time and a count of buses.
+
+1. **Month.** The newest month the source holds that ended before the day of the bake: July
+   2026, 1,344 rows, of which 960 are Monday to Friday. `--month` bakes a named month, and
+   `--check` re-derives the month that is baked and says when the source holds a newer one.
+2. **Join on coordinates.** A leg is keyed by its direction and the coordinates of its two
+   timepoints, never by stop names. The two directions do not share stops: the 8 Avenue timepoint is
+   at station 3,625 eastbound and 3,421 westbound, and the next one is Broadway (4,939) eastbound
+   and 7 Avenue (4,383) westbound. The bake stops if one pair of coordinates carries two names or two
+   distances. There are 8 legs.
+3. **Station** both timepoints by perpendicular projection as in section 1, giving each leg a
+   from/to band, and keep the timepoints' own lon/lat in the direction of travel. The run prints
+   every offset: the timepoints on the street stand 17 to 30 ft off the centreline.
+4. **Drop the legs that leave the street.** A timepoint more than 60 ft off the centreline
+   (`OFF_FT`) is not on 42nd Street. Two are: the 12 Avenue terminal (148 and 239 ft off) and
+   E 41 St/1 Av (248 and 249 ft off). The terminal stations within 100 ft of the west end of
+   `LINE42` (`END_FT`), so the bus joins the street at the end of the line and its leg still runs
+   its whole band: kept. E 41 St/1 Av stations 202 to 274 ft short of the east end, on a parallel
+   street, so the time that leg spends on 42nd cannot be separated from the loop by the UN: both
+   legs that touch it are **dropped**, and listed with their coordinates in `BUS_META.dropped`.
+   6 legs are kept. Eastbound they cover stations 0 to 7,602 and westbound 24 to 7,526. East of
+   that the sheet is drawn blank and says so. Nothing is carried over from a neighbouring leg.
+5. **One bar per leg.** The source knows nothing about speed inside a leg. Eastbound 12 Avenue to
+   8 Avenue is one leg of 3,625 ft on the street (0.720 road miles, which includes the run on
+   12 Avenue); westbound 8 Avenue to 12 Avenue is 3,397 ft. Each is drawn as one bar at that
+   length, on the map and on the ruler, and is never interpolated or split.
+6. **Weekday speed** for a leg and hour is the road distance over the mean travel time, the mean
+   weighted by the buses measured on each of the five weekdays: 144 leg-hours, every one with all
+   five weekdays and at least one bus. Slowest leg-hour 3.23 mph (westbound 7 Avenue to 8 Avenue,
+   9 to 10pm), fastest 10.62 mph (westbound Park Avenue to 7 Avenue, 4 to 5am). `trips` is the
+   publisher's bus count summed over the month's weekdays.
+7. **The street average** at an hour is computed in the page: miles run over hours taken, across
+   the six kept legs and both directions, so it is weighted by buses. It runs from 4.32 mph
+   (5 to 6pm) to 8.71 mph (3 to 4am). Against a walking pace of 3.1 mph (5 km/h) it is below
+   walking pace in **0 of 24 hours**; no single leg-hour is below it either. The page computes
+   that count and prints it. The figure in section 5, 2.98 mph westbound Park to 7th at 5pm, was
+   May 2026 Wednesdays alone; the July weekday figure for that leg and hour is 3.32 mph.
+
+**On the sheet.** One hour-of-day slider (`SEL.hour`, link parameter `hr`) drives the map line, the
+ruler bands, the row's collapsed line (the slowest leg at that hour) and the station card. It
+opens on the street's slowest hour, which is computed. Colour uses the four existing capacity
+ramp colours with one stop at each multiple of walking pace (3.1, 6.2, 9.3, 12.4 mph), blended
+linearly between stops, the same way on the map and in the page. Eastbound is drawn on the south
+side of the centreline and westbound on the north, offset for legibility, not to scale. On the
+station card, `stationProfile(ft, hour)` returns per direction the leg whose band contains the
+station, and where two legs meet the one the bus is entering; the card labels the figure as the
+whole leg's. `node scripts/check/station.js` checks this.
+
+Reproduce with `python3 scripts/bake/bus.py --check`.
+
 ## 4. The lot rule, and what is being corrected
 
 The rule, settled 19 Sep 2026: **a lot is in the set if it is addressed on 42nd Street.** No
@@ -246,7 +302,7 @@ or data.ny.gov resource IDs.
 
 | Question it answers | Dataset | ID | What it holds on 42nd Street |
 |---|---|---|---|
-| How fast does the bus move | MTA Bus Route Segment Speeds, 2025+ (2023-24 baseline `58t6-89vi`) | `kufs-yh3x` | M42 by segment, hour and direction. May 2026 Wednesdays: about 4.1 mph from 11am to 6pm, 2.98 mph westbound Park to 7th at 5pm |
+| How fast does the bus move | MTA Bus Route Segment Speeds, 2025+ (2023-24 baseline `58t6-89vi`) | `kufs-yh3x`, **baked, section 3c** | M42 by segment, hour and direction. May 2026 Wednesdays: about 4.1 mph from 11am to 6pm, 2.98 mph westbound Park to 7th at 5pm |
 | How many people are here | NYC DOT Bi-Annual Pedestrian Counts | `cqsj-cfgu`, **baked, section 3b** | **One** location on the whole street (Park to Lexington, station 7,796), May 2007 to May 2026. May 2026 weekday 4 to 7pm total 16,297, one count day |
 | | MTA Subway Hourly Ridership | `5wq4-mkjj` | Entries at the three 42nd Street complexes, by hour. Entries only |
 | | NYC DOT Pedestrian Mobility Plan | `fwpa-qxaf` | A priority **tier**, not a count. All 34 de-duplicated segments rank in the top two tiers |

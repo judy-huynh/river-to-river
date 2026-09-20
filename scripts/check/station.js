@@ -42,4 +42,21 @@ for(let ft=0;ft<=LEN;ft+=50){
 }
 const C=S.stationProfile(window.PED_COUNT.ft).count, last=window.PED_COUNT.periods[window.PED_COUNT.periods.length-1];
 assert.deepStrictEqual([C.p,C.pm,C.dist],[last.p,last.pm,0]);
+/* the bus at a station is the whole leg that covers it, per direction, at the asked hour.
+   no hour asked, no bus. east of the last kept timepoint there is none, and none is invented */
+assert.strictEqual(P.bus,null);
+for(let ft=0;ft<=LEN;ft+=50) for(const h of [3,17]){
+  const B=S.stationProfile(ft,h).bus;
+  [['e','E'],['w','W']].forEach(([k,d])=>{
+    const legs=window.BUS.filter(r=>r.dir===d&&r.h===h&&ft>=r.a&&ft<=r.b);
+    assert.strictEqual(B[k]!==null,legs.length>0);
+    if(B[k]) assert.ok(legs.includes(B[k])&&B[k].h===h);
+  });
+}
+const lastE=Math.max(...window.BUS.filter(r=>r.dir==='E').map(r=>r.b));
+assert.strictEqual(S.stationProfile(lastE+1,17).bus.e,null);
+/* where two legs meet, the one the bus is entering */
+const meet=window.BUS.find(r=>r.dir==='E'&&r.a>0).a;
+assert.strictEqual(S.stationProfile(meet,17).bus.e.a,meet);
+assert.strictEqual(S.stationProfile(window.BUS.find(r=>r.dir==='W'&&r.a>100).a,17).bus.w.b,window.BUS.find(r=>r.dir==='W'&&r.a>100).a);
 console.log('station checks pass');

@@ -20,6 +20,10 @@ From the repo root:
     python3 scripts/bake/ped_count.py --check   # the one DOT pedestrian counter, writes nothing
     python3 scripts/bake/ped_count.py           # re-derive and write window.PED_COUNT
 
+    python3 scripts/bake/bus.py --check         # M42 weekday speeds for the baked month, writes nothing
+    python3 scripts/bake/bus.py                 # the newest whole month into window.BUS, window.BUS_META
+    python3 scripts/bake/bus.py --month 2026-07 # a named month
+
 `--check` exits 0 when the re-derived set equals what is baked, 1 when it differs. Large sources
 download once to a `river-to-river` folder in the system temp directory (on macOS that is under
 `/var/folders`, not `/tmp`), never into the repo. Set `R2R_CACHE` to use another folder, for

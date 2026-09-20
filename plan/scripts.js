@@ -5,6 +5,7 @@
      LOTS_POLY  NYC MapPLUTO tax lots, real boundaries
      TREES      NYC Parks Forestry Tree Points, current inventory
      ROAD       NYC CSCL street centerline, width and lane counts
+     BUS        MTA Bus Route Segment Speeds, M42 by leg, hour and direction
    ═══════════════════════════════════════════════════════════════════════ */
 (() => {
 'use strict';
@@ -28,6 +29,9 @@ const $=s=>document.querySelector(s);
 const el=(t,c,h)=>{const n=document.createElement(t); if(c)n.className=c; if(h!=null)n.innerHTML=h; return n;};
 const commas=n=>Math.round(n).toLocaleString('en-US');
 const pct=(a,b)=>Math.round(a/b*100);
+/* 24 hour clock in, '5pm' out. 24 wraps to 12am so an hour can be written 'from to'. */
+const hr=h=>((h%=24)%12||12)+(h<12?'am':'pm');
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function at(ft){
   const t=Math.max(0,Math.min(LEN,ft));
@@ -85,6 +89,49 @@ const ROAD_STATS=(()=>{
     total+=l; wSum+=p.w*l; if(p.lanes>=4&&p.park>=2) fourPlusTwo+=l;});
   return {total, share:pct(fourPlusTwo,total), avgW:Math.round(wSum/total)};
 })();
+
+/* the bus, summarised once. a leg is one bar between two MTA timepoints, and its speed is the
+   whole leg's. the corridor average is miles run over hours taken, so it is weighted by buses. */
+const BUS=window.BUS||[], BUS_META=window.BUS_META||null;
+const WALK_MPH=3.1;   /* 5 km/h, the pace the row is read against */
+const DIRS={E:'eastbound',W:'westbound'};
+/* the CAP colours and no others, slow end hot: one stop at each multiple of walking pace */
+const BUS_RAMP=[...CAP].reverse().map(([,c],i)=>[+(WALK_MPH*(i+1)).toFixed(1),c]);
+const busAtHour=h=>BUS.filter(r=>r.h===h&&r.mph!=null);
+const busCorridor=h=>{const v=busAtHour(h), t=v.reduce((x,r)=>x+r.trips*r.mi/r.mph,0);
+  return t?v.reduce((x,r)=>x+r.trips*r.mi,0)/t:null;};
+const busSlowest=h=>busAtHour(h).reduce((x,r)=>!x||r.mph<x.mph?r:x,null);
+const BUS_STATS=(()=>{
+  if(!BUS.length) return null;
+  const avg=[...Array(24).keys()].map(h=>[h,busCorridor(h)]).filter(x=>x[1]!=null);
+  /* the stretch no kept leg reaches, per direction: drawn blank, never filled in */
+  const blank=d=>{const m=[]; BUS.filter(r=>r.dir===d&&r.h===BUS[0].h).map(r=>[r.a,r.b]).sort((x,y)=>x[0]-y[0])
+      .forEach(([a,b])=>{ if(m.length&&a<=m[m.length-1][1]) m[m.length-1][1]=Math.max(m[m.length-1][1],b); else m.push([a,b]); });
+    const out=[]; let at0=0; m.forEach(([a,b])=>{ if(a>at0) out.push([at0,a]); at0=b; });
+    if(at0<LEN) out.push([at0,LEN]); return out;};
+  return {avg, under:avg.filter(x=>x[1]<WALK_MPH).length,
+    slowHour:avg.reduce((x,y)=>y[1]<x[1]?y:x), top:Math.max(...avg.map(x=>x[1])),
+    slowLeg:BUS.filter(r=>r.mph!=null).reduce((x,r)=>r.mph<x.mph?r:x),
+    blank:{E:blank('E'),W:blank('W')}};
+})();
+/* the ramp read in the page, for the ruler and the legend. same stops, same linear blend as the map. */
+const busColour=mph=>{
+  const rgb=c=>[1,3,5].map(i=>parseInt(c.slice(i,i+2),16));
+  const R=BUS_RAMP, k=R.findIndex(x=>mph<=x[0]);
+  if(k===0) return R[0][1]; if(k<0) return R[R.length-1][1];
+  const t=(mph-R[k-1][0])/(R[k][0]-R[k-1][0]), a=rgb(R[k-1][1]), b=rgb(R[k][1]);
+  return 'rgb('+a.map((v,i)=>Math.round(v+(b[i]-v)*t)).join(',')+')';
+};
+/* 'W 42 ST/8 AV' to '8 Av': the timepoint by its cross street. a name with no 42 St in it is kept whole. */
+const stopName=n=>(n.split('/').filter(x=>!/\b42 ST\b/.test(x)).join('/')||n).toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase());
+const legName=r=>`${stopName(r.from)} to ${stopName(r.to)}`;
+const hourSpan=h=>`${hr(h).slice(0,(h<12)===((h+1)%24<12)?-2:undefined)} to ${hr(h+1)}`;
+const busMonth=()=>{const [y,m]=BUS_META.month.split('-'); return MON[m-1]+' '+y;};
+/* six features, one per leg, carrying the chosen hour's speed. drawn along the centreline
+   from timepoint to timepoint at true length, never split. */
+const busGeo=h=>({type:'FeatureCollection',features:BUS.filter(r=>r.h===h).map(r=>({
+  type:'Feature', properties:{dir:r.dir, mph:r.mph, trips:r.trips, name:legName(r)},
+  geometry:{type:'LineString',coordinates:[at(r.a),...LINE.filter(v=>v[0]>r.a&&v[0]<r.b).map(v=>[v[1],v[2]]),at(r.b)]}}))});
 
 /* ── stationing ───────────────────────────────────────────────────────── */
 /* the lookups live in station.js so node can load and test them without a page */
@@ -179,6 +226,37 @@ const LAYERS=[
       if(this.extraOn.gaps)
         h+=`<p class="flag"><b>${commas(GAP_FEET)} feet has no tree at all</b>That is ${pct(GAP_FEET,LEN)}% of the street, in two stretches, and both are the famous ones: 8th through Times Square to 6th, and Madison through Grand Central to 3rd.</p>`;
       return h;
+    }
+  },
+  {
+    id:'bus', name:'How fast does the bus move', hour:true,
+    /* a getter: the collapsed line follows the hour slider */
+    get count(){ const r=BUS_STATS&&busSlowest(SEL.hour);
+      return r?`slowest leg ${r.mph} mph, ${hourSpan(SEL.hour)}`:'no speed baked'; },
+    on:false, open:false, ids:['busCase','busLine','busNone'], opacity:1,
+    says:BUS_STATS?`The M42 on each leg between two MTA timepoints, averaged over the weekdays of ${busMonth()}. <b>One bar is one leg.</b> The speed is the whole leg's, not a reading at any point inside it.`:'',
+    legend(){
+      if(!BUS_STATS) return '';
+      const h=SEL.hour, S=BUS_STATS, rows=BUS.filter(r=>r.h===h);
+      let o=`<div class="key"><h5>Miles per hour</h5>
+        <p>Blended between these stops. Walking pace is taken as ${WALK_MPH} mph.</p><ul>${
+        BUS_RAMP.map(([v,c],i)=>`<li><i style="background:${c}"></i><span>${v} mph${i===BUS_RAMP.length-1?' and over':''}</span><b>${i?`${i+1}&times; walking pace`:'walking pace'}</b></li>`).join('')}</ul></div>`;
+      o+=`<div class="key"><h5>The street by hour</h5>
+        <p>All kept legs, both directions, weighted by buses measured. The line is ${WALK_MPH} mph.</p>
+        <div class="hours" role="img" aria-label="Average speed by hour. ${S.avg.map(([k,v])=>`${hr(k)} ${v.toFixed(1)}`).join(', ')} miles per hour.">${
+        S.avg.map(([k,v])=>`<i${k===h?' data-now':''} style="height:${(v/S.top*100).toFixed(1)}%;background:${busColour(v)}"></i>`).join('')}
+        <b style="bottom:${(WALK_MPH/S.top*100).toFixed(1)}%"></b></div>
+        <div class="hours__lab"><span class="micro">${hr(0)}</span><span class="micro">${hr(12)}</span><span class="micro">${hr(23)}</span></div></div>`;
+      o+=`<div class="key"><h5>Each leg, ${hourSpan(h)}</h5>
+        <p>Street average ${busCorridor(h).toFixed(2)} mph.</p><ul>${
+        rows.map(r=>`<li><i style="background:${r.mph!=null?busColour(r.mph):'transparent'}"></i><span>${DIRS[r.dir]}, ${legName(r)}<br>${commas(r.b-r.a)} ft &middot; ${commas(r.trips)} buses</span><b>${r.mph!=null?r.mph.toFixed(2)+' mph':'no buses'}</b></li>`).join('')}</ul></div>`;
+      o+=`<p class="flag"><b>Below walking pace in ${S.under} of ${S.avg.length} hours</b>The street average against ${WALK_MPH} mph. Its slowest hour is ${hourSpan(S.slowHour[0])} at ${S.slowHour[1].toFixed(2)} mph. The slowest single leg in any hour is ${S.slowLeg.mph.toFixed(2)} mph, ${DIRS[S.slowLeg.dir]} ${legName(S.slowLeg)}, ${hourSpan(S.slowLeg.h)}.</p>`;
+      if(BUS_META.dropped.length)
+        o+=`<p class="flag"><b>Drawn blank where no leg is kept</b>${BUS_META.dropped.map(d=>
+          `${DIRS[d.dir][0].toUpperCase()+DIRS[d.dir].slice(1)}, ${legName(d)} has a timepoint ${Math.max(...d.off)} ft off 42nd Street, so its time on the street cannot be separated and it is left out.`).join(' ')} ${
+          Object.entries(S.blank).map(([d,b])=>`No ${DIRS[d]} speed at ${b.map(([x,y])=>`${commas(x)} to ${commas(y)} ft`).join(' and ')}.`).join(' ')}</p>`;
+      o+=`<div class="key"><p>MTA Bus Route Segment Speeds, ${BUS_META.route}, ${BUS_META.days[0]} to ${BUS_META.days[BUS_META.days.length-1]}, ${busMonth()}${srcDate('BUS')}. <a href="${METHOD}">Method</a></p></div>`;
+      return o;
     }
   },
   {
@@ -288,7 +366,13 @@ function renderBody(L){
     h+=`<div class="ctl"><span>Opacity</span><div class="slider">
       <input type="range" min="10" max="100" value="${Math.round(L.opacity*100)}" data-op>
       <output>${Math.round(L.opacity*100)}%</output></div></div>`;
-  h+=L.legend();
+  /* one hour slider for the whole sheet. the legend sits in its own box so it can
+     be redrawn under a slider that is mid-drag. */
+  if(L.hour)
+    h+=`<div class="ctl ctl--hour"><label for="hourIn">Hour of day, weekdays</label>
+      <output id="hourOut" for="hourIn">${hourSpan(SEL.hour)}</output>
+      <input type="range" id="hourIn" min="0" max="23" step="1" value="${SEL.hour}" aria-valuetext="${hourSpan(SEL.hour)}"></div>`;
+  h+=`<div data-legend>${L.legend()}</div>`;
   if(L.extras)
     h+=`<div class="opt">${L.extras.map(([k,t])=>
       `<button type="button" data-extra="${k}" aria-pressed="${!!L.extraOn[k]}">${t}</button>`).join('')}</div>`;
@@ -297,6 +381,8 @@ function renderBody(L){
   const op=L._body.querySelector('[data-op]');
   if(op) op.oninput=e=>{ L.opacity=+e.target.value/100;
     L._body.querySelector('output').textContent=e.target.value+'%'; paint(L); };
+  const hourIn=L._body.querySelector('#hourIn');
+  if(hourIn) hourIn.oninput=e=>setHour(+e.target.value);
   const sel=L._body.querySelector('[data-style]');
   if(sel) sel.onchange=e=>{ L.style=e.target.value; paint(L); renderBody(L); };
   L._body.querySelectorAll('[data-extra]').forEach(b=>{
@@ -308,6 +394,24 @@ function toggle(L,row,sw){
   L.on=!L.on; row.dataset.on=L.on; if(sw) sw.setAttribute('aria-checked',L.on);
   if(L.on && row.dataset.open!=='true') row.dataset.open='true';
   paint(L);
+  /* the bus also draws on the ruler, and its hour is part of the link */
+  if(L.id==='bus'){ buildRuler(); link(); }
+}
+
+/* the one place the hour changes: slider, link and boot all come through here */
+function setHour(h){
+  SEL.hour=Math.max(0,Math.min(23,Math.round(h)));
+  const L=LAYERS.find(x=>x.id==='bus'); if(!L||!L._body) return;
+  const inp=L._body.querySelector('#hourIn');
+  if(inp){ inp.value=SEL.hour; inp.setAttribute('aria-valuetext',hourSpan(SEL.hour)); }
+  L._body.querySelector('#hourOut').textContent=hourSpan(SEL.hour);
+  L._body.querySelector('[data-legend]').innerHTML=L.legend();
+  L._row.querySelector('.layer__count').textContent=L.count;
+  if(MAP_OK&&map.getSource&&map.getSource('bus')) map.getSource('bus').setData(busGeo(SEL.hour));
+  buildRuler(); link();
+  /* an open station card follows the hour, without jumping back to its top */
+  if(SEL.st!=null&&!SEL.lot){ const p=$('#readout'), t=p.scrollTop;
+    p.innerHTML=stationHTML(stationProfile(SEL.st,SEL.hour)); p.scrollTop=t; }
 }
 
 function paint(L){
@@ -330,6 +434,8 @@ function paint(L){
     if(map.getLayer('gapBand'))
       map.setLayoutProperty('gapBand','visibility',(L.on&&L.extraOn.gaps)?'visible':'none');
   }
+  if(L.id==='bus'){ map.setPaintProperty('busLine','line-opacity',L.opacity);
+    map.setPaintProperty('busCase','line-opacity',L.opacity); }
   if(L.id==='road'){ map.setPaintProperty('roadLine','line-opacity',L.opacity);
     if(map.getLayer('swLine')) map.setPaintProperty('swLine','line-opacity',L.opacity); }
 }
@@ -382,6 +488,30 @@ map.on('style.load',()=>{
     paint:{'line-color':'#6E6A62','line-opacity':.85,'line-emissive-strength':1,
       'line-width':['interpolate',['exponential',2],['zoom'],
         13,['*',['get','w'],0.035], 17,['*',['get','w'],0.56]]}});
+
+  if(BUS_STATS){
+    /* eastbound runs on the south side, westbound on the north: each bar is set off to its own
+       side of the centreline. positive line-offset is to the right of a line drawn west to east. */
+    const side=['case',['==',['get','dir'],'E'],1,-1];
+    const off=['interpolate',['exponential',2],['zoom'],13,['*',side,2.5],17,['*',side,14]];
+    map.addSource('bus',{type:'geojson',data:busGeo(SEL.hour)});
+    /* an ink edge, so the pale fast end of the ramp still reads on a pale street */
+    map.addLayer({id:'busCase',type:'line',source:'bus',slot:'middle',layout:{visibility:'none','line-cap':'butt'},
+      paint:{'line-color':'#14120F','line-emissive-strength':1,'line-offset':off,
+        'line-width':['interpolate',['exponential',2],['zoom'],13,4.5,17,13]}});
+    map.addLayer({id:'busLine',type:'line',source:'bus',slot:'middle',layout:{visibility:'none','line-cap':'butt'},
+      paint:{'line-emissive-strength':1,'line-offset':off,
+        'line-color':['case',['==',['get','mph'],null],'rgba(0,0,0,0)',
+          ['interpolate',['linear'],['get','mph'],...BUS_RAMP.flat()]],
+        'line-width':['interpolate',['exponential',2],['zoom'],13,3,17,10]}});
+    /* where no leg is kept: a dashed hairline, so the blank reads as not measured, not as missing */
+    map.addSource('busNone',{type:'geojson',data:{type:'FeatureCollection',features:
+      Object.entries(BUS_STATS.blank).flatMap(([d,list])=>list.map(([a,b])=>({type:'Feature',properties:{dir:d},
+        geometry:{type:'LineString',coordinates:[at(a),...LINE.filter(v=>v[0]>a&&v[0]<b).map(v=>[v[1],v[2]]),at(b)]}})))}});
+    map.addLayer({id:'busNone',type:'line',source:'busNone',slot:'middle',layout:{visibility:'none'},
+      paint:{'line-color':'#14120F','line-opacity':.5,'line-width':1,'line-dasharray':[2,3],
+        'line-offset':off,'line-emissive-strength':1}});
+  }
 
   map.addSource('gaps',{type:'geojson',data:{type:'FeatureCollection',features:TREE_GAPS.map(([a,b])=>{
     const pts=[]; for(let f=a;f<b;f+=60) pts.push(at(f)); pts.push(at(b));
@@ -448,24 +578,29 @@ function wire(){
         +`<span>gross width, nothing deducted</span>`);});
     map.on('mouseleave','swLine',()=>tip.dataset.show='false');
   }
+  if(map.getLayer('busLine')){
+    map.on('mousemove','busLine',e=>{const p=e.features[0].properties;
+      showTip(e,`<b>${p.mph!=null?(+p.mph).toFixed(2)+' mph':'no buses measured'}</b><em>${DIRS[p.dir]}, ${p.name}</em>`
+        +`<span>${hourSpan(SEL.hour)} &middot; ${commas(p.trips)} buses</span>`);});
+    map.on('mouseleave','busLine',()=>tip.dataset.show='false');
+  }
   map.on('move',syncRuler);
 }
 
 /* ── the station card ─────────────────────────────────────────────────── */
-/* one selection, one place. st is feet from the west end, lot is a bbl or null. */
-const SEL={st:null, lot:null};
+/* one selection, one place. st is feet from the west end, lot is a bbl or null, hour is the
+   hour of day every timed figure is read at. it opens on the street's slowest hour. */
+const SEL={st:null, lot:null, hour:BUS_STATS?BUS_STATS.slowHour[0]:17};
 const AVE_FULL={Mad:'Madison',Lex:'Lexington'};
 const aveShort=n=>AVE_FULL[n]||n;
 const aveName=n=>aveShort(n)+' Avenue';
 const ON_42=/\b42(nd)?\b/i;
 const feet=v=>v==null?'not measured here':v+' ft';
 /* '2026-05-20' to '20 May 2026', '2026-05' to 'May 2026'. no Date object, so no timezone slip. */
-const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const day=iso=>{const [y,m,d]=iso.split('-'); return (d?+d+' ':'')+MON[m-1]+' '+y;};
 const srcDate=k=>(window.SOURCE_DATE||{})[k]?`, updated ${day(window.SOURCE_DATE[k])}`:'';
 const away=x=>x.dir?`${commas(x.dist)} ft ${x.dir}`:'at this station';
 /* a count window from the baked hours, 24 hour clock in: 'weekday 4 to 7pm' */
-const hr=h=>(h%12||12)+(h<12?'am':'pm');
 const span=w=>w?`${w.day} ${hr(w.from).slice(0,(w.from<12)===(w.to<12)?-2:undefined)} to ${hr(w.to)}`:'PM';
 const PM_WIN=span((window.PED_COUNT||{}).windows&&window.PED_COUNT.windows.pm);
 const block=x=>x.west===x.east?`at ${aveShort(x.west)}`:`${aveShort(x.west)} to ${aveShort(x.east)}`;
@@ -481,7 +616,10 @@ const NOTE_WALK=`Walk widths are gross concrete. Sheds, stairs, newsstands and k
   +`or put out by a building or a business improvement district, is not in it. `
   +`Pedestrian count: NYC DOT Bi-Annual Pedestrian Counts${srcDate('PED_COUNT')}. The figure is the total for `
   +`${PM_WIN} on one count day, both sidewalks, not an average. Shown within ${COUNT_REACH} ft of the `
-  +`counter and only on its own block.`;
+  +`counter and only on its own block.`
+  +(BUS_STATS?` Bus: MTA Bus Route Segment Speeds, ${BUS_META.route}, weekdays in ${busMonth()}${srcDate('BUS')}. `
+  +`A speed is the average over a whole leg between two timepoints, not a reading at this station. `
+  +`A leg with a timepoint off 42nd Street is left out, so some stations have none.`:'');
 const NOTE_LOT=`Unbuilt floor area is lot area &times; the base floor area ratio of the zoning district, minus `
   +`floor area built. Special district rules are not applied, and a landmarked lot may not be able `
   +`to use it. Lots: NYC MapPLUTO.`;
@@ -505,7 +643,7 @@ function select(next,boot){
   const panel=$('#readout'), mark=$('#rulerMark'), ruler=$('#ruler');
   panel.hidden=!open; mark.hidden=!open;
   if(open){
-    const P=stationProfile(SEL.st);
+    const P=stationProfile(SEL.st,SEL.hour);
     mark.style.left=(SEL.st/LEN*100)+'%';
     ruler.setAttribute('aria-valuenow',SEL.st);
     ruler.setAttribute('aria-valuetext',`${commas(SEL.st)} ft from the west end. ${where(P)}`);
@@ -529,10 +667,15 @@ function select(next,boot){
     panel.innerHTML=''; $('#said').textContent=''; restSlider();
     if(pin) pin.remove();
   }
-  /* the view is a link: ?st=4000 opens this card, &lot= opens the lot inside it */
-  const q=new URLSearchParams(location.search);
+  link();
+}
+/* the view is a link: ?st=4000 opens this card, &lot= opens the lot inside it, &hr=17 switches
+   the bus on at 5pm */
+function link(){
+  const q=new URLSearchParams(location.search), open=SEL.st!=null;
   open?q.set('st',SEL.st):q.delete('st');
   SEL.lot&&open?q.set('lot',SEL.lot):q.delete('lot');
+  LAYERS.find(L=>L.id==='bus').on?q.set('hr',SEL.hour):q.delete('hr');
   const qs=q.toString();
   try{ history.replaceState(null,'',location.pathname+(qs?'?'+qs:'')+location.hash); }catch(e){}
 }
@@ -572,6 +715,9 @@ function stationHTML(P){
    +`<div><dt>Trees within ${TREE_REACH} ft</dt><dd>${P.trees.all}${P.trees.all?`<span>${P.trees.n} north, ${P.trees.s} south</span>`:''}</dd></div>`
    +`<div><dt>Nearest DOT bench</dt><dd>${P.bench?`${away(P.bench)}<span>${P.bench.side==='n'?'north':'south'} side, ${block(P.bench)}`
      +`${P.bench.installed?`, installed ${day(P.bench.installed)}`:''}</span>`:'no DOT bench recorded on the street'}</dd></div>`
+   +(P.bus?`<div><dt>M42 bus here, ${hourSpan(P.bus.hour)}</dt><dd>${[P.bus.e,P.bus.w].some(Boolean)?[P.bus.e,P.bus.w].filter(Boolean).map(r=>
+       `${r.mph!=null?r.mph.toFixed(2)+' mph':'no buses measured'} ${DIRS[r.dir]}<span>whole leg, ${legName(r)}, ${commas(r.b-r.a)} ft</span>`).join('')
+       :'no M42 speed kept here'}</dd></div>`:'')
    +(P.count?`<div><dt>Pedestrians counted</dt><dd>${commas(P.count.pm)}<span>${span(P.count.win)}, one day in ${day(P.count.p)}, counter ${away(P.count)}, ${block(P.count)}</span></dd></div>`:'')
    +`</dl>`+note(NOTE_WALK)
    +lotList('North',P.lots.n)+lotList('South',P.lots.s)
@@ -655,6 +801,16 @@ function buildRuler(){
   TREES.forEach(t=>add('rect',{x:X(t.ft),y:H-8,width:1,height:5,fill:'#2E9E4F','fill-opacity':.9}));
 
   add('line',{x1:0,x2:W,y1:27,y2:27,stroke:'#14120F','stroke-opacity':.3,'stroke-width':.8});
+
+  /* the bus at the chosen hour, either side of the axis as on the street: westbound above,
+     eastbound below. one bar per leg at true length. where no leg is kept, a dashed blank. */
+  if(BUS_STATS&&LAYERS.find(L=>L.id==='bus').on){
+    const Y={W:17,E:33};
+    BUS.filter(r=>r.h===SEL.hour).forEach(r=>add('rect',{x:X(r.a)+.5,y:Y[r.dir],width:Math.max(1,X(r.b)-X(r.a)-1),height:4,
+      fill:r.mph!=null?busColour(r.mph):'none',stroke:'#14120F','stroke-width':.6}));
+    Object.entries(BUS_STATS.blank).forEach(([d,list])=>list.forEach(([a,b])=>
+      add('line',{x1:X(a),x2:X(b),y1:Y[d]+2,y2:Y[d]+2,stroke:'#14120F','stroke-opacity':.5,'stroke-width':.8,'stroke-dasharray':'2 3'})));
+  }
 
   /* avenues, decluttered left to right: a label is drawn only if it clears the
      last one drawn, so nothing ever collides no matter how narrow the window */
@@ -745,6 +901,11 @@ let VIEW=[0,LEN];
 $('#metaLots').textContent=LOTS.features.length+' lots';
 $('#metaTrees').textContent=TREES.length+' trees';
 $('#ruler').setAttribute('aria-valuemax',LEN);
+(()=>{ /* ?hr=17 switches the bus on at that hour with its legend open */
+  const v=parseInt(new URLSearchParams(location.search).get('hr'),10);
+  if(!BUS_STATS||!(v>=0&&v<=23)) return;
+  SEL.hour=v; LAYERS.forEach(L=>{ L.open=L.id==='bus'; if(L.open) L.on=true; });
+})();
 buildPanel(); buildRuler();
 (()=>{ /* ?st=4000 opens the card at 4,000 ft. ?lot=<bbl> alone stands at that lot. */
   const q=new URLSearchParams(location.search), lot=q.get('lot');
