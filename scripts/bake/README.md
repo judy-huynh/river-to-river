@@ -38,8 +38,8 @@ From the repo root:
     python3 scripts/bake/crashes.py --check     # crashes up to the baked last day, writes nothing
     python3 scripts/bake/crashes.py             # re-derive and write window.CRASHES, window.CRASH_META
 
-    python3 scripts/bake/bus.py --check         # M42 weekday speeds for the baked month, writes nothing
-    python3 scripts/bake/bus.py                 # the newest whole month into window.BUS, window.BUS_META
+    python3 scripts/bake/bus.py --check         # M42 weekday speeds for the baked month and every month before it, writes nothing
+    python3 scripts/bake/bus.py                 # the newest whole month into window.BUS, window.BUS_META, and the month by month record into window.BUS_HIST
     python3 scripts/bake/bus.py --month 2026-07 # a named month
 
     python3 scripts/bake/field_stations.py --check  # the six count stations in field/index.html, writes nothing

@@ -184,7 +184,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .key p a{color:var(--ink)}
 .flag + .key{margin-top:12px}
 .key--after{margin-top:16px}
-/* twenty-four bars, one an hour, heights to one scale. the rule across them is walking pace,
+/* twenty-four bars, one an hour, heights to one scale. the rule across them is the walking reference,
    the ink edge is the chosen hour. */
 .hours{position:relative; display:flex; align-items:flex-end; gap:1px; height:56px;
   border-bottom:1px solid var(--ink)}
@@ -192,6 +192,8 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .hours i[data-now]{outline:1.5px solid var(--ink); outline-offset:-1px}
 .hours b{position:absolute; left:0; right:0; height:0; border-top:1px dashed var(--ink)}
 .hours__lab{display:flex; justify-content:space-between; margin-top:4px}
+/* one bar a month, same scale rule. the text under it follows at the key's own spacing */
+.hours--months + .hours__lab{margin-bottom:8px}
 /* the count series: plain ink bars, and a hatched slot where no count was taken */
 .hours--count i{background:var(--ink-50); border-top:0}
 .hours--count .hours__none{flex:2 1 0; height:100%;

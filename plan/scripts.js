@@ -106,7 +106,8 @@ const ROAD_STATS=(()=>{
 /* the bus, summarised once. a leg is one bar between two MTA timepoints, and its speed is the
    whole leg's. the corridor average is miles run over hours taken, so it is weighted by buses. */
 const BUS=window.BUS||[], BUS_META=window.BUS_META||null;
-const WALK_MPH=3.1;   /* 5 km/h, the pace the row is read against */
+/* the reference line every speed is read against, baked with its source (METHODOLOGY 3c) */
+const WALK_MPH=BUS_META&&BUS_META.walk_mph||3, WALK=WALK_MPH.toFixed(1);
 const DIRS={E:'eastbound',W:'westbound'};
 /* the CAP colours and no others, slow end hot: one stop at each multiple of walking pace */
 const BUS_RAMP=[...CAP].reverse().map(([,c],i)=>[+(WALK_MPH*(i+1)).toFixed(1),c]);
@@ -122,10 +123,31 @@ const BUS_STATS=(()=>{
       .forEach(([a,b])=>{ if(m.length&&a<=m[m.length-1][1]) m[m.length-1][1]=Math.max(m[m.length-1][1],b); else m.push([a,b]); });
     const out=[]; let at0=0; m.forEach(([a,b])=>{ if(a>at0) out.push([at0,a]); at0=b; });
     if(at0<LEN) out.push([at0,LEN]); return out;};
+  const live=BUS.filter(r=>r.mph!=null), [d0,d1]=BUS_META.day_hours,
+    lit=live.filter(r=>r.h>=d0&&r.h<d1);
   return {avg, under:avg.filter(x=>x[1]<WALK_MPH).length,
+    legHours:live.length, legUnder:live.filter(r=>r.mph<WALK_MPH).length,
+    day:lit.reduce((x,r)=>x+r.trips*r.mi,0)/lit.reduce((x,r)=>x+r.trips*r.mi/r.mph,0),
     slowHour:avg.reduce((x,y)=>y[1]<x[1]?y:x), top:Math.max(...avg.map(x=>x[1])),
     slowLeg:BUS.filter(r=>r.mph!=null).reduce((x,r)=>r.mph<x.mph?r:x),
     blank:{E:blank('E'),W:blank('W')}};
+})();
+/* the record month by month: the slowest kept leg at one hour (BUS_META.strip_hour) of every
+   month baked. legs differ between months, so each bar carries its own leg. */
+const monthName=ym=>{const [y,m]=ym.split('-'); return MON[m-1]+' '+y;};
+const BUS_HIST_STATS=(()=>{
+  const H=window.BUS_HIST; if(!H||!BUS_META) return null;
+  const h=BUS_META.strip_hour, rows=H.months.filter(x=>x.slow[h]).map(x=>{
+    const [mph,k]=x.slow[h], [dir,from,to,a,b]=H.legsets[x.set][k];
+    return {month:x.month, src:x.src, set:x.set, mph, dir, from, to, a, b};});
+  if(!rows.length) return null;
+  /* how far back the displayed month's set of legs runs unbroken */
+  let i=rows.length-1; while(i>0&&rows[i-1].set===rows[i].set) i--;
+  return {h, rows, n:H.months.length, under:rows.filter(r=>r.mph<WALK_MPH),
+    lo:rows.reduce((x,r)=>r.mph<x.mph?r:x), hi:rows.reduce((x,r)=>r.mph>x.mph?r:x),
+    top:Math.max(WALK_MPH,...rows.map(r=>r.mph)), sameSince:rows[i], sameN:rows.length-i,
+    /* the months read from the publisher's earlier file */
+    old:rows.filter(r=>r.src!==rows[rows.length-1].src)};
 })();
 /* the ramp read in the page, for the ruler and the legend. same stops, same linear blend as the map. */
 const busColour=mph=>{
@@ -139,7 +161,7 @@ const busColour=mph=>{
 const stopName=n=>(n.split('/').filter(x=>!/\b42 ST\b/.test(x)).join('/')||n).toLowerCase().replace(/\b[a-z]/g,c=>c.toUpperCase());
 const legName=r=>`${stopName(r.from)} to ${stopName(r.to)}`;
 const hourSpan=h=>`${hr(h).slice(0,(h<12)===((h+1)%24<12)?-2:undefined)} to ${hr(h+1)}`;
-const busMonth=()=>{const [y,m]=BUS_META.month.split('-'); return MON[m-1]+' '+y;};
+const busMonth=()=>monthName(BUS_META.month);
 /* six features, one per leg, carrying the chosen hour's speed. drawn along the centreline
    from timepoint to timepoint at true length, never split. */
 const busGeo=h=>({type:'FeatureCollection',features:BUS.filter(r=>r.h===h).map(r=>({
@@ -457,17 +479,17 @@ const LAYERS=[
     get fig(){ const v=busCorridor(SEL.hour);
       return [v!=null?v.toFixed(2):'none', `${v!=null?'mph':'no buses measured'}, ${hourSpan(SEL.hour)}`]; },
     get sub(){ const r=busSlowest(SEL.hour);
-      return `average over the measured legs &middot; `+(r?`slowest ${r.mph.toFixed(2)} mph &middot; `:'')+`walking ${WALK_MPH} mph`; },
+      return `average over the measured legs &middot; `+(r?`slowest leg ${r.mph.toFixed(2)} mph &middot; `:'')+`walking reference ${WALK} mph`; },
     on:false, open:false, ids:['busCase','busLine','busNone'], opacity:1,
     says:BUS_STATS?`The M42 on each leg between two MTA timepoints, averaged over the weekdays of ${busMonth()}. <b>One bar is one leg.</b> The speed is the whole leg's, not a reading at any point inside it.`:'',
     legend(){
       if(!BUS_STATS) return '';
       const h=SEL.hour, S=BUS_STATS, rows=BUS.filter(r=>r.h===h);
       let o=`<div class="key"><h4>Miles per hour</h4>
-        <p>Blended between these stops. Walking pace is taken as ${WALK_MPH} mph.</p><ul>${
-        BUS_RAMP.map(([v,c],i)=>`<li><i style="background:${c}"></i><span>${v} mph${i===BUS_RAMP.length-1?' and over':''}</span><b>${i?`${i+1}&times; walking pace`:'walking pace'}</b></li>`).join('')}</ul></div>`;
+        <p>Blended between these stops. The walking reference is ${WALK} mph.</p><ul>${
+        BUS_RAMP.map(([v,c],i)=>`<li><i style="background:${c}"></i><span>${v.toFixed(1)} mph${i===BUS_RAMP.length-1?' and over':''}</span><b>${i?`${i+1}&times; walking reference`:'walking reference'}</b></li>`).join('')}</ul></div>`;
       o+=`<div class="key"><h4>The street by hour</h4>
-        <p>All kept legs, both directions, weighted by buses measured. The line is ${WALK_MPH} mph.</p>
+        <p>All kept legs, both directions, weighted by buses measured. The line is ${WALK} mph.</p>
         <div class="hours" role="img" aria-label="Average speed by hour. ${S.avg.map(([k,v])=>`${hr(k)} ${v.toFixed(1)}`).join(', ')} miles per hour.">${
         S.avg.map(([k,v])=>`<i${k===h?' data-now':''} style="height:${(v/S.top*100).toFixed(1)}%;background:${busColour(v)}"></i>`).join('')}
         <b style="bottom:${(WALK_MPH/S.top*100).toFixed(1)}%"></b></div>
@@ -475,12 +497,30 @@ const LAYERS=[
       o+=`<div class="key"><h4>Each leg, ${hourSpan(h)}</h4>
         <p>Street average ${busCorridor(h).toFixed(2)} mph.</p><ul>${
         rows.map(r=>`<li><i style="background:${r.mph!=null?busColour(r.mph):'transparent'}"></i><span>${DIRS[r.dir]}, ${legName(r)}<br>${commas(r.b-r.a)} ft &middot; ${commas(r.trips)} buses</span><b>${r.mph!=null?r.mph.toFixed(2)+' mph':'no buses'}</b></li>`).join('')}</ul></div>`;
-      o+=`<p class="flag"><b>Below walking pace in ${S.under} of ${S.avg.length} hours</b>The street average against ${WALK_MPH} mph. Its slowest hour is ${hourSpan(S.slowHour[0])} at ${S.slowHour[1].toFixed(2)} mph. The slowest single leg in any hour is ${S.slowLeg.mph.toFixed(2)} mph, ${DIRS[S.slowLeg.dir]} ${legName(S.slowLeg)}, ${hourSpan(S.slowLeg.h)}.</p>`;
+      const [d0,d1]=BUS_META.day_hours, T=BUS_HIST_STATS;
+      o+=`<div class="key"><h4>${busMonth()}, weekdays</h4><ul>
+        <li><span>Street average, ${hr(d0)} to ${hr(d1)}</span><b>${S.day.toFixed(2)} mph</b></li>
+        <li><span>Slowest hour of the street average, ${hourSpan(S.slowHour[0])}</span><b>${S.slowHour[1].toFixed(2)} mph</b></li>
+        <li><span>Slowest single leg in any hour: ${DIRS[S.slowLeg.dir]}, ${legName(S.slowLeg)}, ${hourSpan(S.slowLeg.h)}</span><b>${S.slowLeg.mph.toFixed(2)} mph</b></li>
+        <li><span>Hours with the street average under ${WALK} mph</span><b>${S.under} of ${S.avg.length}</b></li>
+        <li><span>Leg speeds under ${WALK} mph, every leg in every hour</span><b>${S.legUnder} of ${S.legHours}</b></li></ul></div>`;
+      if(T){
+        const first=T.rows[0], last=T.rows[T.rows.length-1], say=r=>`${monthName(r.month)} ${r.mph.toFixed(2)}`;
+        o+=`<div class="key"><h4>Slowest leg, ${hourSpan(T.h)}, by month</h4>
+          <p>One bar a month, weekdays, ${monthName(first.month)} to ${monthName(last.month)}. The line is ${WALK} mph. The slowest leg was under it in ${T.under.length} of ${T.rows.length} months.</p>
+          <div class="hours hours--months" role="img" aria-label="Slowest leg, ${hourSpan(T.h)}, in miles per hour. ${T.rows.map(say).join(', ')}.">${
+          T.rows.map(r=>`<i${r.month===BUS_META.month?' data-now':''} style="height:${(r.mph/T.top*100).toFixed(1)}%;background:${busColour(r.mph)}"></i>`).join('')}
+          <b style="bottom:${(WALK_MPH/T.top*100).toFixed(1)}%"></b></div>
+          <div class="hours__lab"><span class="micro">${monthName(first.month)}</span><span class="micro">${monthName(last.month)}</span></div>
+          <p>Lowest ${T.lo.mph.toFixed(2)} mph in ${monthName(T.lo.month)}, highest ${T.hi.mph.toFixed(2)} mph in ${monthName(T.hi.month)}.${T.under.length?` The months under ${WALK} mph:`:''}</p>${
+          T.under.length?`<ul>${T.under.map(r=>`<li><i style="background:${busColour(r.mph)}"></i><span>${monthName(r.month)} &middot; ${commas(r.b-r.a)} ft leg<br>${DIRS[r.dir]}, ${legName(r)}</span><b>${r.mph.toFixed(2)} mph</b></li>`).join('')}</ul>`:''}</div>`;
+        o+=`<p class="flag"><b>Each bar is one leg in one hour</b>Each bar is the slowest of that month's legs between ${hourSpan(T.h)}, averaged over its weekdays. It is one leg and does not describe the whole street. The MTA moved its timepoints during the record, so the legs are not the same stretches of street in every month. The legs of ${busMonth()} have been the same since ${monthName(T.sameSince.month)}, ${T.sameN} of the ${T.rows.length} months.</p>`;
+      }
       if(BUS_META.dropped.length)
         o+=`<p class="flag"><b>Drawn blank where no leg is kept</b>${BUS_META.dropped.map(d=>
           `${DIRS[d.dir][0].toUpperCase()+DIRS[d.dir].slice(1)}, ${legName(d)} has a timepoint ${Math.max(...d.off)} ft off 42nd Street, so its time on the street cannot be separated and it is left out.`).join(' ')} ${
           Object.entries(S.blank).map(([d,b])=>`No ${DIRS[d]} speed at ${b.map(([x,y])=>`${commas(x)} to ${commas(y)} ft`).join(' and ')}.`).join(' ')}</p>`;
-      o+=`<div class="key"><p>MTA Bus Route Segment Speeds, ${BUS_META.route}, ${BUS_META.days[0]} to ${BUS_META.days[BUS_META.days.length-1]}, ${busMonth()}${srcDate('BUS')}. <a href="${METHOD}">Method</a></p></div>`;
+      o+=`<div class="key"><p>MTA Bus Route Segment Speeds, ${BUS_META.route}, ${BUS_META.days[0]} to ${BUS_META.days[BUS_META.days.length-1]}, ${busMonth()}${srcDate('BUS')}.${BUS_HIST_STATS&&BUS_HIST_STATS.old.length?` ${monthName(BUS_HIST_STATS.old[0].month)} to ${monthName(BUS_HIST_STATS.old[BUS_HIST_STATS.old.length-1].month)} are from the MTA's earlier file, ${BUS_HIST_STATS.old[0].src}${srcDate('BUS_OLD')}.`:''} <a href="${METHOD}">Method</a></p></div>`;
       return o;
     }
   },
