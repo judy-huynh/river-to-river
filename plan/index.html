@@ -67,6 +67,12 @@
       <div class="mapshot__credit" id="mapCredit"></div>
     </div>
 
+    <!-- the printed sheet only, and only when there is no picture of the map: the frame is drawn empty and says so -->
+    <div class="mapnone" id="mapNone">
+      <p class="micro">The drawing did not load</p>
+      <p>No picture of the map was available when this sheet was printed. The ruler and every figure on the sheet are computed from local data and print as normal.</p>
+    </div>
+
     <!-- the whole street, always visible, doubles as the navigator -->
     <!-- also a slider: a press picks a station, arrow keys walk it 100 ft at a time -->
     <div class="ruler" id="ruler" tabindex="0" role="slider" aria-orientation="horizontal"

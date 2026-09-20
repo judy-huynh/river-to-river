@@ -55,7 +55,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 .head__tools{display:flex; flex-wrap:wrap; gap:8px; flex:0 0 auto; min-width:0}
 /* only the printed sheet has these: the picture of the map, the station mark inside the ruler
    drawing, and the foot */
-#mapShot, .printfoot, .pmark{display:none}
+#mapShot, .mapnone, .printfoot, .pmark{display:none}
 .head__meta dd{overflow-wrap:break-word}
 .head__meta div{display:flex; flex-direction:column; gap:3px; justify-content:flex-end}
 .head__meta dt{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
@@ -428,16 +428,22 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   .ctl:not(.ctl--hour), .ctl--hour input, .card__top .mini, .ruler__mark, .mapboxgl-ctrl-top-right{display:none !important}
   .pmark{display:inline}
 
-  /* the drawing comes after the rail in the source, and first on paper */
-  .sheet{display:flex; flex-direction:column}
-  /* the drawing has the first page. the words start the second. */
-  .draw{display:block; order:-1; height:auto; min-height:0; break-after:page}
+  /* the drawing comes after the rail in the source. scripts.js lifts it above the rail as the sheet
+     goes to print. plain blocks, because a flex or grid item holding columns is pushed whole to the
+     next page, and block flow lets the questions start under the drawing on the first page. */
+  .sheet{display:block; width:100%; overflow:visible}
+  .draw{display:block; height:auto; min-height:0; margin-bottom:12px}
   /* if the first page ever runs over, only the foot goes over, never the map */
   #mapShot, .ruler{break-inside:avoid}
   /* the picture stands in for the canvas. north, the scale bar and the basemap's credit sit on it. */
-  /* the live map never prints: a WebGL canvas comes out blank. with no picture yet, the sheet has no map. */
+  /* the live map never prints: a WebGL canvas comes out blank */
   #map{display:none}
   :root[data-shot] #mapShot{display:block; position:relative; border-bottom:1.5px solid var(--ink)}
+  /* no picture: the same frame, drawn empty and labelled. it is the default, so it also prints if the script never ran. */
+  :root:not([data-shot]) .mapnone{display:flex; flex-direction:column; justify-content:center; gap:8px;
+    aspect-ratio:1056 / 284; padding:16px 24px; border:1.5px solid var(--ink); border-top:0; break-inside:avoid}
+  .mapnone p{margin:0; max-width:64ch; font-size:var(--t-body); line-height:1.5; color:var(--ink-70)}
+  .mapnone .micro{color:var(--ink-label)}
   /* a real picture, as wide as the frame, so what is set over it is measured against the same box */
   #mapPrint{display:block; width:100%; height:auto}
   .mapshot__pin{position:absolute; width:2px; height:72px; margin:-36px 0 0 -1px; background:var(--ink)}
@@ -467,17 +473,21 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   #layerList:has(.layer[data-open="true"]) .group{display:none}
   /* with no question open, what is drawn on the map still gets its key */
   #layerList:not(:has(.layer[data-open="true"])) .layer[data-on="true"] .layer__body{display:block}
-  /* a shut question stays whole. an open one is long and has to run on. */
-  .layer:not([data-open="true"]), .group, .key > p, .says{break-inside:avoid}
+  /* a shut question stays whole. one that prints its key, open or drawn on the map, is long and has to run on. */
+  .layer:not([data-open="true"]):not([data-on="true"]), .group{break-inside:avoid}
+  /* a paragraph may run on into the next column, never by a single line */
+  .key > p, .says{orphans:2; widows:2}
   .group{background:none; padding:4px 0; min-height:0; break-after:avoid}
   .layer__bar{grid-template-columns:minmax(0,1fr); padding:0}
   .layer__q{padding:8px 0; min-height:0; grid-template-columns:minmax(0,1fr) fit-content(46%)}
   .layer__body{padding:0 0 16px}
+  /* key rows are set closer on paper: there is no finger to aim at them */
+  .key li, .key--rank li{padding:4px 0}
   .panel{max-height:none; overflow:visible; border:0; padding:0 0 16px; background:none}
-  .key li, .panel dl div, .lotrows li, .xsec, .flag, .hours, .hours__lab{break-inside:avoid}
+  .key li, .sizes, .panel dl div, .lotrows li, .xsec, .flag, .hours, .hours__lab{break-inside:avoid}
   .hours, .key > p, .xsec{break-after:avoid}
   /* a heading is never left at a page end without what it heads */
-  .panel h3, .panel h4, .layer__body h3, .layer__body h4, .card__top, .layer[data-open="true"] .layer__bar{break-after:avoid}
+  .panel h3, .panel h4, .layer__body h3, .layer__body h4, .card__top, .layer[data-open="true"] .layer__bar, .layer[data-on="true"] .layer__bar{break-after:avoid}
   .layer__bar{break-inside:avoid}
   /* words that only mean something on a screen */
   .scr{display:none}

@@ -254,11 +254,13 @@ const spark=(W,H)=>{
 };
 
 /* ── map ──────────────────────────────────────────────────────────────── */
-mapboxgl.accessToken=TOKEN;
+/* with no network the map library itself never arrives. the sheet still has to draw. */
+const GL=typeof mapboxgl!=='undefined';
+if(GL) mapboxgl.accessToken=TOKEN;
 
 /* the street's own bounding box, so the opening view frames the subject at any
    window size. a fixed zoom only ever looked right on one screen. */
-const STREET_BOUNDS=LINE.reduce((b,[,lng,lat])=>b.extend([lng,lat]),
+const STREET_BOUNDS=GL&&LINE.reduce((b,[,lng,lat])=>b.extend([lng,lat]),
   new mapboxgl.LngLatBounds(at(0),at(0)));
 const FIT={bearing:BEARING, padding:{top:48,bottom:48,left:28,right:28}, maxZoom:15.4};
 
@@ -269,6 +271,7 @@ const FIT={bearing:BEARING, padding:{top:48,bottom:48,left:28,right:28}, maxZoom
    readable instead of showing a page of empty headings. */
 let MAP_OK=true, map;
 try{
+  if(!GL) throw new Error('the map library did not load');
   map=new mapboxgl.Map({container:'map', style:'mapbox://styles/mapbox/standard',
     bounds:STREET_BOUNDS, fitBoundsOptions:{...FIT, duration:0},
     pitch:0, antialias:true});
@@ -292,7 +295,7 @@ try{
     + '<p style="font-size:13px">Most often this is WebGL being disabled or unavailable.</p></div>';
   console.warn('map failed to construct:', err && err.message);
 }
-map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
+if(MAP_OK) map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
 
 /* the constructor measures the container before the mobile media query has laid it
    out, so the opening fit was computed against the wrong box and the street ran off
@@ -365,7 +368,7 @@ const TREE_ROW=
         .sort((a,b)=>b[1]-a[1]).slice(0,4);
       const spTop=sp.length?sp[0][1]:1;
       h+=`<div class="key key--rank"><h4>Most common species</h4>
-        <p>${new Set(TREES.map(t=>t.common)).size} species in all. Hover any tree on the map for its name.</p><ul>${
+        <p>${new Set(TREES.map(t=>t.common)).size} species in all.<span class="scr"> Hover any tree on the map for its name.</span></p><ul>${
         sp.map(([s,c])=>`<li><div class="row"><span>${s}</span><b>${c}</b></div>`
           + `<i class="bar" style="width:${Math.max(3,Math.round(c/spTop*100))}%"></i></li>`).join('')}</ul></div>`;
       if(this.extraOn.gaps)
@@ -1447,6 +1450,8 @@ function syncRuler(){
   VIEW=[lo,hi];
   if(SEL.st==null) restSlider();
   const win=$('#rulerWin'), edge=ft=>Math.max(0,Math.min(1,share(ft)));
+  /* with no map there is no view to mark: the ruler says only what it is */
+  if(!MAP_OK){ win.hidden=true; $('#rulerMid').textContent=`the whole street · ${commas(LEN)} ft`; return; }
   win.style.left=(edge(a)*100)+'%';
   win.style.width=Math.max(.5,(edge(c)-edge(a))*100)+'%';
   const mid=(lo+hi)/2, ave=AVES.reduce((x,y)=>Math.abs(y[0]-mid)<Math.abs(x[0]-mid)?y:x);
@@ -1542,11 +1547,13 @@ function printFoot(){
   const d=new Date(), iso=[d.getFullYear(),d.getMonth()+1,d.getDate()].map(n=>String(n).padStart(2,'0')).join('-');
   $('#printLink').textContent=viewLink(); $('#printDate').textContent=day(iso); $('#printMethod').textContent=METHOD;
   /* the basemap is credited only when there is one on the sheet */
-  const base=basemapCredit(); $('#printBaseText').textContent=base; $('#printBase').hidden=!base;
+  const base=document.documentElement.dataset.shot?basemapCredit():''; $('#printBaseText').textContent=base; $('#printBase').hidden=!base;
 }
 /* the ruler is set out for the sheet's width, then scaled */
-addEventListener('beforeprint',()=>{ PRINTING=true; placeMeta(); snapshot(); printFoot(); buildRuler(PRINT_W); });
-addEventListener('afterprint',()=>{ PRINTING=false; placeMeta(); buildRuler(); refit(); });
+/* on paper the drawing is read first. it is lifted above the rail for the print and put back after. */
+function placeDraw(){ const rail=$('#layers'), draw=$('.draw'); PRINTING?rail.before(draw):rail.after(draw); }
+addEventListener('beforeprint',()=>{ PRINTING=true; placeMeta(); placeDraw(); snapshot(); printFoot(); buildRuler(PRINT_W); });
+addEventListener('afterprint',()=>{ PRINTING=false; placeMeta(); placeDraw(); buildRuler(); refit(); });
 (()=>{ /* the button's own words change, so the confirmation is never colour alone */
   const b=$('#copyLink'), REST=b.textContent; let t;
   /* as wide as its longest label, measured as drawn, so the tools do not shift when it answers */
