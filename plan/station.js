@@ -10,6 +10,8 @@ const SW=window.SIDEWALK||[];
 const BENCHES=window.BENCHES||[], PED=window.PED_COUNT||null, BUS=window.BUS||[];
 const TIER=window.PED_TIER||[];
 const CURB=window.CURB||[], SHEDS=window.SHEDS||[], CRASHES=window.CRASHES||[];
+/* the stretches a published vision names, baked by scripts/bake/vision.py */
+const VISION=window.VISION||null;
 const LEN=LINE[LINE.length-1][0];
 /* where each cross street meets the line, baked from the city centerline. AVES is the ticked
    avenues as [station, label, west edge, east edge]; nothing here is typed */
@@ -112,6 +114,8 @@ function stationProfile(ft,hour){
   const rd=covering(ROAD.features.map(f=>f.properties),x=>[x.a,x.b]);
   /* the plan's tier for the segment under the station. null past either end of the source. */
   const tr=covering(TIER,x=>[x.a,x.b]);
+  /* the published stretch the station falls in. null between stretches. */
+  const vis=VISION?covering(VISION.stretches,x=>[x.a,x.b]):null;
   const [w,e]=flank(ft);
   const near=TREES.filter(t=>Math.abs(t.ft-ft)<=TREE_REACH);
   /* the lots that face the reader: the first boundary the perpendicular meets on each side,
@@ -155,6 +159,7 @@ function stationProfile(ft,hour){
     curb:CURB.length?{n:face('n'), s:face('s')}:null,
     crashes:CRASHES.length?{reach:CRASH_REACH, place:place?{ft:place.ft, name:place.name, n:place.n, inj:place.inj,
       dist:Math.abs(place.ft-ft), dir:place.ft>ft?'east':place.ft<ft?'west':null}:null}:null,
+    vision:vis?{a:vis.a, b:vis.b, from:vis.from, to:vis.to, stated:vis.stated, place:vis.place, says:vis.says, basis:vis.basis||null}:null,
     bench, count, bus:hour==null?null:busAt(ft,hour), lots:{n,s}, outside:{n:outside('n'),s:outside('s')}, biggest};
 }
 

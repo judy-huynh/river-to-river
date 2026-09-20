@@ -45,9 +45,12 @@ From the repo root:
     python3 scripts/bake/field_stations.py --check  # the six count stations in field/index.html, writes nothing
     python3 scripts/bake/field_stations.py          # re-derive from plan/data.js and write them into the page
 
+    python3 scripts/bake/vision.py --check      # the stretches a published vision names, writes nothing
+    python3 scripts/bake/vision.py              # station them from window.AVES and write window.VISION
+
 `--check` exits 0 when the re-derived set equals what is baked, 1 when it differs. The shed permits
 and the crashes come from sources that change daily, so their check re-derives the set as of the
-baked day: a difference there means the source has moved and the set wants re-baking. `lot_rule.py` reads no network source: its pool is the snapshot `source/lots_pool.geojson`,
+baked day: a difference there means the source has moved and the set wants re-baking. `vision.py` reads no network source either: its source is an article read by a person, written down in the script, and only the stations are derived. `lot_rule.py` reads no network source: its pool is the snapshot `source/lots_pool.geojson`,
 the 130 MapPLUTO lots baked before any rule was applied. Large sources
 download once to a `river-to-river` folder in the system temp directory (on macOS that is under
 `/var/folders`, not `/tmp`), never into the repo. Set `R2R_CACHE` to use another folder, for

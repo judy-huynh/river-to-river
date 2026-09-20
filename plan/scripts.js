@@ -193,6 +193,8 @@ const PED_STATS=PED&&PED_LAST?(()=>{
 })():null;
 /* the DOT priority tier, summarised once. runs are consecutive segments of one tier merged,
    on is each tier found on the street, blank is where the source has no segment. */
+/* the stretches a published vision names. scripts/bake/vision.py */
+const VISION=window.VISION||null;
 const TIER=window.PED_TIER||[], TIER_META=(window.PED_TIER_META||{}).tiers||[];
 const TIER_STATS=TIER.length?(()=>{
   const runs=[]; TIER.forEach(r=>{ const m=runs[runs.length-1];
@@ -1071,7 +1073,8 @@ function select(next,boot){
     const P=stationProfile(SEL.st,SEL.hour);
     mark.style.left=(share(SEL.st)*100)+'%';
     ruler.setAttribute('aria-valuenow',SEL.st);
-    ruler.setAttribute('aria-valuetext',`${commas(SEL.st)} ft from the west end. ${where(P)}`);
+    ruler.setAttribute('aria-valuetext',`${commas(SEL.st)} ft from the west end. ${where(P)}`
+      +(P.vision?`. Published vision, ${VISION.by}: ${P.vision.place}`:''));   /* the band has no other text form */
     const lot=SEL.lot&&LOT_BY_BBL.get(SEL.lot);
     /* one short line is announced, not the whole card. walking the ruler already speaks
        through the slider, so it stays quiet then. */
@@ -1120,6 +1123,11 @@ function link(){
   printFoot();
 }
 
+/* where a published stretch runs, in the piece's own terms. a stretch the piece gives no cross streets
+   for says so, and names the avenue crossings it is drawn between. */
+const crossName=n=>{ const v=(window.AVES||[]).find(x=>x.name===n); return v&&v.label?aveName(v.label):n; };
+const visionWhere=v=>v.stated?(v.basis?`${v.place}. ${v.basis}`:`${v.place}, as the piece gives it.`)
+  : `The piece names ${v.place} without cross streets. Drawn ${v.from?crossName(v.from):'the west end'} to ${v.to?crossName(v.to):'the east end'}, approximate.`;
 function stationHTML(P){
   const parts=[['n',P.north,'North walk'],['r',P.road&&P.road.w,'Roadway'],['s',P.south,'South walk']];
   const whole=parts.every(x=>x[1]!=null);
@@ -1167,6 +1175,8 @@ function stationHTML(P){
        :`none within ${P.crashes.reach} ft`)(P.crashes.place)}</dd></div>`:'')
    +(TIER_STATS?`<div><dt>DOT pedestrian priority tier</dt><dd>${P.tier?`${P.tier.name}<span>tier ${P.tier.rank} of ${TIER_META.length}, a planning rank, not a count</span>`:'no tier in the source here'}</dd></div>`:'')
    +(P.count?`<div><dt>Pedestrians counted</dt><dd>${commas(P.count.pm)}<span>${span(P.count.win)}, one day in ${day(P.count.p)}, counter ${away(P.count)}, ${block(P.count)}</span></dd></div>`:'')
+   +(P.vision?`<div class="pub"><dt>Published vision: ${VISION.by}</dt><dd>${P.vision.says}<span>${visionWhere(P.vision)} `
+     +`<a href="${VISION.url}">${VISION.title}</a>, ${VISION.by}, read ${day(VISION.accessed)}. <a href="${METHOD}">Method</a></span></dd></div>`:'')
    +`</dl>`+note(NOTE_WALK)
    +lotList('North',P.lots.n,P.outside.n)+lotList('South',P.lots.s,P.outside.s)
    +(P.lots.n.length+P.lots.s.length?note(NOTE_LOT):'');
@@ -1251,6 +1261,8 @@ const INK=token('--ink'), PAPER=token('--paper'), LABEL=token('--ink-label'), LE
    ink, as the bus bars are, so a pale tier still stands off the ruler. */
 const TIER_INK={1:'--ink-70',2:'--ink-30',3:'--hair-2',4:'--hair'};
 const tierFill=rank=>({fill:TIER_INK[rank]?token(TIER_INK[rank]):'none',stroke:INK,'stroke-width':.6});
+/* a published stretch: ink already on the sheet, dashed where its ends are approximate */
+const visionBar=stated=>stated?{fill:token('--hair-2'),stroke:INK,'stroke-width':.6}:{fill:'none',stroke:INK,'stroke-width':.8,'stroke-dasharray':'2 2'};
 const blankLine=(add,X,a,b,y)=>add('line',{x1:X(a),x2:X(b),y1:y,y2:y,stroke:INK,'stroke-opacity':.5,'stroke-width':.8,'stroke-dasharray':'2 3'});
 const RULER_BANDS=[
   { id:'tier', has:!!TIER_STATS, keep:1,
@@ -1273,12 +1285,12 @@ const RULER_BANDS=[
       BUS.filter(r=>r.h===SEL.hour).forEach(r=>add('rect',{x:X(r.a)+.5,y:Y[r.dir],width:Math.max(1,X(r.b)-X(r.a)-1),height:bh,
         fill:r.mph!=null?busColour(r.mph):'none',stroke:INK,'stroke-width':.6}));
       Object.entries(BUS_STATS.blank).forEach(([d,list])=>list.forEach(([a,b])=>blankLine(add,X,a,b,Y[d]+bh/2))); } },
-  { id:'trees', has:TREES.length>0, wide:true, keep:4,
+  { id:'trees', has:TREES.length>0, wide:true, keep:5,
     caption:()=>[[{sw:{fill:LEAF,'fill-opacity':.9}, t:'Street trees'},{sw:{fill:ALARM,'fill-opacity':.45}, t:`over ${TREE_GAP_MIN} ft with none`}]],
     draw(add,X,y,h){
       TREE_GAPS.forEach(([a,b])=>add('rect',{x:X(a),y,width:X(b)-X(a),height:h,fill:ALARM,'fill-opacity':.45}));
       TREES.forEach(t=>add('rect',{x:X(t.ft),y,width:1,height:h,fill:LEAF,'fill-opacity':.9})); } },
-  { id:'marks', has:!!(BENCH_STATS||PED_STATS||SHED_STATS), keep:3, joins:true,
+  { id:'marks', has:!!(BENCH_STATS||PED_STATS||SHED_STATS), keep:4, joins:true,
     /* each bench solid, the counter a ring, as on the map. a building with a shed permit in
        force is a narrow bar at its station, never a length: narrow so it clears the counter's ring */
     caption:()=>[[...(SHED_STATS?[{sw:{fill:INK}, t:`shed permit in force, ${SHED_STATS.live.length} building${SHED_STATS.live.length===1?'':'s'}`}]:[]),
@@ -1288,7 +1300,16 @@ const RULER_BANDS=[
       add('line',{x1:X(0),x2:X(LEN),y1:cy,y2:cy,stroke:INK,'stroke-opacity':.13,'stroke-width':1});
       if(SHED_STATS) SHED_STATS.live.forEach(x=>add('rect',{x:X(x.ft)-1.5,y,width:3,height:h,fill:INK}));
       if(BENCH_STATS) BENCHES.forEach(b=>add('circle',{cx:X(b.ft),cy,r:3,fill:INK}));
-      if(PED_STATS) add('circle',{cx:X(PED.ft),cy,r:4,fill:PAPER,stroke:INK,'stroke-width':1.5}); } }
+      if(PED_STATS) add('circle',{cx:X(PED.ft),cy,r:4,fill:PAPER,stroke:INK,'stroke-width':1.5}); } },
+  { id:'vision', has:!!VISION, keep:3,
+    /* the stretches the piece names. one whose ends the piece gives is a ruled bar, one drawn
+       between the nearest avenue crossings, or to the end of the street, is a dashed outline, and the key says which */
+    caption:()=>{ const n=VISION.stretches.filter(v=>!v.stated).length, some=n>0,
+        keys=(full)=>[{sw:visionBar(true), t:full?'stretch, extent given in the piece':'extent given'},
+          ...(some?[{sw:visionBar(false), t:full?'extent not given, ends approximate':'approximate'}]:[])];
+      return [[{t:`Published vision: ${VISION.by}, ${VISION.title}`},...keys(1)],[{t:`Published vision: ${VISION.by}`},...keys(1)],[{t:`Published vision: ${VISION.by}`},...keys(0)]]; },
+    draw(add,X,y,h){ VISION.stretches.forEach(v=>
+      add('rect',{x:X(v.a)+.5,y:y+.5,width:Math.max(1,X(v.b)-X(v.a)-1),height:h-1,...visionBar(v.stated)})); } }
 ];
 
 /* drawn to the ruler's own width, or to a width handed in when the sheet is about to print */
@@ -1358,7 +1379,9 @@ function buildRuler(force){
       set.push({B,rows,y,bar:y+rows.length*LH+PAD,h}); y+=rows.length*LH+PAD+h+GAP; });
     const axis=y+3; return {set,axis,H:axis+5+LH+1}; };
   /* over the ceiling, the band held least goes, down to the ones always drawn */
-  const ceiling=!force&&innerHeight<SHORT_WINDOW?RULER_MAX_SHORT:RULER_MAX;
+  /* the published band came after the ceilings were set: where it is drawn the ceiling is one
+     band taller. the bands drawn before it are unchanged and the map is one band shorter. */
+  const ceiling=(!force&&innerHeight<SHORT_WINDOW?RULER_MAX_SHORT:RULER_MAX)+(bands.some(B=>B.id==='vision')?LH+PAD+BAR+GAP:0);
   let laid=layout(bands);
   while(laid.H>ceiling&&bands.length>RULER_KEEP){
     const drop=bands.reduce((x,B)=>B.keep>x.keep?B:x); bands=bands.filter(B=>B!==drop); laid=layout(bands); }

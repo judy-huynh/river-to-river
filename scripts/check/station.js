@@ -100,6 +100,17 @@ for(let ft=0;ft<=LEN;ft+=25){
   if(!on){ assert.ok(Q.west===null?ft<A[0].ft:Q.west.ft<ft); assert.ok(Q.east===null?ft>A[A.length-1].ft:Q.east.ft>ft);
     assert.ok(!A.some(v=>v.label&&v.ft>(Q.west?Q.west.ft:-1)&&v.ft<(Q.east?Q.east.ft:LEN+1))); }
 }
+/* a published stretch runs between two baked cross streets (or a river end), stretches do not
+   overlap, and the card names a stretch exactly where one covers the station */
+const V=window.VISION;
+V.stretches.forEach((v,i)=>{ const w=v.from?A.find(x=>x.name===v.from):{ft:0}, e=v.to?A.find(x=>x.name===v.to):{ft:LEN};
+  assert.ok(w&&e,`stretch ${v.place} names a street the avenues do not hold`);
+  assert.deepStrictEqual([v.a,v.b],[w.ft,e.ft]); assert.ok(v.b>v.a);
+  assert.strictEqual(typeof v.stated,'boolean'); assert.ok(v.says&&v.place);
+  if(i) assert.ok(v.a>=V.stretches[i-1].b); });
+assert.ok(V.url&&/^\d{4}-\d\d-\d\d$/.test(V.accessed));
+for(let ft=0;ft<=LEN;ft+=25){ const q=S.stationProfile(ft).vision, hit=V.stretches.filter(v=>ft>=v.a&&ft<=v.b);
+  assert.strictEqual(q!==null,hit.length>0); if(q) assert.ok(hit.some(v=>v.a===q.a&&v.says===q.says)); }
 /* two sources name cross streets on their own records. each must agree with the baked avenues:
    a metered face lies between the two streets its source names, with no ticked avenue inside
    it, and between() says the same when both are ticked */

@@ -273,6 +273,10 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 /* when label and value do not fit side by side the value drops to its own line, whole */
 .panel dd{margin-left:auto}
 .panel dd span{display:block}
+/* a published proposal is a sentence, so it is set as one: full width, read from the left */
+.panel .pub dd{flex:1 1 100%; margin-left:0; text-align:left; line-height:1.45}
+.panel .pub dd span{margin-top:4px; color:var(--ink-50)}
+.panel dd a{color:var(--ink)}
 .panel h4{display:block; margin:16px 0 0; font-weight:400}
 .lotrows{list-style:none; margin:8px 0 0; padding:0}
 .lotrows li{border-top:1px solid var(--hair)}

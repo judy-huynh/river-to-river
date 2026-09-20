@@ -116,6 +116,7 @@ fill the sheet, and the foot of the sheet says so and gives the screen's width.
 | `CURB` | NYC DOT Parking Meters, ParkNYC Block Faces `e7yp-wx55` | 18 metered block faces, each a from/to band on its own side. See section 3e |
 | `SHEDS`, `SHEDS_META` | DOB NOW: Build, Approved Permits `rbx6-tga4`, with DOB Permit Issuance `ipu4-2q9a` for history | One record per building whose newest sidewalk shed permit is not signed off, stationed, with the run of permits dated. A permit, not a sighting, and no shed length. See section 3f |
 | `CRASHES`, `CRASH_META` | NYPD Motor Vehicle Collisions, Crashes `h9gi-nx95` | 1,192 police-reported crashes within 75 ft of the centreline since 1 Jan 2021, stationed, with people injured. A count, not a rate. See section 3g |
+| `VISION` | KPF, "A Fix for 42nd Street", kpf.com, published 13 Feb 2026, read 20 Sep 2026 | The 5 stretches the piece names, each a from/to band between baked cross streets, with a paraphrase of what it proposes there. 3 have the extent the piece gives, 2 are approximate. See section 3h |
 | `SOURCE_DATE` | The open data portal's own metadata | The date each publisher last changed its rows, read at bake time |
 
 Derived figures computed in the page, not typed:
@@ -468,7 +469,8 @@ never calls it demand or volume.**
    22,769 Neighborhood, 34,195 Community, 64,975 Baseline. These are raw rows, repeats included.
    The page reads "tier 1 of 5" from this list, not from prose.
 
-**On the ruler.** The ruler carries four bands, each with a caption and a bar on the street's own
+**On the ruler.** The ruler carries four bands of measured evidence, and a fifth for a published
+vision (section 3h), each with a caption and a bar on the street's own
 scale, drawn whether or not any rail row is on: the priority tier (consecutive segments of one
 tier merged into runs, ink at two strengths, captioned "DOT pedestrian priority tier"), the M42
 speed at the hour the slider is on (section 3c, one bar per leg, westbound above eastbound, dashed
@@ -478,7 +480,9 @@ The ruler's height is computed from the bands drawn and from the label height me
 reader's browser, and it has a ceiling: 128 px, or 96 px in a window under 720 px high
 (`RULER_MAX`, `RULER_MAX_SHORT`, `SHORT_WINDOW` in `plan/scripts.js`). When the bands do not fit
 under the ceiling the ruler shows fewer bands, never smaller type: the tree band goes first, then
-the bench, counter and shed band. The priority tier and the bus are always drawn, so a ruler with
+the bench, counter and shed band, then the published vision band. Where the published vision band
+is drawn the ceiling is one band taller (one label line, the bar and its gaps). The bands drawn
+before it are unchanged and the map is one band shorter. The priority tier and the bus are always drawn, so a ruler with
 wrapped captions and large type can still pass the ceiling. Under 620 px the tree band is left
 off whatever the height. Every band drawn has its caption. When the tree caption and the caption
 of the band under it both fit on one line they share that line, and the two bars sit under it in
@@ -664,6 +668,71 @@ that crashes on an avenue inside an intersection are counted. Checked in
 
 `--check` re-derives the set up to the baked last day. The police amend old reports, and an
 amended report shows as a difference. Reproduce with `python3 scripts/bake/crashes.py --check`.
+
+## 3h. A published vision: KPF (added 20 Sep 2026)
+
+**Source.** KPF, "A Fix for 42nd Street", https://www.kpf.com/story/a-fix-for-42nd-street. The
+page's own metadata dates it 13 Feb 2026. Read 20 Sep 2026. It is an article and has no rows to fetch: it
+was read by a person, and what was read is written down once in `scripts/bake/vision.py`, which
+bakes `window.VISION`. Nothing from the piece is quoted on the sheet. Every sentence about a
+proposal is a paraphrase.
+
+**What the piece proposes.** For the whole street, a streetcar from river to river ending at a
+new ferry terminal on each river. The body text says a dedicated streetcar. One image caption
+gives the street-level transit as a streetcar or bus rapid transit. The whole street proposal is
+kept in `window.VISION.whole` and here. The card prints only the stretch's own line. Then a
+different move for each of five stretches.
+
+**How a stretch is stationed.** No station is typed. Each end of a stretch is a cross street
+named as `window.AVES` names it, and its station is that cross street's `ft`, so a stretch moves
+with the avenues when they are re-baked. An end at a river is the end of `LINE42`. The bake stops
+if a named cross street is not in `AVES`, if an east end is not east of its west end, or if two
+stretches overlap.
+
+| Stretch as the piece names it | Drawn between | Stations, ft | Length, ft | Extent |
+|---|---|---|---|---|
+| Hudson River to Ninth Avenue | west end of `LINE42`, 9 Avenue | 0 to 2,744 | 2,744 | given in the piece |
+| Times Square | 8 Avenue, Avenue of the Americas | 3,643 to 5,435 | 1,792 | **approximate** |
+| Fifth Avenue to Park Avenue | 5 Avenue, Park Avenue | 6,456 to 7,476 | 1,020 | given in the piece |
+| Lexington Avenue to Second Avenue | Lexington Avenue, 2 Avenue | 7,986 to 9,200 | 1,214 | given in the piece |
+| The far east end | 2 Avenue, east end of `LINE42` | 9,200 to 10,411 | 1,211 | **approximate** |
+
+5 stretches, 3 with the extent the piece gives and 2 approximate. 7,981 of the street's 10,411 ft
+fall inside a stretch. These figures, and the 457 ft below, are printed by
+`python3 scripts/bake/vision.py`.
+
+**The two approximate stretches.** The piece names Times Square and the far east end as places
+and gives neither of them cross streets. Times Square is drawn between the nearest avenue
+crossings either side of it, 8th and 6th Avenue. The piece says the far east
+end of the street, so that stretch runs to the east end of `LINE42`, 457 ft past 1st Avenue,
+the last avenue crossing. Its west end is 2nd Avenue, the crossing where the stretch before it
+ends. That choice is made by this project and the piece does not make it. The band draws these two as a dashed
+outline, its caption keys the dashed outline as approximate, and the station card says the piece
+names the place without cross streets and names the ends it is drawn between.
+
+**A judgement in one given extent.** The piece gives Lexington to Second Avenue as the extent of
+its second office cluster in the part that describes the street's density. The part that makes
+the proposal refers to the same cluster as east of Grand Central and repeats no cross streets.
+The two are read as the same stretch, and the record carries a `basis` sentence that the card
+prints for this stretch: the extent is given where the piece describes the cluster.
+
+**Left off.** The piece's image captions also show a plaza outside Grand Central Terminal. The
+text gives it no extent and it falls inside the Fifth to Park Avenue stretch, so it is not
+drawn as a stretch of its own. The streetcar and the two ferry terminals are for the whole
+street, so they are not a stretch and the card does not repeat them at every station.
+
+**On the sheet.** The ruler carries one band, captioned "Published vision: KPF", nearest the
+avenue ticks so an extent reads against them. The station card gains one line when the station
+falls inside a stretch (`stationProfile(ft).vision` in `plan/station.js`): the paraphrase, the
+stretch as the piece names it, and a link to the piece with the day it was read. Where two stretches meet, at 2nd Avenue, the card reads the one that continues east,
+the rule every band on the card uses. Outside a stretch the card has no such line. The line sits
+in the same list as the measured figures for that station and nothing compares or scores them.
+The band is there at every width and is not hover-only: the card opens by click, tap or the
+ruler's arrow keys. Checked in `node scripts/check/station.js`.
+
+Reproduce with `python3 scripts/bake/vision.py --check`. The check re-derives the stations from
+`AVES`. It cannot tell whether the article has changed: that needs a person to read it again and
+move the access date.
 
 ## 4. The lot rule: frontage
 
