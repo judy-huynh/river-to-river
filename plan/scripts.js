@@ -18,8 +18,8 @@
 
 if (location.protocol === 'file:') {
   document.body.innerHTML =
-    '<div style="padding:70px 60px;font:15px/1.7 ui-monospace,Menlo,monospace;max-width:70ch">'
-    + '<div style="color:#FF5A36;letter-spacing:.18em;font-size:12px">CANNOT RUN FROM A FILE URL</div>'
+    '<div style="padding:70px 60px;font:16px/1.6 Helvetica Neue,Arial,sans-serif;max-width:70ch">'
+    + '<div>Cannot run from a file URL</div>'
     + '<h2 style="font:600 38px/1.05 -apple-system,Helvetica,sans-serif;letter-spacing:-.03em">Serve it over localhost</h2>'
     + '<pre style="background:#F4F0E6;border-left:3px solid #14120F;padding:14px;white-space:pre-wrap">'
     + 'cd ~/Documents/GitHub/river-to-river\npython3 -m http.server 8042 --bind 127.0.0.1</pre>'
@@ -288,16 +288,16 @@ try{
     resize:noop, fitBounds:noop};
   const host=document.getElementById('map');
   if(host) host.innerHTML='<div style="padding:40px 32px;max-width:52ch;'
-    + 'font:400 14px/1.6 -apple-system,Helvetica,sans-serif;color:rgba(20,18,15,.72)">'
-    + '<div style="font:500 11px/1 ui-monospace,Menlo,monospace;letter-spacing:.1em;'
-    + 'text-transform:uppercase;color:#FF5A36">The drawing did not load</div>'
+    + 'font:400 16px/1.55 Helvetica Neue,Arial,sans-serif;color:#14120F">'
+    + '<div style="font-weight:600">The drawing did not load</div>'
     + '<p>This browser could not start the map. Everything else on this sheet is '
     + 'measured from local data and is still correct: the layer list, the counts, the '
     + 'legends and the ruler all work.</p>'
-    + '<p style="font-size:13px">Most often this is WebGL being disabled or unavailable.</p></div>';
+    + '<p>Most often this is WebGL being disabled or unavailable.</p></div>';
   console.warn('map failed to construct:', err && err.message);
 }
-if(MAP_OK) map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-right');
+/* top left, so the card at the right of the map has the map's whole height */
+if(MAP_OK) map.addControl(new mapboxgl.NavigationControl({showCompass:false}),'top-left');
 
 /* the constructor measures the container before the mobile media query has laid it
    out, so the opening fit was computed against the wrong box and the street ran off
@@ -332,132 +332,270 @@ map.on('dragstart',()=>{userMoved=true;}); map.on('zoomstart',e=>{ if(e.original
    has not moved the map. */
 const refit=()=>{ if(!MAP_OK) return;
   try{ map.resize(); if(!userMoved) map.jumpTo(streetView()); }catch(e){} };
-map.on('load',refit); map.on('load',()=>clearPin());
+map.on('load',refit); map.on('load',()=>{ syncPick(); showStation(false); });
 let _fitT; addEventListener('resize',()=>{clearTimeout(_fitT); _fitT=setTimeout(refit,160);});
 map.dragRotate.disable(); map.touchZoomRotate.disableRotation();
 
+/* ── the station card ─────────────────────────────────────────────────── */
+/* one selection, one place. st is feet from the west end, lot is a bbl or null, hour is the
+   hour of day every timed figure is read at. it opens on the street's slowest hour. */
+const HOUR_START=BUS_STATS?BUS_STATS.slowHour[0]:17;
+const SEL={st:null, lot:null, pick:null, hour:HOUR_START};
+const AVE_FULL={Mad:'Madison',Lex:'Lexington'};
+const aveShort=n=>AVE_FULL[n]||n;
+const aveName=n=>aveShort(n)+' Avenue';
+/* the numbered street an address names. a label only: the lot rule is frontage (METHODOLOGY 4) */
+const streetNo=a=>((a||'').toUpperCase().replace(/\s+/g,' ').trim().replace(/\b(\d+)(ST|ND|RD|TH)\b/g,'$1').match(/^(?:[0-9][0-9A-Z-]* )?(?:EAST|WEST|E|W) (\d+) (?:STREET|ST)$/)||[])[1];
+/* the lot row's figures, all from the drawn lots. on is the lots addressed on 42nd Street. */
+const LOT_STATS=(()=>{ const P=LOTS.features.map(f=>f.properties), sum=l=>l.reduce((t,p)=>t+(p.unbuilt||0),0), lm=P.filter(p=>p.lm===1);
+  return {all:P.length, room:P.filter(p=>p.unbuilt>0).length, on:P.filter(p=>streetNo(p.addr)==='42').length,
+    lm:lm.length, unbuilt:sum(P), lmUnbuilt:sum(lm)}; })();
+const feet=v=>v==null?'not measured here':v+' ft';
+/* '2026-05-20' to '20 May 2026', '2026-05' to 'May 2026'. no Date object, so no timezone slip. */
+const day=iso=>{const [y,m,d]=iso.split('-'); return (d?+d+' ':'')+MON[m-1]+' '+y;};
+const srcDate=k=>(window.SOURCE_DATE||{})[k]?`, updated ${day(window.SOURCE_DATE[k])}`:'';
+const away=x=>x.dir?`${commas(x.dist)} ft ${x.dir}`:'at this station';
+/* a count window from the baked hours, 24 hour clock in: 'weekday 4 to 7pm' */
+const span=w=>w?`${w.day} ${hr(w.from).slice(0,(w.from<12)===(w.to<12)?-2:undefined)} to ${hr(w.to)}`:'PM';
+const PM_WIN=span((window.PED_COUNT||{}).windows&&window.PED_COUNT.windows.pm);
+/* a shed permit in one line, the same words on the map, in the card and in the lot list */
+const shedSays=x=>x.state==='in force'?`in force to ${day(x.expires)}`:`ran out ${day(x.expires)}, no sign-off recorded`;
+const block=x=>x.west===x.east?`at ${aveShort(x.west)}`:!x.west?`west of ${aveShort(x.east)}`:!x.east?`east of ${aveShort(x.west)}`:`${aveShort(x.west)} to ${aveShort(x.east)}`;
+/* source, date and caveat travel with the figures, whichever layers are on */
+/* the rendered file on GitHub. a relative .md link is not served the same way by every host. */
+const METHOD='https://github.com/judy-huynh/river-to-river/blob/main/METHODOLOGY.md';
+const NOTE_WALK=`Walk widths are gross concrete. Sheds, stairs, newsstands and kiosks are not deducted, `
+  +`so each width is an upper bound, not a clear width. Sidewalks: NYC planimetric sidewalk polygons `
+  +`via Sidewalk Widths NYC, source file dated 20 Apr 2020. Roadway: NYC CSCL street centerline. `
+  +`Trees: NYC Parks Forestry Tree Points. `
+  +`Benches: NYC DOT Seating Locations${srcDate('BENCHES')}, ${(window.BENCHES||[]).length} on the street, `
+  +`distance measured along it. The source holds only benches DOT placed. Seating in parks and plazas, `
+  +`or put out by a building or a business improvement district, is not in it. `
+  +`Pedestrian count: NYC DOT Bi-Annual Pedestrian Counts${srcDate('PED_COUNT')}. The figure is the total for `
+  +`${PM_WIN} on one count day, both sidewalks, not an average. Shown within ${COUNT_REACH} ft of the `
+  +`counter and only on its own block.`
+  +(TIER_STATS?` Priority tier: NYC DOT Pedestrian Mobility Plan${srcDate('PED_TIER')}. A tier is the plan's rank `
+  +`for the street segment, 1 the highest. It is not a count of people.`:'')
+  +(CURB_STATS?` Curb: NYC DOT ParkNYC Block Faces${srcDate('CURB')}. No meter does not mean free to park: other posted `
+  +`rules apply and are not in the source.`:'')
+  +(CRASH_STATS?` Crashes: NYPD Motor Vehicle Collisions${srcDate('CRASHES')}, ${day(CRASH_META.since)} to ${day(CRASH_META.to)}, `
+  +`police points within ${CRASH_META.near_ft} ft of the centreline, usually the nearest intersection. Counts of people hurt. No rate can be computed.`:'')
+  +(BUS_STATS?` Bus: MTA Bus Route Segment Speeds, ${BUS_META.route}, weekdays in ${busMonth()}${srcDate('BUS')}. `
+  +`A speed is the average over a whole leg between two timepoints, not a reading at this station. `
+  +`A leg with a timepoint off 42nd Street is left out, so some stations have none.`:'');
+const NOTE_LOT=`Unbuilt floor area is lot area &times; the base floor area ratio of the zoning district, minus `
+  +`floor area built. Special district rules are not applied, and a landmarked lot may not be able `
+  +`to use it. Lots: NYC MapPLUTO.`;
+/* said only on a lot that has a shed permit */
+const NOTE_SHED=(SHED_STATS?` Shed permits: DOB NOW: Build, Approved Permits${srcDate('SHEDS')}, read as of ${day(SHEDS_META.asof)}. `
+  +`A permit is a record. It does not confirm a shed is standing, and the length of a shed is not in it.`:'');
+const note=t=>`<p class="note">${t} <a href="${METHOD}">Method</a></p>`;
+/* the line runs on past the first and last avenue, so a station can have one on one side only */
+const whereName=x=>x.west&&x.west===x.east?`At ${aveName(x.west)}`
+  : !x.west?`West of ${aveName(x.east)}`
+  : !x.east?`East of ${aveName(x.west)}`
+  : `Between ${aveShort(x.west)} and ${aveName(x.east)}`;
+/* a station within AT_TOL ft of an avenue's own station reads as at that avenue, so an item stationed
+   a step past the crossing and the card's title name the same place */
+const AT_TOL=30;
+const placeAt=ft=>{ const v=window.STATION.AVES.find(a=>Math.abs(a[0]-ft)<=AT_TOL); return v?{west:v[1],east:v[1]}:between(ft); };
+const where=P=>whereName(placeAt(P.ft));
+/* a cross street as the ruler names it: '6th Avenue', never the source's 'Avenue of the Americas' */
+const crossName=n=>{ const v=(window.AVES||[]).find(x=>x.name===n); return v&&v.label?aveName(v.label):n; };
+
+/* MapPLUTO cuts an address at its field width. said in full where the cut is known. */
+const addrShow=p=>(p.addr||'Unnamed lot').replace(/\bAvenue Of The Amer$/,'Avenue of the Americas');
+/* MapPLUTO owner type: city, mixed, other public authority, fully tax-exempt */
+const PUBLIC_OWN=new Set(['C','M','O','X']);
+/* each thing a reader can pick, by row: its station, its own geometry for the map's ring, and the
+   words the list and the card use for it. one table, so a list button, a map feature and a ruler
+   tick that carry the same row and index are the same item. */
+const pt=(lon,lat)=>({type:'Point',coordinates:[lon,lat]});
+const sideName=s=>s==='n'?'North':'South';
+const lotGeo=bbl=>{ const f=LOTS.features.find(x=>String(x.properties.bbl)===String(bbl)); return f?f.geometry:null; };
+const PICKS={
+  people:PED_STATS?[{ft:PED.ft, geo:pt(PED.lon,PED.lat), r:[4,9], kind:'DOT pedestrian counter', name:'DOT pedestrian counter', sub:block(between(PED.ft))}]:[],
+  benches:BENCHES.map(b=>({ft:b.ft, geo:pt(b.lon,b.lat), r:[3.5,8], kind:'DOT bench', name:`${sideName(b.side)} side, ${block(between(b.ft))}`})),
+  sheds:SHED_STATS?[...SHED_STATS.live,...SHED_STATS.lapsed].map(x=>({ft:x.ft, bbl:String(x.bbl), geo:lotGeo(x.bbl), kind:'Shed permit', name:x.addr,
+    sub:x.state==='in force'?shedSays(x):`ran out ${day(x.expires)}`, run:`${x.n} permit${x.n===1?'':'s'} in a run since ${day(x.since)}`})):[],
+  crashes:CRASH_STATS?CRASH_STATS.drawn.map(p=>({ft:p.ft, geo:pt(p.lon,p.lat), r:[1.3*Math.sqrt(p.inj),4.4*Math.sqrt(p.inj)], kind:'Crash place',
+    name:p.name?`At ${crossName(p.name)}`:whereName(placeAt(p.ft)), sub:`${commas(p.inj)} injured in ${commas(p.n)} crash${p.n===1?'':'es'}`})):[],
+  curb:CURB.map(f=>({ft:Math.round((f.a+f.b)/2), geo:{type:'LineString',coordinates:f.c}, kind:'Metered curb',
+    name:`${sideName(f.side)} side, between ${crossName(f.from)} and ${crossName(f.to)}`, sub:f.who}))
+};
+const pickTitle=k=>k.kind===k.name?k.kind:`${k.kind} · ${k.name}`;
+/* the tier ramp on the ruler and in the row's key: four ink strengths, strongest first */
+const TIER_INK={1:'--ink-fill',2:'--ink-30',3:'--hair-2',4:'--hair'};
+
 /* ═══════════════════════════════════════════════════════════════════════
    THE ROWS. Each is a question, grouped People, Movement, Built, in the order read.
-   fig is the answer shown while the row is shut: [figure, what it measures]. sub is one
-   plain line under the question. has is false when the row's data is not baked, and the
-   row is then left off the rail. Every row opens with one plain sentence before any key.
+   Three levels. Shut: the question, fig [figure, unit], and the unit carries the caveat.
+   Open: says (one sentence on what is drawn), lead (one computed line), l2 (the key or the
+   pick list, and at most one flag), src (the source line). Behind About this data: l3.
+   has is false when the row's data is not baked, and the row is then left off the rail.
    ═══════════════════════════════════════════════════════════════════════ */
+const LIST_CAP=5;   /* a pick list shows this many before Show all */
+const srcLine=t=>`<p class="src">${t} <a href="${METHOD}">Method</a></p>`;
+const about=h=>h?`<details class="about"><summary>About this data</summary>${h}</details>`:'';
+const flag=(t,b)=>`<div class="flag"><h4>${t}</h4>${b?`<p>${b}</p>`:''}</div>`;
+const showAll=(L,n)=>n>LIST_CAP?`<button class="mini" type="button" data-all aria-expanded="${!!L.all}">${L.all?`Show first ${LIST_CAP}`:`Show all ${commas(n)}`}</button>`:'';
+/* items are PICKS entries with their index, so a button and the map's feature name the same item */
+const pickList=(L,label,items)=>`<p class="lab">${label}</p><ul class="lotrows">${
+  (L.all?items:items.slice(0,LIST_CAP)).map(x=>`<li><button type="button" data-pick="${L.id}:${x.i}"><b>${x.name}</b>${x.sub?`<span>${x.sub}</span>`:''}</button></li>`).join('')}</ul>`
+  +showAll(L,items.length);
+const picksOf=id=>PICKS[id].map((x,i)=>({...x,i}));
+const cap1=s=>s.charAt(0).toUpperCase()+s.slice(1);
+/* a stretch named by place: the river at a street end, else the avenue inside the stretch at that end */
+const gapEnds=([a,b])=>[a<=0?'the Hudson River':aveName(between(a).east||between(a).west),
+  b>=LEN?'the East River':aveName(between(b).west||between(b).east)];
+const gapPlace=g=>{ const [A,B]=gapEnds(g); return A===B?`at ${A}`:`from ${A} to ${B}`; };
+const feetMiles=ft=>`${commas(ft)} ft`+(ft>=1320?` (${(ft/5280).toFixed(2)} mi)`:'');
+let VISION_ON=false;   /* the published stretches on the ruler, from the ground row */
+const tierSwatch=rank=>`background:${TIER_INK[rank]?`var(${TIER_INK[rank]})`:'none'};border-color:var(--ink)`;
+
 const TREE_ROW=
   {
     id:'trees', group:'Built', short:'Trees', name:'Street trees', has:TREES.length>0,
     get fig(){ return [commas(TREES.length),'standing']; },
-    get sub(){ return `${TREE_GAPS.length} stretch${TREE_GAPS.length===1?'':'es'} of over ${TREE_GAP_MIN} ft with none`; },
     on:true, open:false, ids:['treeDots'], opacity:1,
-    says:`Every tree the Parks Department currently records on this street. <b>The dot is the size of the trunk.</b>`,
+    says:`Every tree the Parks Department currently records on this street.`,
     styles:[['plain','All the same'],['cond','How healthy they are']], style:'plain',
     extras:[['gaps','Show where there are none']], extraOn:{gaps:false},
-    legend(){
+    src:`NYC Parks Forestry Tree Points${srcDate('TREES')||', release date not recorded'}.`,
+    l2(){
       let h='';
       if(this.style==='plain'){
         h+=`<div class="key"><h4>Trunk size</h4>
-          <p>Measured across the trunk. The biggest on the street is ${Math.max(...TREES.map(t=>t.dbh||0))} inches.</p>
           <div class="sizes">${[4,12,24].map(d=>
             `<figure><span style="width:${d*1.1}px;height:${d*1.1}px"></span><figcaption>${d}"</figcaption></figure>`).join('')}</div></div>`;
       } else {
         const rows=Object.entries(COND)
           .map(([k,v])=>[k,v,TREES.filter(t=>t.cond===k).length])
           .filter(r=>r[2]>0).sort((a,b)=>b[2]-a[2]);
-        h+=`<div class="key"><h4>Condition, as the city rates it</h4>
-          <p>${pct(TREES.filter(t=>t.cond==='Good'||t.cond==='Excellent').length,TREES.length)}% are good or better.</p><ul>${
+        h+=`<div class="key"><h4>Condition, as the city rates it</h4><ul>${
           rows.map(([k,v,n])=>`<li><i class="dot" style="background:${v}"></i><span>${k}</span><b>${n}</b></li>`).join('')}</ul></div>`;
       }
+      if(this.extraOn.gaps)
+        h+=flag(`${commas(GAP_FEET)} feet has no tree at all`,`That is ${pct(GAP_FEET,LEN)}% of the street, in ${TREE_GAPS.length} stretch${TREE_GAPS.length===1?'':'es'} of over ${TREE_GAP_MIN} ft: ${TREE_GAPS.map(g=>g.map(x=>'near '+aveShort(nearAve(x))).join(' to ')).join(', ')}.`);
+      return h;
+    },
+    l3(){
       const sp=[...TREES.reduce((m,t)=>m.set(t.common,(m.get(t.common)||0)+1),new Map())]
         .sort((a,b)=>b[1]-a[1]).slice(0,4);
       const spTop=sp.length?sp[0][1]:1;
-      h+=`<div class="key key--rank"><h4>Most common species</h4>
-        <p>${new Set(TREES.map(t=>t.common)).size} species in all.<span class="scr"> Hover any tree on the map for its name.</span></p><ul>${
+      return `<p class="note">The dot is the size of the trunk. Measured across the trunk. The biggest on the street is ${Math.max(...TREES.map(t=>t.dbh||0))} inches. `
+        +`${pct(TREES.filter(t=>t.cond==='Good'||t.cond==='Excellent').length,TREES.length)}% are good or better. `
+        +`${TREE_GAPS.length} stretch${TREE_GAPS.length===1?'':'es'} of over ${TREE_GAP_MIN} ft with none.</p>`
+        +`<div class="key key--rank"><h4>Most common species</h4>
+        <p>${new Set(TREES.map(t=>t.common)).size} species in all.</p><ul>${
         sp.map(([s,c])=>`<li><div class="row"><span>${s}</span><b>${c}</b></div>`
           + `<i class="bar" style="width:${Math.max(3,Math.round(c/spTop*100))}%"></i></li>`).join('')}</ul></div>`;
-      if(this.extraOn.gaps)
-        h+=`<p class="flag"><b>${commas(GAP_FEET)} feet has no tree at all</b>That is ${pct(GAP_FEET,LEN)}% of the street, in ${TREE_GAPS.length} stretch${TREE_GAPS.length===1?'':'es'} of over ${TREE_GAP_MIN} ft: ${TREE_GAPS.map(g=>g.map(x=>'near '+aveShort(nearAve(x))).join(' to ')).join(', ')}.</p>`;
-      return h;
     }
   };
 const LAYERS=[
   {
     id:'people', group:'People', short:'Count', name:'How many people are here?', has:!!PED_STATS,
-    get fig(){ return [commas(PED_LAST.pm), day(PED_LAST.p)]; },
     /* the bake stops unless the source has exactly one location on 42 Street, so this is the whole set */
-    get sub(){ return `${PM_WIN}, at the one place the city counts`; },
-    get chart(){ return spark(120,18); },
+    get fig(){ return [commas(PED_LAST.pm), `${PM_WIN}, ${day(PED_LAST.p)}`]; },
     on:false, open:false, ids:['countDot'],
-    get says(){ return `NYC DOT counts people on foot at one place on 42nd Street, twice a year: ${PED.street}, ${PED.from} to ${PED.to}. <b>Each figure is one count day, both sidewalks.</b>`; },
-    legend(){
-      const S=PED_STATS, P=PED.periods, W=PED.windows||{};
+    get says(){ return `NYC DOT counts people on foot at one place on 42nd Street, twice a year: ${PED.street}, ${PED.from} to ${PED.to}.`; },
+    get src(){ return `NYC DOT Bi-Annual Pedestrian Counts, location ${PED.loc}${srcDate('PED_COUNT')}.`
+      +(TIER_STATS?` NYC DOT Pedestrian Mobility Plan${srcDate('PED_TIER')}.`:''); },
+    l2(){
+      const W=PED.windows||{}, P=PED.periods;
+      let o=`<div class="key"><h4>Latest count, ${day(PED_LAST.p)}</h4><ul>${
+        ['am','md','pm'].map(k=>`<li><span>${span(W[k])}</span><b>${PED_LAST[k]!=null?commas(PED_LAST[k]):'not counted'}</b></li>`).join('')}</ul>
+        <div class="sparkrow">${spark(120,18)}<span class="lab">${PM_WIN}, ${day(P[0].p)} to ${day(P[P.length-1].p)}</span></div></div>`;
+      o+=pickList(this,'Pick it to see it on the street',picksOf('people'));
+      if(TIER_STATS)
+        o+=`<div class="key"><h4>DOT pedestrian priority tier</h4><ul>${
+          TIER_STATS.on.map(t=>`<li><i style="${tierSwatch(t.rank)}"></i><span>${t.tier}</span><b>tier ${t.rank} of ${TIER_META.length}</b></li>`).join('')}</ul></div>`;
+      o+=flag('Counted on one block, on single days',`The count is taken across both sidewalks on this block only, on a single weekday and the Saturday next to it.`);
+      return o;
+    },
+    l3(){
+      const S=PED_STATS, P=PED.periods;
       const gone=S.hole?P.findIndex(p=>p.p===S.hole[1]):-1;
-      let o=`<div class="key"><h4>Latest count, ${day(PED_LAST.p)}</h4>
-        <p>A total over each window, not a peak hour and not a whole day.</p><ul>${
-        ['am','md','pm'].map(k=>`<li><span>${span(W[k])}</span><b>${PED_LAST[k]!=null?commas(PED_LAST[k]):'not counted'}</b></li>`).join('')}</ul></div>`;
-      o+=`<div class="key"><h4>Every period, ${PM_WIN}</h4>
+      return `<p class="note">Each figure is one count day, both sidewalks. A total over each window, not a peak hour and not a whole day. One day's weather or an event moves it, and it does not describe any other block of the street.`
+        +(TIER_STATS?` A tier is the plan's rank for the street segment, 1 the highest. It is not a count of people. Drawn blank where the source has no segment.`:'')+`</p>`
+        +`<div class="key"><h4>Every period, ${PM_WIN}</h4>
         <p>${S.n} count days, ${day(S.first.p)} to ${day(PED_LAST.p)}, to one scale from zero.${S.hole?` No count between ${day(S.hole[0])} and ${day(S.hole[1])}, drawn blank.`:''}</p>
         <div class="hours hours--count" role="img" aria-label="${PM_WIN} count by period. ${P.map(p=>`${day(p.p)} ${p.pm!=null?commas(p.pm):'not counted'}`).join(', ')}.">${
         P.map((p,i)=>(i===gone?'<i class="hours__none"></i>':'')
           +`<i${p===PED_LAST?' data-now':''} style="height:${p.pm!=null?(p.pm/S.hi.pm*100).toFixed(1):0}%"></i>`).join('')}</div>
-        <div class="hours__lab"><span class="micro">${day(P[0].p)}</span><span class="micro">${day(P[P.length-1].p)}</span></div>
+        <div class="hours__lab"><span class="lab">${day(P[0].p)}</span><span class="lab">${day(P[P.length-1].p)}</span></div>
         <ul><li><span>Highest, ${day(S.hi.p)}</span><b>${commas(S.hi.pm)}</b></li>
         <li><span>Lowest, ${day(S.lo.p)}</span><b>${commas(S.lo.pm)}</b></li></ul></div>`;
-      o+=`<div class="opt"><button type="button" data-st="${PED.ft}">Stand at the counter, ${commas(PED.ft)} ft</button></div>`;
-      o+=`<p class="flag"><b>Counted on one block, on single days</b>The count is taken across both sidewalks on this block only, on a single weekday and the Saturday next to it. One day's weather or an event moves it, and it does not describe any other block of the street.</p>`;
-      o+=`<div class="key"><p>NYC DOT Bi-Annual Pedestrian Counts, location ${PED.loc}${srcDate('PED_COUNT')}. <a href="${METHOD}">Method</a></p></div>`;
-      return o;
     }
   },
   {
     id:'benches', group:'People', short:'Benches', name:'Where can you stop?', has:!!BENCH_STATS,
     get fig(){ return [commas(BENCHES.length), `DOT bench${BENCHES.length===1?'':'es'}`]; },
-    get sub(){ return `none west of ${aveName(BENCH_STATS.west)} or east of ${aveName(BENCH_STATS.east)}`; },
     on:false, open:false, ids:['benchDots'],
-    says:`Every bench NYC DOT records on 42 Street. <b>Only benches DOT placed are in the source.</b> Seating in parks and plazas, or put out by a building or a business improvement district, is not.`,
-    legend(){
+    says:`Every bench the NYC Department of Transportation (DOT) records on 42 Street.`,
+    src:`NYC DOT Seating Locations${srcDate('BENCHES')}.`,
+    l2(){
+      const g=BENCH_STATS.none[0], len=g[1]-g[0];
+      return flag(`No DOT bench ${gapPlace(g)}`,`${feetMiles(len)}, ${pct(len,LEN)}% of the street.`)
+        +`<p class="lead">Only benches DOT placed are in the source.</p>`
+        +pickList(this,'Pick one to see it on the street',picksOf('benches'));
+    },
+    l3(){
       const S=BENCH_STATS;
-      let o=`<div class="key"><h4>Each bench</h4><p><span class="scr">Pick one to stand at its station.</span></p></div>
-        <ul class="lotrows">${BENCHES.map(b=>`<li><button type="button" data-st="${b.ft}">`
-          +`<b>${b.side==='n'?'North':'South'} side, ${block(between(b.ft))}</b>`
-          +`<span>${commas(b.ft)} ft from the west end${b.installed?` &middot; installed ${day(b.installed)}`:''}</span>`
-          +`</button></li>`).join('')}</ul>`;
-      o+=`<div class="key key--after"><h4>Stretches with no DOT bench</h4>
+      return `<p class="note">Seating in parks and plazas, or put out by a building or a business improvement district, is not. It is the length of street between DOT benches or a street end. Other places to sit are not in the source.</p>`
+        +`<div class="key"><h4>Stretches with no DOT bench</h4>
         <p>Measured along the street, either side, longest first.</p><ul>${
-        S.none.map(([a,b])=>`<li><span>${commas(a)} to ${commas(b)} ft</span><b>${commas(b-a)} ft</b></li>`).join('')}</ul></div>`;
-      o+=`<p class="flag"><b>${commas(S.none[0][1]-S.none[0][0])} ft with no DOT bench</b>That is ${pct(S.none[0][1]-S.none[0][0],LEN)}% of the street in one stretch. It is the length of street between DOT benches or a street end. Other places to sit are not in the source.</p>`;
-      o+=`<div class="key"><p>NYC DOT Seating Locations${srcDate('BENCHES')}. <a href="${METHOD}">Method</a></p></div>`;
-      return o;
+        S.none.map(g=>`<li><span>${cap1(gapPlace(g).replace(/^from /,''))}<br>${commas(g[0])} to ${commas(g[1])} ft</span><b>${commas(g[1]-g[0])} ft</b></li>`).join('')}</ul></div>`
+        +`<div class="key"><h4>Each bench</h4><ul>${BENCHES.map(b=>`<li><span>${sideName(b.side)} side, ${block(between(b.ft))}<br>${commas(b.ft)} ft from the Hudson River</span><b>${b.installed?`installed ${day(b.installed)}`:'no install date'}</b></li>`).join('')}</ul></div>`;
     }
   },
   {
     id:'sheds', group:'People', short:'Sheds', name:'What is in the way?', has:!!SHED_STATS,
-    get fig(){ const n=SHED_STATS.live.length; return [commas(n), `building${n===1?'':'s'}`]; },
-    get sub(){ const S=SHED_STATS; return `with a shed permit in force`+(S.oldest?` &middot; oldest run since ${day(S.oldest.since)}`:''); },
+    get fig(){ const n=SHED_STATS.live.length; return [commas(n), `building${n===1?'':'s'} with a shed permit in force`]; },
     on:false, open:false, ids:['shedFill','shedLine'],
-    says:`Buildings addressed on 42nd Street with a Department of Buildings permit for a sidewalk shed. <b>Permit records only.</b> A permit does not say a shed is standing, how long it is, or which side of a corner building it covers.`,
-    legend(){
+    says:`Buildings addressed on 42nd Street with a Department of Buildings permit for a sidewalk shed.`,
+    get src(){ return `DOB NOW: Build, Approved Permits${srcDate('SHEDS')}.`; },
+    l2(){
       const S=SHED_STATS, M=SHEDS_META;
-      const rows=(list,line)=>`<ul class="lotrows">${list.map(x=>`<li><button type="button" data-st="${x.ft}">`
-        +`<b>${x.addr}</b><span>${x.side==='n'?'North':'South'} side &middot; ${commas(x.ft)} ft from the west end</span>`
-        +`<span class="num">${line(x)}</span></button></li>`).join('')}</ul>`;
-      let o=`<div class="key"><h4><i class="mark mark--full"></i>Permit in force on ${day(M.asof)}</h4><p>${S.live.length} building${S.live.length===1?'':'s'}. <span class="scr">Pick one to stand at its station.</span></p></div>`
-        +rows(S.live,x=>`${x.n} permit${x.n===1?'':'s'} in a run since ${day(x.since)} &middot; runs to ${day(x.expires)}`);
-      if(S.lapsed.length)
-        o+=`<div class="key key--after"><h4><i class="mark"></i>Permit run out, no sign-off recorded</h4><p>${S.lapsed.length} building${S.lapsed.length===1?'':'s'}, newest first. The record does not say whether a shed still stands.</p></div>`
-          +rows(S.lapsed,x=>`ran out ${day(x.expires)} &middot; run began ${day(x.since)}`);
-      o+=`<p class="flag"><b>The length of a shed is not in the record</b>DOB publishes the address, dates and status of each permit, and not how much sidewalk the shed covers, so no length is given here. Permits at one building are read as one run when each starts within ${M.gap_days} days of the last running out.</p>`;
-      o+=`<div class="key"><p>DOB NOW: Build, Approved Permits${srcDate('SHEDS')}, ${commas(M.rows.now)} shed permits on 42 Street. Runs dated with ${commas(M.rows.old)} older permits from DOB Permit Issuance. <a href="${METHOD}">Method</a></p></div>`;
-      return o;
+      return `<div class="key"><ul>
+        <li><i class="mark mark--full"></i><span>Permit in force on ${day(M.asof)}</span><b>${S.live.length}</b></li>`
+        +(S.lapsed.length?`<li><i class="mark"></i><span>Permit run out, no sign-off recorded</span><b>${S.lapsed.length}</b></li>`:'')+`</ul></div>`
+        +pickList(this,'Pick one to see it on the street',picksOf('sheds'))
+        +flag('The length of a shed is not in the record',`DOB publishes the address, dates and status of each permit, and not how much sidewalk the shed covers, so no length is given here.`);
+    },
+    l3(){
+      const S=SHED_STATS, M=SHEDS_META;
+      return `<p class="note">Permit records only. A permit does not say a shed is standing, how long it is, or which side of a corner building it covers. `
+        +(S.oldest?`Oldest run since ${day(S.oldest.since)}. `:'')
+        +(S.lapsed.length?`Permits run out are listed newest first. The record does not say whether a shed still stands. `:'')
+        +`Permits at one building are read as one run when each starts within ${M.gap_days} days of the last running out. `
+        +`${commas(M.rows.now)} shed permits on 42 Street. Runs dated with ${commas(M.rows.old)} older permits from DOB Permit Issuance.</p>`
+        +`<div class="key"><h4>Each building</h4><ul>${PICKS.sheds.map(k=>`<li><span>${k.name}<br>${k.sub}</span><b>${k.run}</b></li>`).join('')}</ul></div>`;
     }
   },
   {
     id:'crashes', group:'People', short:'Crashes', name:'Who gets hurt?', has:!!CRASH_STATS,
-    get fig(){ return [commas(CRASH_STATS.inj),'people injured']; },
-    get sub(){ return `in ${commas(CRASH_STATS.n)} reported crashes since ${day(CRASH_META.since)}`; },
+    get fig(){ return [commas(CRASH_STATS.inj),`people injured since ${day(CRASH_META.since)}`]; },
     on:false, open:false, ids:['crashDots'],
-    get says(){ return `Every crash the police reported within ${CRASH_META.near_ft} ft of the centre of 42nd Street. <b>A circle is the people injured at one place.</b> The police put most crashes at the nearest intersection, not at the spot, so a place is an intersection far more often than a spot.`; },
-    legend(){
+    get says(){ return `Every crash the police reported within ${CRASH_META.near_ft} ft of the centre of 42nd Street.`; },
+    src:`NYPD Motor Vehicle Collisions, Crashes${srcDate('CRASHES')}.`,
+    l2(){
+      const S=CRASH_STATS, all=picksOf('crashes');
+      /* the first five by people injured, or every place west to east: one index into drawn either way */
+      const items=this.all?all:S.top.slice(0,CRASH_TOP).map(p=>all[S.drawn.indexOf(p)]);
+      return `<div class="key"><h4>Circle size: people injured at one place</h4>
+        <div class="sizes sizes--ink">${[1,10,40].map(v=>`<figure><span style="width:${(Math.sqrt(v)*4.4).toFixed(1)}px;height:${(Math.sqrt(v)*4.4).toFixed(1)}px"></span><figcaption>${v}</figcaption></figure>`).join('')}</div></div>`
+        +`<p class="lab">${this.all?'Every place with anyone injured, west to east':`The ${Math.min(CRASH_TOP,S.top.length)} places with most injured`}. Pick one to see it on the street</p>`
+        +`<ul class="lotrows">${items.map(x=>`<li><button type="button" data-pick="crashes:${x.i}"><b>${x.name}</b><span>${x.sub}</span></button></li>`).join('')}</ul>`
+        +showAll(this,all.length)
+        +flag('Counts only',`No source counts how many people walk, cycle or drive along the street, so there is nothing to divide by.`);
+    },
+    l3(){
       const S=CRASH_STATS, M=CRASH_META;
-      let o=`<div class="key"><h4>People injured, ${day(M.since)} to ${day(M.to)}</h4>
+      let o=`<p class="note">In ${commas(S.n)} reported crashes since ${day(M.since)}. A circle is the people injured at one place. The police put most crashes at the nearest intersection, not at the spot, so a place is an intersection far more often than a spot. `
+        +`Area grows with the people injured at one place: the crashes the police put within ${window.STATION.CRASH_JOIN} ft of each other along the street. A place where nobody was injured is not drawn. `
+        +`These figures say how many people were hurt. They do not say how dangerous the street is for one person using it, and a busy corner cannot be compared with a quiet one.</p>`;
+      o+=`<div class="key"><h4>People injured, ${day(M.since)} to ${day(M.to)}</h4>
         <p>${commas(S.hurt)} of the ${commas(S.n)} crashes injured someone. The split is the source's own.</p><ul>${
         S.split.map(([k,v])=>`<li><span>${k}</span><b>${commas(v)}</b></li>`).join('')}${
         S.other?`<li><span>In none of the three</span><b>${commas(S.other)}</b></li>`:''}
@@ -465,19 +603,10 @@ const LAYERS=[
         <li><span>People killed</span><b>${commas(S.k)}</b></li></ul></div>`;
       o+=`<div class="key"><h4>By year</h4><p>The last year runs to ${day(M.to)} only.</p><ul>${
         S.years.map(([y,v])=>`<li><span>${y} &middot; ${commas(v.n)} crashes</span><b>${commas(v.inj)} injured</b></li>`).join('')}</ul></div>`;
-      o+=`<div class="key"><h4>Circle size</h4><p>Area grows with the people injured at one place: the crashes the police put within ${window.STATION.CRASH_JOIN} ft of each other along the street. A place where nobody was injured is not drawn.</p>
-        <div class="sizes sizes--ink">${[1,10,40].map(v=>`<figure><span style="width:${(Math.sqrt(v)*4.4).toFixed(1)}px;height:${(Math.sqrt(v)*4.4).toFixed(1)}px"></span><figcaption>${v}</figcaption></figure>`).join('')}</div></div>`;
-      const rows=list=>`<ul class="lotrows">${list.map(p=>`<li><button type="button" data-st="${p.ft}">`
-          +`<b>${p.name?`At ${p.name}`:whereName(between(p.ft))}</b><span>${commas(p.ft)} ft from the west end</span>`
-          +`<span class="num">${commas(p.inj)} injured in ${commas(p.n)} crash${p.n===1?'':'es'}</span></button></li>`).join('')}</ul>`;
-      o+=`<div class="key key--after"><h4>The ${Math.min(CRASH_TOP,S.top.length)} places with most injured</h4><p><span class="scr">Pick one to stand at its station.</span></p></div>`+rows(S.top.slice(0,CRASH_TOP));
-      o+=`<div class="key key--after"><h4>Every place with anyone injured, west to east</h4><p>${commas(S.drawn.length)} places, one circle each.</p></div>`+rows(S.drawn);
-      o+=`<p class="flag"><b>Counts only</b>No source counts how many people walk, cycle or drive along the street, so there is nothing to divide by. These figures say how many people were hurt. They do not say how dangerous the street is for one person using it, and a busy corner cannot be compared with a quiet one.</p>`;
       if(S.fdr.n)
-        o+=`<p class="flag"><b>Not every crash here was on 42nd Street</b>The rule is distance, so a crash on an avenue inside one of the street's intersections is counted. ${commas(S.fdr.n)} of the crashes are ones the source names on the FDR Drive, at the east end, with ${commas(S.fdr.inj)} people injured.</p>`;
+        o+=`<div class="key"><h4>Not every crash here was on 42nd Street</h4><p>The rule is distance, so a crash on an avenue inside one of the street's intersections is counted. ${commas(S.fdr.n)} of the crashes are ones the source names on the FDR Drive, at the east end, with ${commas(S.fdr.inj)} people injured.</p></div>`;
       if(M.unlocated.n)
-        o+=`<p class="flag"><b>${commas(M.unlocated.n)} more crashes have no point</b>The source records them on 42 Street with no coordinates, so they cannot be placed and are not counted above. ${commas(M.unlocated.inj)} people were injured in them.</p>`;
-      o+=`<div class="key"><p>NYPD Motor Vehicle Collisions, Crashes${srcDate('CRASHES')}. <a href="${METHOD}">Method</a></p></div>`;
+        o+=`<div class="key"><h4>${commas(M.unlocated.n)} more crashes have no point</h4><p>The source records them on 42 Street with no coordinates, so they cannot be placed and are not counted above. ${commas(M.unlocated.inj)} people were injured in them.</p></div>`;
       return o;
     }
   },
@@ -485,26 +614,37 @@ const LAYERS=[
     id:'bus', group:'Movement', short:'Bus', name:'How fast does the bus move?', has:!!BUS_STATS, hour:true,
     /* getters: the shut row follows the hour slider */
     get fig(){ const v=busCorridor(SEL.hour);
-      return [v!=null?v.toFixed(2):'none', `${v!=null?'mph':'no buses measured'}, ${hourSpan(SEL.hour)}`]; },
-    get sub(){ const r=busSlowest(SEL.hour);
-      return (r?`slowest leg ${r.mph.toFixed(2)} mph &middot; `:'')+`walking is ${WALK} mph`; },
+      return [v!=null?v.toFixed(2):'none', `${v!=null?'mph, street average':'no buses measured'}, ${hourSpan(SEL.hour)}`]; },
     on:false, open:false, ids:['busCase','busLine','busNone'], opacity:1,
-    says:BUS_STATS?`The M42 on each leg between two MTA timepoints, averaged over the weekdays of ${busMonth()}. <b>One bar is one leg.</b> The speed is the whole leg's, not a reading at any point inside it.`:'',
-    legend(){
+    says:BUS_STATS?`The M42 on each leg between two MTA timepoints, averaged over the weekdays of ${busMonth()}.`:'',
+    get lead(){ const r=busSlowest(SEL.hour);
+      return (r?`Slowest: ${DIRS[r.dir]}, ${legName(r)}, ${r.mph.toFixed(2)} mph. `:'')+`Walking reference ${WALK} mph.`; },
+    get src(){ return `MTA Bus Route Segment Speeds, ${BUS_META.route}, ${BUS_META.days[0]} to ${BUS_META.days[BUS_META.days.length-1]}, ${busMonth()}${srcDate('BUS')}.`; },
+    l2(){
+      const h=SEL.hour, rows=BUS.filter(r=>r.h===h);
+      /* one ramp, as the map blends it between the stops. ticks sit at each stop's share of the range. */
+      const lo=BUS_RAMP[0][0], hi=BUS_RAMP[BUS_RAMP.length-1][0], at=v=>((v-lo)/(hi-lo)*100).toFixed(1);
+      const slow=busSlowest(h);
+      return `<div class="key"><h4>Miles per hour</h4>
+        <div class="ramp" role="img" aria-label="Colour runs from ${lo} mph, the walking reference, to ${hi} mph and over.">
+        <i style="background:linear-gradient(90deg,${BUS_RAMP.map(([v,c])=>`${c} ${at(v)}%`).join(',')})"></i>
+        <div>${BUS_RAMP.map(([v],i)=>`<span style="left:${at(v)}%"${i===0?' data-end="lo"':i===BUS_RAMP.length-1?' data-end="hi"':''}>${v}${i===BUS_RAMP.length-1?'+':''}</span>`).join('')}</div></div></div>`
+        +`<div class="key"><h4>Each leg, ${hourSpan(h)}</h4><ul>${
+        rows.map(r=>`<li><i style="background:${r.mph!=null?busColour(r.mph):'transparent'}${r===slow?';outline:1.5px solid var(--ink);outline-offset:1px':''}"></i><span>${DIRS[r.dir]}, ${legName(r)}</span><b>${r.mph!=null?r.mph.toFixed(2)+' mph':'no buses'}</b></li>`).join('')}</ul></div>`
+        +`<p class="lab keyline"><i class="box"></i>outlined: slowest leg${BUS_META.dropped.length?`<i class="dots"></i>dotted: leg not measured`:''}</p>`;
+    },
+    l3(){
       if(!BUS_STATS) return '';
       const h=SEL.hour, S=BUS_STATS, rows=BUS.filter(r=>r.h===h);
-      let o=`<div class="key"><h4>Miles per hour</h4>
-        <p>Blended between these stops. The walking reference is ${WALK} mph.</p><ul>${
-        BUS_RAMP.map(([v,c],i)=>`<li><i style="background:${c}"></i><span>${v.toFixed(1)} mph${i===BUS_RAMP.length-1?' and over':''}</span><b>${i?`${i+1}&times; walking reference`:'walking reference'}</b></li>`).join('')}</ul></div>`;
+      let o=`<p class="note">One bar is one leg. The speed is the whole leg's, not a reading at any point inside it. Blended between these stops. The walking reference is ${WALK} mph. Street average ${busCorridor(h)!=null?busCorridor(h).toFixed(2)+' mph':'none'}, ${hourSpan(h)}.</p>`;
+      o+=`<div class="key"><h4>Each leg, length and buses measured, ${hourSpan(h)}</h4><ul>${
+        rows.map(r=>`<li><span>${DIRS[r.dir]}, ${legName(r)}</span><b>${commas(r.b-r.a)} ft &middot; ${commas(r.trips)} buses</b></li>`).join('')}</ul></div>`;
       o+=`<div class="key"><h4>The street by hour</h4>
         <p>All kept legs, both directions, weighted by buses measured. The line is ${WALK} mph.</p>
         <div class="hours" role="img" aria-label="Average speed by hour. ${S.avg.map(([k,v])=>`${hr(k)} ${v.toFixed(1)}`).join(', ')} miles per hour.">${
         S.avg.map(([k,v])=>`<i${k===h?' data-now':''} style="height:${(v/S.top*100).toFixed(1)}%;background:${busColour(v)}"></i>`).join('')}
         <b style="bottom:${(WALK_MPH/S.top*100).toFixed(1)}%"></b></div>
-        <div class="hours__lab"><span class="micro">${hr(0)}</span><span class="micro">${hr(12)}</span><span class="micro">${hr(23)}</span></div></div>`;
-      o+=`<div class="key"><h4>Each leg, ${hourSpan(h)}</h4>
-        <p>Street average ${busCorridor(h).toFixed(2)} mph.</p><ul>${
-        rows.map(r=>`<li><i style="background:${r.mph!=null?busColour(r.mph):'transparent'}"></i><span>${DIRS[r.dir]}, ${legName(r)}<br>${commas(r.b-r.a)} ft &middot; ${commas(r.trips)} buses</span><b>${r.mph!=null?r.mph.toFixed(2)+' mph':'no buses'}</b></li>`).join('')}</ul></div>`;
+        <div class="hours__lab"><span class="lab">${hr(0)}</span><span class="lab">${hr(12)}</span><span class="lab">${hr(23)}</span></div></div>`;
       const [d0,d1]=BUS_META.day_hours, T=BUS_HIST_STATS;
       o+=`<div class="key"><h4>${busMonth()}, weekdays</h4><ul>
         <li><span>Street average, ${hr(d0)} to ${hr(d1)}</span><b>${S.day.toFixed(2)} mph</b></li>
@@ -519,85 +659,131 @@ const LAYERS=[
           <div class="hours hours--months" role="img" aria-label="Slowest leg, ${hourSpan(T.h)}, in miles per hour. ${T.rows.map(say).join(', ')}.">${
           T.rows.map(r=>`<i${r.month===BUS_META.month?' data-now':''} style="height:${(r.mph/T.top*100).toFixed(1)}%;background:${busColour(r.mph)}"></i>`).join('')}
           <b style="bottom:${(WALK_MPH/T.top*100).toFixed(1)}%"></b></div>
-          <div class="hours__lab"><span class="micro">${monthName(first.month)}</span><span class="micro">${monthName(last.month)}</span></div>
+          <div class="hours__lab"><span class="lab">${monthName(first.month)}</span><span class="lab">${monthName(last.month)}</span></div>
           <p>Lowest ${T.lo.mph.toFixed(2)} mph in ${monthName(T.lo.month)}, highest ${T.hi.mph.toFixed(2)} mph in ${monthName(T.hi.month)}.${T.under.length?` The months under ${WALK} mph:`:''}</p>${
           T.under.length?`<ul>${T.under.map(r=>`<li><i style="background:${busColour(r.mph)}"></i><span>${monthName(r.month)} &middot; ${commas(r.b-r.a)} ft leg<br>${DIRS[r.dir]}, ${legName(r)}</span><b>${r.mph.toFixed(2)} mph</b></li>`).join('')}</ul>`:''}</div>`;
-        o+=`<p class="flag"><b>Each bar is one leg in one hour</b>Each bar is the slowest of that month's legs between ${hourSpan(T.h)}, averaged over its weekdays. It is one leg and does not describe the whole street. The MTA moved its timepoints during the record, so the legs are not the same stretches of street in every month. The legs of ${busMonth()} have been the same since ${monthName(T.sameSince.month)}, ${T.sameN} of the ${T.rows.length} months.</p>`;
+        o+=`<div class="key"><h4>Each bar is one leg in one hour</h4><p>Each bar is the slowest of that month's legs between ${hourSpan(T.h)}, averaged over its weekdays. It is one leg and does not describe the whole street. The MTA moved its timepoints during the record, so the legs are not the same stretches of street in every month. The legs of ${busMonth()} have been the same since ${monthName(T.sameSince.month)}, ${T.sameN} of the ${T.rows.length} months.</p></div>`;
       }
       if(BUS_META.dropped.length)
-        o+=`<p class="flag"><b>Drawn blank where no leg is kept</b>${BUS_META.dropped.map(d=>
+        o+=`<div class="key"><h4>Drawn blank where no leg is kept</h4><p>${BUS_META.dropped.map(d=>
           `${DIRS[d.dir][0].toUpperCase()+DIRS[d.dir].slice(1)}, ${legName(d)} has a timepoint ${Math.max(...d.off)} ft off 42nd Street, so its time on the street cannot be separated and it is left out.`).join(' ')} ${
-          Object.entries(S.blank).map(([d,b])=>`No ${DIRS[d]} speed at ${b.map(([x,y])=>`${commas(x)} to ${commas(y)} ft`).join(' and ')}.`).join(' ')}</p>`;
-      o+=`<div class="key"><p>MTA Bus Route Segment Speeds, ${BUS_META.route}, ${BUS_META.days[0]} to ${BUS_META.days[BUS_META.days.length-1]}, ${busMonth()}${srcDate('BUS')}.${BUS_HIST_STATS&&BUS_HIST_STATS.old.length?` ${monthName(BUS_HIST_STATS.old[0].month)} to ${monthName(BUS_HIST_STATS.old[BUS_HIST_STATS.old.length-1].month)} are from the MTA's earlier file, ${BUS_HIST_STATS.old[0].src}${srcDate('BUS_OLD')}.`:''} <a href="${METHOD}">Method</a></p></div>`;
+          Object.entries(S.blank).map(([d,b])=>`No ${DIRS[d]} speed at ${b.map(([x,y])=>`${commas(x)} to ${commas(y)} ft`).join(' and ')}.`).join(' ')}</p></div>`;
+      if(T&&T.old.length)
+        o+=`<p class="note">${monthName(T.old[0].month)} to ${monthName(T.old[T.old.length-1].month)} are from the MTA's earlier file, ${T.old[0].src}${srcDate('BUS_OLD')}.</p>`;
       return o;
     }
   },
   {
     id:'road', group:'Movement', short:'Ground', name:'Who gets the ground?', has:ROAD.features.length>0,
-    get fig(){ return [SW_STATS?`${ROAD_STATS.avgW} : ${SW_STATS.med}`:ROAD_STATS.avgW,'feet']; },
-    get sub(){ return SW_STATS?'average roadway to typical sidewalk, each side':'average roadway &middot; no sidewalk widths baked'; },
+    get fig(){ return SW_STATS?[`${SW_STATS.med} ft`,`median sidewalk, roadway ${ROAD_STATS.avgW} ft`]:[`${ROAD_STATS.avgW} ft`,'average roadway']; },
     on:false, open:false, ids:['roadLine','swLine'], opacity:.85,
     says:`The roadway and both sidewalks, drawn at their real widths on the same scale.`,
-    legend(){
+    src:`NYC planimetric sidewalk polygons via Sidewalk Widths NYC, source file dated 20 Apr 2020. NYC CSCL street centerline.`,
+    l2(){
       let h=`<div class="key"><h4>Drawn at real width</h4>
         <ul>
-          <li><i class="rule" style="border-top-width:7px;border-top-color:#6E6A62"></i><span>Roadway</span><b>${ROAD_STATS.avgW} ft avg</b></li>`;
+          <li><i class="rule" style="border-top-width:7px;border-top-color:#6E6A62"></i><span>Roadway</span><b>${ROAD_STATS.avgW} ft average</b></li>`;
       if(SW_STATS) h+=`
-          <li><i class="rule" style="border-top-width:3px;border-top-color:#2E9E4F"></i><span>Sidewalk, each side</span><b>${SW_STATS.med} ft typical</b></li>`;
-      h+=`</ul></div>
-        <p class="flag"><b>How the roadway is divided</b>On ${ROAD_STATS.share}% of the street it is four lanes for moving traffic and two more for cars that are parked.</p>`;
-      if(SW_STATS){
+          <li><i class="rule" style="border-top-width:3px;border-top-color:#2E9E4F"></i><span>Sidewalk, each side</span><b>${SW_STATS.med} ft median</b></li>`;
+      h+=`</ul></div>`;
+      if(VISION){
+        const some=VISION.stretches.some(v=>!v.stated);
+        h+=`<label class="check"><input type="checkbox" id="visionOn"${VISION_ON?' checked':''}><span>Published vision: ${VISION.by}, ${VISION.title}</span></label>`;
+        if(VISION_ON) h+=`<div class="key"><ul><li><i style="background:var(--hair-2);border-color:var(--ink)"></i><span>stretch, extent given in the piece</span></li>${
+          some?`<li><i style="border:1px dashed var(--ink)"></i><span>extent not given, ends approximate</span></li>`:''}</ul></div>`;
+      }
+      if(SW_STATS) h+=flag('Widths are the whole sidewalk',`Sheds, stairs, newsstands and kiosks are not deducted, so every figure here is an upper bound on what you can actually walk on.`);
+      return h;
+    },
+    l3(){
+      let h=`<div class="key"><h4>How the roadway is divided</h4><p>On ${ROAD_STATS.share}% of the street it is four lanes for moving traffic and two more for cars that are parked.</p></div>`;
+      if(SW_STATS)
         h+=`<div class="key"><h4>The walking surface</h4>
-          <p>Measured across ${SW_STATS.n} stretches of the street's own sidewalk.</p>
+          <p>Measured across ${SW_STATS.n} stretches of the street's own sidewalk. Coverage is ${pct(SW_STATS.coverN,LEN)}% of the north side and ${pct(SW_STATS.coverS,LEN)}% of the south.</p>
           <ul>
             <li><span>Narrowest</span><b>${SW_STATS.narrow.w} ft</b></li>
-            <li><span>Typical</span><b>${SW_STATS.med} ft</b></li>
+            <li><span>Median</span><b>${SW_STATS.med} ft</b></li>
             <li><span>Widest</span><b>${SW_STATS.max} ft</b></li>
-          </ul></div>
-          <p class="flag"><b>This is gross concrete, not clear width</b>Sheds, stairs, newsstands and kiosks are not deducted, so every figure here is an upper bound on what you can actually walk on. Coverage is ${pct(SW_STATS.coverN,LEN)}% of the north side and ${pct(SW_STATS.coverS,LEN)}% of the south.</p>`;
-      }
+          </ul></div>`;
+      if(VISION)
+        h+=`<p class="note">Published vision: <a href="${VISION.url}">${VISION.title}</a>, ${VISION.by}, read ${day(VISION.accessed)}. A stretch whose ends the piece gives is a ruled bar. One drawn between the nearest avenue crossings, or to the end of the street, is a dashed outline.</p>`;
       return h;
     }
   },
   {
     id:'curb', group:'Movement', short:'Curb', name:'Who is the curb for?', has:!!CURB_STATS,
-    get fig(){ return [`${CURB_STATS.who[0][1]} of ${CURB.length}`,'metered block faces']; },
-    get sub(){ return `${CURB_STATS.who[0][0].toLowerCase()} &middot; meters along ${pct(CURB_STATS.n+CURB_STATS.s,2*LEN)}% of the length of the two sides`; },
+    get fig(){ return [`${CURB_STATS.who[0][1]} of ${CURB.length}`,`metered block sides, ${CURB_STATS.who[0][0].toLowerCase()}`]; },
     on:false, open:false, ids:['curbLine'],
-    says:`Each side of a block where NYC DOT runs parking meters, and who may pay to stand there. <b>A line is one metered block face.</b> Curb with no line has no meter.`,
-    legend(){
+    says:`Each side of a block where NYC DOT runs parking meters, and who may pay to stand there.`,
+    src:`NYC DOT Parking Meters, ParkNYC Block Faces${srcDate('CURB')}.`,
+    l2(){
       const S=CURB_STATS;
-      let o=`<div class="key"><h4>Who may pay to stand</h4><p>The source's own vehicle type, by block face.</p><ul>${
-        S.who.map(([k,v])=>`<li><span>${k}</span><b>${v} face${v===1?'':'s'}</b></li>`).join('')}</ul></div>`;
-      o+=`<div class="key"><h4>When the meters run</h4><ul>${
-        S.hours.map(([k,v])=>`<li><span>${k}</span><b>${v} face${v===1?'':'s'}</b></li>`).join('')}</ul></div>`;
-      o+=`<div class="key key--after"><h4>Each block face, west to east</h4><p><span class="scr">Pick one to stand at its middle.</span></p></div>
-        <ul class="lotrows">${CURB.map(f=>`<li><button type="button" data-st="${Math.round((f.a+f.b)/2)}">`
-          +`<b>${f.side==='n'?'North':'South'} side, between ${f.from} and ${f.to}</b>`
-          +`<span>${commas(f.a)} to ${commas(f.b)} ft &middot; ${f.who}</span><span class="num">${curbTerms(f)}</span></button></li>`).join('')}</ul>`;
-      o+=`<p class="flag"><b>${pct(2*LEN-S.n-S.s,2*LEN)}% of the length of the two sides has no meter</b>Meters run along ${pct(S.n,LEN)}% of the north side and ${pct(S.s,LEN)}% of the south. Each share is of the whole ${commas(LEN)} ft of the street, avenue crossings included, so it is a share of the street's length and not of the curb a vehicle could use. No meter does not mean free to park. Bus stops, no standing zones and other posted rules apply there, and they are in another source that is not on this sheet.</p>`;
-      o+=`<div class="key"><p>NYC DOT Parking Meters, ParkNYC Block Faces${srcDate('CURB')}. <a href="${METHOD}">Method</a></p></div>`;
-      return o;
+      return `<div class="key"><h4>Who may pay to stand</h4><ul>${
+        S.who.map(([k,v])=>`<li><span>${k}</span><b>${v} side${v===1?'':'s'}</b></li>`).join('')}</ul></div>`
+        +pickList(this,'Each metered side of a block, west to east. Pick one to see it on the street',picksOf('curb'))
+        +flag(`${pct(2*LEN-S.n-S.s,2*LEN)}% of the length of the two sides has no meter`,`No meter does not mean free to park.`);
+    },
+    l3(){
+      const S=CURB_STATS;
+      return `<p class="note">A line is one metered block face. Curb with no line has no meter. The source's own vehicle type, by block face. Meters run along ${pct(S.n,LEN)}% of the north side and ${pct(S.s,LEN)}% of the south. Each share is of the whole ${commas(LEN)} ft of the street, avenue crossings included, so it is a share of the street's length and not of the curb a vehicle could use. Bus stops, no standing zones and other posted rules apply there, and they are in another source that is not on this sheet.</p>`
+        +`<div class="key"><h4>When the meters run</h4><ul>${
+        S.hours.map(([k,v])=>`<li><span>${k}</span><b>${v} side${v===1?'':'s'}</b></li>`).join('')}</ul></div>`
+        +`<div class="key"><h4>Terms on each face</h4><ul>${CURB.map(f=>`<li><span>${sideName(f.side)} side, between ${crossName(f.from)} and ${crossName(f.to)}<br>${curbTerms(f)}</span></li>`).join('')}</ul></div>`;
     }
   },
   {
     id:'lots', group:'Built', short:'Lots', name:'What could be built?', has:LOTS.features.length>0,
     /* the sum of unbuilt floor area over the drawn lots, in millions of sq ft (METHODOLOGY 2, 4) */
-    get fig(){ return [`${(LOT_STATS.unbuilt/1e6).toFixed(1)}m`,'sq ft on paper']; },
-    get sub(){ return `allowed and not built &middot; ${pct(LOT_STATS.lmUnbuilt,LOT_STATS.unbuilt)}% of it on landmarked lots`; },
+    get fig(){ return [`${(LOT_STATS.unbuilt/1e6).toFixed(1)}M`,'sq ft allowed and unbuilt, on paper']; },
     on:true, open:false, ids:['lotFill','lotLine','lmHatch'], opacity:.58,
-    /* the set as it is drawn, every count from the records (METHODOLOGY 4) */
-    get says(){ const S=LOT_STATS, M=window.LOTS_META, out=(window.LOTS_OUT||[]).length;
-      return `${S.all} lots front the street, at their boundary from the city tax map (MapPLUTO).`
-        +(M?` A lot is in the set when its boundary comes within ${M.front_ft} ft of the middle of the street, whatever its address. ${S.on} are addressed on 42nd Street and ${S.all-S.on} on an avenue or another street. ${out} of the ${M.pool} lots nearby ${out===1?'is':'are'} left out. <a href="${METHOD}#4-the-lot-rule-frontage">Method</a>.`:'')
-        +` ${commas(S.unbuilt)} sq ft of floor area is allowed and not built, on ${S.room} of the ${S.all} lots. That is floor area on paper: most of these lots sit in a special district where the base rule is not the rule that governs, and ${commas(S.lmUnbuilt)} sq ft of it is on the ${S.lm} landmarked lots.`
-        +` <b class="scr">Click one to see who owns it.</b>`; },
+    get says(){ const S=LOT_STATS;
+      return `${S.all} lots. ${(S.unbuilt/1e6).toFixed(1)} million sq ft allowed and not built, ${pct(S.lmUnbuilt,S.unbuilt)}% of it on landmarked lots.`; },
+    src:`NYC MapPLUTO${srcDate('LOTS')||', release date not recorded'}.`,
     styles:[['zoning','The rules that govern it'],['capacity','Room left to build'],
       ['landmark','What cannot be touched'],['age','When it was built'],['plain','Outline only']],
-    style:'zoning',
-    legend(){
-      if(this.style==='zoning'){
-        return ZONE_GROUPS.map(([h,note,keys])=>{
+    style:'zoning', noLm:false, noPub:false,
+    ranked(){ return LOTS.features.map(f=>f.properties).filter(p=>!(this.noLm&&p.lm===1)&&!(this.noPub&&PUBLIC_OWN.has(p.own))).sort((x,y)=>y.unbuilt-x.unbuilt||x.ft-y.ft); },
+    key(){
+      if(this.style==='zoning')
+        return `<div class="key key--three"><h4>Zoning district</h4><ul>${ZONE_GROUPS.flatMap(g=>g[2]).filter(k=>LOTS.features.some(f=>f.properties.zone===k))
+          .map(k=>`<li><i style="background:${ZONE[k]}"></i><span>${k}</span></li>`).join('')}</ul></div>`;
+      if(this.style==='capacity')
+        return `<div class="key"><h4>Floor area allowed and never built</h4><ul>${
+          CAP.map(([v,c],i)=>`<li><i style="background:${c}"></i><span>${i===0?'nothing spare':commas(v)+'+ sq ft'}</span></li>`).join('')}</ul></div>`;
+      if(this.style==='landmark'){
+        const n=LOT_STATS.lm;
+        return `<div class="key"><h4>Designated landmarks</h4><ul>
+          <li><i style="background:#14120F"></i><span>designated</span><b>${n} lots</b></li>
+          <li><i style="background:#E9E4D6"></i><span>not designated</span><b>${LOTS.features.length-n} lots</b></li>
+          </ul></div>`;
+      }
+      if(this.style==='age')
+        return `<div class="key"><h4>Year the building went up</h4><ul>${
+          AGE.map(([y,c])=>`<li><i style="background:${c}"></i><span>${y}s</span></li>`).join('')}</ul></div>`;
+      return `<div class="key"><h4>Boundaries only</h4></div>`;
+    },
+    l2(){
+      const list=this.ranked(), shown=this.all?list:list.slice(0,LIST_CAP);
+      return this.key()
+        +`<p class="lab keyline"><i class="dash"></i>dashed outline: designated landmark</p>`
+        +`<div class="ctl"><label for="lotFind">Find a lot by address, owner or BBL</label>
+          <input id="lotFind" type="text" list="lotOpts" autocomplete="off" spellcheck="false">
+          <p class="lab" id="lotFindSay" aria-live="polite"></p></div>`
+        +`<div class="filters"><p class="lab">Most unbuilt floor area first</p>`
+        +`<label class="check"><input type="checkbox" id="lotNoLm"${this.noLm?' checked':''}><span>Leave out landmarked lots</span></label>`
+        +`<label class="check"><input type="checkbox" id="lotNoPub"${this.noPub?' checked':''}><span>Leave out public and tax-exempt owners</span></label></div>`
+        +`<ul class="lotrows">${shown.map(p=>`<li><button type="button" data-lot="${p.bbl}"><b>${addrShow(p)}</b>`
+          +`<span>${p.owner||'owner not recorded'} &middot; ${p.zone==='PARK'?'park':commas(p.unbuilt)+' sq ft'}${p.lm===1?' &middot; landmark':''}</span></button></li>`).join('')}</ul>`
+        +showAll(this,list.length)
+        /* the sentence behind this flag is in About this data, word for word */
+        +flag('Floor area on paper only');
+    },
+    /* the set as it is drawn, every count from the records (METHODOLOGY 4) */
+    l3(){ const S=LOT_STATS, M=window.LOTS_META, out=(window.LOTS_OUT||[]).length;
+      let o=`<p class="note">${S.all} lots front the street, at their boundary from the city tax map (MapPLUTO).`
+        +(M?` A lot is in the set when its boundary comes within ${M.front_ft} ft of the middle of the street, whatever its address. ${S.on} are addressed on 42nd Street and ${S.all-S.on} on an avenue or another street. ${out} of the ${M.pool} lots nearby ${out===1?'is':'are'} left out. <a href="${METHOD}#4-the-lot-rule-frontage">Method</a>.`:'')
+        +` ${commas(S.unbuilt)} sq ft of floor area is allowed and not built, on ${S.room} of the ${S.all} lots. That is floor area on paper: most of these lots sit in a special district where the base rule is not the rule that governs, and ${commas(S.lmUnbuilt)} sq ft of it is on the ${S.lm} landmarked lots. ${S.lm} are landmarked and cannot be built on at all. A landmarked lot can carry unbuilt floor area on paper and never be able to use it.</p>`;
+      o+=ZONE_GROUPS.map(([h,note,keys])=>{
           const rows=keys.map(k=>{
             const n=LOTS.features.filter(f=>f.properties.zone===k).length;
             if(!n) return '';
@@ -606,29 +792,10 @@ const LAYERS=[
           }).join('');
           return rows?`<div class="key"><h4>${h}</h4><p>${note}</p><ul>${rows}</ul></div>`:'';
         }).join('')
-        + `<p class="flag"><b>What "up to 15&times;" means</b>You may build floor area up to fifteen times the size of the lot. On a 10,000 sq ft lot that is 150,000 sq ft of building, stacked however the rules allow.</p>`;
-      }
-      if(this.style==='capacity'){
-        return `<div class="key"><h4>Floor area allowed and never built</h4>
-          <p>The gap between what the rules permit and what is standing.</p><ul>${
-          CAP.map(([v,c],i)=>`<li><i style="background:${c}"></i><span>${i===0?'nothing spare':commas(v)+'+ sq ft'}</span></li>`).join('')}</ul></div>
-          <p class="flag"><b>Floor area on paper only</b>Most of these lots sit in a special district where the base rule is not the rule that governs. ${LOTS.features.filter(f=>f.properties.lm===1).length} are landmarked and cannot be built on at all.</p>`;
-      }
-      if(this.style==='landmark'){
-        const n=LOTS.features.filter(f=>f.properties.lm===1).length;
-        return `<div class="key"><h4>Designated landmarks</h4>
-          <p>Whatever the zoning allows, these cannot grow.</p><ul>
-          <li><i style="background:#14120F"></i><span>designated</span><b>${n} lots</b></li>
-          <li><i style="background:#E9E4D6"></i><span>not designated</span><b>${LOTS.features.length-n} lots</b></li>
-          </ul></div>
-          <p class="flag"><b>Landmarked lots cannot use this floor area</b>A landmarked lot can carry unbuilt floor area on paper and never be able to use it.</p>`;
-      }
-      if(this.style==='age'){
-        return `<div class="key"><h4>Year the building went up</h4>
-          <p>The year the building on each lot was completed.</p><ul>${
-          AGE.map(([y,c])=>`<li><i style="background:${c}"></i><span>${y}s</span></li>`).join('')}</ul></div>`;
-      }
-      return `<div class="key"><h4>Boundaries only</h4><p>Every lot line, no fill.</p></div>`;
+        +`<div class="key"><h4>What "up to 15&times;" means</h4><p>You may build floor area up to fifteen times the size of the lot. On a 10,000 sq ft lot that is 150,000 sq ft of building, stacked however the rules allow.</p></div>`
+        +`<div class="key"><h4>Public and tax-exempt owners</h4><p>MapPLUTO owner type C (city), M (mixed city and private), O (other public authority) or X (fully tax-exempt): ${LOTS.features.filter(f=>PUBLIC_OWN.has(f.properties.own)).length} of the ${S.all} lots. A blank owner type is kept in.</p></div>`
+        +`<div class="key"><h4>The other colourings</h4><p>Room left to build: the gap between what the rules permit and what is standing. What cannot be touched: whatever the zoning allows, these cannot grow. When it was built: the year the building on each lot was completed. Outline only: every lot line, no fill.</p></div>`;
+      return o;
     }
   },
   TREE_ROW
@@ -647,29 +814,70 @@ function buildPanel(){
       group=L.group; host.append(el('div','group',`<h2>${L.group}</h2>`));
     }
     const r=el('div','layer'); r.dataset.on=L.on; r.dataset.open=L.open;
-    /* two real buttons side by side: the switch draws the row, the header opens it. the heading
-       holds the question alone, and the button's hit area is stretched over the answer beside it. */
-    const bar=el('div','layer__bar',
-      `<button class="sw" type="button" aria-pressed="${L.on}" aria-label="Show on the map: ${L.name}"></button>
-       <div class="layer__q">
-         <h3><button class="layer__head" type="button" id="head-${L.id}" aria-expanded="${L.open}" aria-controls="body-${L.id}" aria-describedby="fig-${L.id} ans-${L.id}">${L.name}</button></h3>
-         <span class="layer__fig" id="fig-${L.id}"><b></b><small></small></span>
-         <span class="layer__caret" aria-hidden="true">&#9654;</span>
-         <span class="layer__sub" id="ans-${L.id}"><span class="layer__count"></span>${L.chart||''}</span></div>`);
+    /* the whole shut row is one button: the question, its figure, and the unit under it.
+       the square before the question says the row is drawn on the map. */
+    const bar=el('h3','layer__bar',
+      `<button class="layer__head" type="button" id="head-${L.id}" aria-expanded="${L.open}" aria-controls="body-${L.id}">`
+      +`<span class="layer__name"><i class="layer__on" aria-hidden="true"></i><span class="sr" data-onsay></span>${L.name}</span>`
+      +`<span class="layer__fig"><b></b><small></small></span></button>`);
     const body=el('div','layer__body'); body.id='body-'+L.id;
     body.setAttribute('role','region'); body.setAttribute('aria-labelledby','head-'+L.id);
     r.append(bar,body); host.append(r);
-    L._row=r; L._body=body; L._sw=bar.querySelector('.sw'); L._head=bar.querySelector('.layer__head');
-    L._sw.onclick=()=>toggle(L);
+    L._row=r; L._body=body; L._head=bar.querySelector('.layer__head');
     L._head.onclick=()=>{ setOpen(L,!L.open); link(); };
-    headline(L); renderBody(L);
+    renderBody(L); headline(L);
   });
   /* the one control that is not a row sits under the last of them, so it belongs to no group */
-  const foot=el('div','group group--foot'), off=el('button','mini','hide all from the map'); off.type='button';
+  const foot=el('div','group group--foot',`<span class="lab"><i class="layer__on layer__on--key" aria-hidden="true"></i>Shown on map</span>`), off=el('button','mini','Hide all'); off.type='button';
+  off.setAttribute('aria-label','Hide all from the map');
   off.onclick=()=>LAYERS.forEach(o=>{ if(o.on) toggle(o); });
   foot.append(off); host.append(foot);
-  /* a bench or the counter picked in a legend is a station like any other */
-  host.addEventListener('click',e=>{ const b=e.target.closest('[data-st]'); if(b) select({st:+b.dataset.st,lot:null}); });
+  /* a list item is a station like any other, and carries which item it is */
+  host.addEventListener('click',e=>{
+    const b=e.target.closest('button'); if(!b) return;
+    const L=LAYERS.find(o=>o._body.contains(b));
+    if(b.dataset.pick){ const [id,i]=b.dataset.pick.split(':'), k=PICKS[id][+i], own=row(id);
+      if(own&&!own.on) toggle(own);   /* so the item is drawn */
+      select({st:k.ft, lot:null, pick:{row:id,i:+i}}); }
+    else if(b.dataset.lot) openLot(b.dataset.lot);
+    else if('all' in b.dataset&&L){ L.all=!L.all; redraw(L); }
+  });
+  host.addEventListener('change',e=>{ const t=e.target, L=row('lots');
+    if(t.id==='lotNoLm'){ L.noLm=t.checked; redraw(L); link(); }
+    else if(t.id==='lotNoPub'){ L.noPub=t.checked; redraw(L); link(); }
+    else if(t.id==='visionOn'){ VISION_ON=t.checked; redraw(row('road')); buildRuler(); }
+    else if(t.id==='lotFind') findLot(t.value);
+  });
+}
+/* a lot opened from a list stands at its own station */
+const lotStation=p=>{ const k=LOT_BAND.get(p.bbl); return p.ft>=k.a&&p.ft<=k.b?p.ft:(k.a+k.b)/2; };
+function openLot(bbl){ const p=LOT_BY_BBL.get(String(bbl)); if(!p) return;
+  const L=row('lots'); if(L&&!L.on) toggle(L);
+  select({st:lotStation(p), lot:String(bbl)}); }
+/* the finder: the option picked, else the first lot whose address, owner or BBL holds what was typed.
+   both sides are spelled one way first: no punctuation, 42nd as 42, w as west, st as street, 6 av as
+   avenue of the americas. so an address pasted from anywhere finds the lot MapPLUTO spells its own way. */
+const lotOption=p=>`${p.addr||'Unnamed lot'}, ${p.owner||'owner not recorded'}, ${p.bbl}`;
+const ADDR_WORD={w:'west',e:'east',st:'street',str:'street',av:'avenue',ave:'avenue',aven:'avenue',bway:'broadway',pl:'place',
+  first:'1',second:'2',third:'3',fifth:'5',sixth:'6',seventh:'7',eighth:'8',ninth:'9',tenth:'10',eleventh:'11',twelfth:'12',amer:'americas'};
+const addrKey=t=>(t||'').toLowerCase().replace(/[.,#]/g,' ').replace(/\b(\d+)(st|nd|rd|th)\b/g,'$1')
+  .split(/\s+/).filter(Boolean).map(w=>ADDR_WORD[w]||w).join(' ')
+  .replace(/\b6 avenue\b/,'avenue of the americas');
+function findLot(text){
+  const raw=text.trim().toLowerCase(), q=addrKey(text), say=$('#lotFindSay'); if(!q){ if(say) say.textContent=''; return; }
+  const all=LOTS.features.map(f=>f.properties), A=p=>addrKey(p.addr);
+  /* a whole word must end where the typing ends, so 23 west 42 does not open 234 west 42 */
+  const starts=(a,b)=>a===b||a.startsWith(b+' ');
+  const hit=all.find(p=>lotOption(p).toLowerCase()===raw)||all.find(p=>A(p)===q)||all.find(p=>starts(A(p),q))
+    ||all.find(p=>starts(q,A(p))&&A(p))||all.find(p=>A(p).startsWith(q))||all.find(p=>(' '+addrKey(lotOption(p))).includes(' '+q));
+  if(hit){ if(say) say.textContent=''; openLot(hit.bbl); return; }
+  /* no lot: name the nearest number on the same street as the sheet spells it, so a miss does not read as a missing lot */
+  const num=t=>t.match(/^(\d+) (.+)$/), m=num(q);
+  const near=m&&all.filter(p=>{ const k=num(A(p)); return k&&(starts(k[2],m[2])||starts(m[2],k[2])); })
+    .sort((x,y)=>Math.abs(num(A(x))[1]-m[1])-Math.abs(num(A(y))[1]-m[1]))[0];
+  const eg=all.find(p=>streetNo(p.addr)==='42');
+  if(say) say.textContent=near?`No lot on the sheet at that number. Nearest: ${addrShow(near)}.`
+    :`No lot on the sheet matches.${eg?` Addresses are spelled as in MapPLUTO: ${eg.addr}.`:''}`;
 }
 
 /* the answer on the shut row. called again whenever the figure can move. */
@@ -677,63 +885,79 @@ function headline(L){
   const [fig,cap]=L.fig;
   L._row.querySelector('.layer__fig b').innerHTML=fig;
   L._row.querySelector('.layer__fig small').innerHTML=cap;
-  L._row.querySelector('.layer__count').innerHTML=L.sub;
+  L._row.querySelector('[data-onsay]').textContent=L.on?'Shown on map. ':'';
 }
 
-/* one row open at a time, or the rail becomes a single unreadable column */
+/* one row open at a time. opening a row draws it. it stays drawn after the row shuts, until
+   the switch inside the row, or Hide all, takes it off. */
 function setOpen(L,open){
-  if(open) LAYERS.forEach(o=>{ if(o!==L&&o.open) setOpen(o,false); });
+  if(open) LAYERS.forEach(o=>{ if(o!==L&&o.open){ o.open=false; o._row.dataset.open=false; o._head.setAttribute('aria-expanded',false); } });
   L.open=open; L._row.dataset.open=open; L._head.setAttribute('aria-expanded',open);
+  /* the first question opened has the map to itself: the trees drawn at the start step back,
+     unless the reader has already chosen what is drawn */
+  const t=row('trees');
+  if(open&&t&&t!==L&&t.on&&LAYERS.filter(o=>o.on).map(o=>o.id).join(',')===ON_START) toggle(t,true);
+  if(open&&!L.on) toggle(L,true);
+  buildRuler(); renderCard();
   if(open) requestAnimationFrame(()=>L._row.scrollIntoView({block:'nearest'}));
 }
 
-/* the controls are written once. only the legend is redrawn after that, so a select or a
-   chip being worked by keyboard is never replaced under the reader. */
+/* the controls are written once. only the sentence and the legend are redrawn after that, so a
+   select or a slider being worked by keyboard is never replaced under the reader. */
 function renderBody(L){
-  let h=`<p class="says">${L.says}</p>`;
-  if(L.styles)
-    h+=`<div class="ctl"><label for="style-${L.id}">${L.short}: colour by</label><select id="style-${L.id}">${
-      L.styles.map(([v,t])=>`<option value="${v}"${v===L.style?' selected':''}>${t}</option>`).join('')}</select></div>`;
-  if(L.opacity!==undefined)
-    h+=`<div class="ctl"><label for="op-${L.id}">${L.short}: opacity</label><div class="slider">
-      <input type="range" id="op-${L.id}" min="10" max="100" value="${Math.round(L.opacity*100)}">
-      <output for="op-${L.id}">${Math.round(L.opacity*100)}%</output></div></div>`;
+  let h=`<div data-top></div>`;
   /* one hour slider for the whole sheet */
   if(L.hour)
-    h+=`<div class="ctl ctl--hour"><label for="hourIn">${L.short}: hour of day, weekdays</label>
+    h+=`<div class="ctl ctl--hour"><label for="hourIn">Hour of day, weekdays</label>
       <output id="hourOut" for="hourIn">${hourSpan(SEL.hour)}</output>
       <input type="range" id="hourIn" min="0" max="23" step="1" value="${SEL.hour}" aria-valuetext="${hourSpan(SEL.hour)}"></div>`;
-  h+=`<div data-legend>${L.legend()}</div>`;
+  if(L.styles)
+    h+=`<div class="ctl"><label for="style-${L.id}">Colour by</label><select id="style-${L.id}">${
+      L.styles.map(([v,t])=>`<option value="${v}"${v===L.style?' selected':''}>${t}</option>`).join('')}</select></div>`;
+  h+=`<button class="swrow" type="button" aria-pressed="${L.on}" aria-label="Show on map: ${L.name}"><i class="sw" aria-hidden="true"></i><span>Show on map</span></button>`;
   if(L.extras)
     h+=`<div class="opt">${L.extras.map(([k,t])=>
       `<button type="button" data-extra="${k}" aria-pressed="${!!L.extraOn[k]}">${t}</button>`).join('')}</div>`;
+  h+=`<div data-legend></div>`;
+  if(L.id==='lots') h+=`<datalist id="lotOpts">${LOTS.features.map(f=>`<option value="${lotOption(f.properties).replace(/"/g,'&quot;')}">`).join('')}</datalist>`;
   L._body.innerHTML=h;
-
-  const op=L._body.querySelector('#op-'+L.id);
-  if(op) op.oninput=e=>{ L.opacity=+e.target.value/100;
-    L._body.querySelector('.slider output').textContent=e.target.value+'%'; paint(L); };
+  L._sw=L._body.querySelector('.swrow'); L._sw.onclick=()=>toggle(L);
   const hourIn=L._body.querySelector('#hourIn');
   if(hourIn) hourIn.oninput=e=>setHour(+e.target.value);
   const sel=L._body.querySelector('#style-'+L.id);
   if(sel) sel.onchange=e=>{ L.style=e.target.value; paint(L); redraw(L); link(); };
   L._body.querySelectorAll('[data-extra]').forEach(b=>{
     b.onclick=()=>{ const k=b.dataset.extra; L.extraOn[k]=!L.extraOn[k];
-      b.setAttribute('aria-pressed',L.extraOn[k]); paint(L); redraw(L); };
+      b.setAttribute('aria-pressed',L.extraOn[k]); paint(L); redraw(L); buildRuler(); };
   });
+  redraw(L);
 }
-/* the legend alone. if focus was on a station button inside it, it goes back to the same one. */
+/* the sentence and the legend. focus goes back to the same control, and About this data stays as it was. */
 function redraw(L){
-  const box=L._body.querySelector('[data-legend]'), a=document.activeElement;
-  const st=box.contains(a)&&a.dataset?a.dataset.st:null;
-  box.innerHTML=L.legend();
-  const f=st!=null&&box.querySelector(`[data-st="${st}"]`); if(f) f.focus();
+  const box=L._body.querySelector('[data-legend]'), a=document.activeElement, d=a&&box.contains(a)?a.dataset:null;
+  const key=!d?null:a.id?'#'+a.id:d.pick?`[data-pick="${d.pick}"]`:d.lot?`[data-lot="${d.lot}"]`:'all' in d?'[data-all]':null;
+  const was=box.querySelector('details.about'), open=!!(was&&was.open);
+  L._body.querySelector('[data-top]').innerHTML=`<p class="says">${L.says}</p>`+(L.lead?`<p class="lead">${L.lead}</p>`:'');
+  box.innerHTML=L.l2()+srcLine(L.src)+about(L.l3());
+  if(open) box.querySelector('details.about').open=true;
+  const f=key&&box.querySelector(key); if(f) f.focus();
+  markCurrent();
 }
 
-function toggle(L){
+function toggle(L,quiet){
   L.on=!L.on; L._row.dataset.on=L.on; L._sw.setAttribute('aria-pressed',L.on);
-  if(L.on&&!L.open) setOpen(L,true);
-  paint(L);
-  link();
+  headline(L); paint(L);
+  if(!quiet) link();
+}
+
+/* the item that made the selection, and the open lot, are marked wherever they are listed */
+function markCurrent(){
+  document.querySelectorAll('#layerList [aria-current], #readout [aria-current]').forEach(b=>b.removeAttribute('aria-current'));
+  const o=LAYERS.find(L=>L.open), at=!SEL.pick&&!SEL.lot&&SEL.st!=null&&o&&PICKS[o.id]?PICKS[o.id].findIndex(x=>x.ft===SEL.st):-1;
+  const k=SEL.pick||(at>=0?{row:o.id,i:at}:null), b=k&&$(`#layerList [data-pick="${k.row}:${k.i}"]`);
+  if(b) b.setAttribute('aria-current','true');
+  if(SEL.lot) document.querySelectorAll(`#layerList [data-lot="${SEL.lot}"], #readout .lotrows [data-lot="${SEL.lot}"]`).forEach(x=>x.setAttribute('aria-current','true'));
+  return b;
 }
 
 /* the one place the hour changes: slider, link and boot all come through here */
@@ -746,9 +970,8 @@ function setHour(h){
   redraw(L); headline(L);
   if(MAP_OK&&map.getSource&&map.getSource('bus')) map.getSource('bus').setData(busGeo(SEL.hour));
   buildRuler(); link();
-  /* an open station card follows the hour, without jumping back to its top */
-  if(SEL.st!=null&&!SEL.lot){ const p=$('#readout'), t=p.scrollTop;
-    p.innerHTML=stationHTML(stationProfile(SEL.st,SEL.hour)); p.scrollTop=t; }
+  /* an open station card follows the hour. the pick is kept. */
+  renderCard();
 }
 
 function paint(L){
@@ -804,8 +1027,8 @@ map.on('style.load',()=>{
   map.addLayer({id:'lotLine',type:'line',source:'lots',slot:'middle',
     paint:{'line-color':'#14120F','line-opacity':.8,'line-emissive-strength':1,
       'line-width':['interpolate',['linear'],['zoom'],
-        13,['case',['boolean',['feature-state','hover'],false],2.4,.35],
-        17,['case',['boolean',['feature-state','hover'],false],2.4,1.1]]}});
+        13,['case',['any',['boolean',['feature-state','hover'],false],['boolean',['feature-state','picked'],false]],2.4,.35],
+        17,['case',['any',['boolean',['feature-state','hover'],false],['boolean',['feature-state','picked'],false]],2.4,1.1]]}});
   map.addLayer({id:'lmHatch',type:'line',source:'lots',slot:'middle',filter:['==',['get','lm'],1],
     layout:{visibility:'none'},
     paint:{'line-color':'#14120F','line-width':3,'line-opacity':.9,'line-dasharray':[1,1.4],'line-emissive-strength':1}});
@@ -869,8 +1092,8 @@ map.on('style.load',()=>{
   const dot=(id,src,paint)=>map.addLayer({id,type:'circle',source:src,slot:'top',layout:{visibility:'none'},
     paint:{'circle-emissive-strength':1,...paint}});
   if(BENCH_STATS){
-    map.addSource('benches',{type:'geojson',data:{type:'FeatureCollection',features:BENCHES.map(b=>({
-      type:'Feature',properties:{ft:b.ft, side:b.side, installed:b.installed||''},geometry:{type:'Point',coordinates:[b.lon,b.lat]}}))}});
+    map.addSource('benches',{type:'geojson',data:{type:'FeatureCollection',features:BENCHES.map((b,i)=>({
+      type:'Feature',properties:{i, ft:b.ft, side:b.side, installed:b.installed||''},geometry:{type:'Point',coordinates:[b.lon,b.lat]}}))}});
     dot('benchDots','benches',{'circle-color':'#14120F','circle-stroke-color':'#FCFAF5','circle-stroke-width':1.5,
       'circle-radius':['interpolate',['linear'],['zoom'],13,3.5,17,8]});
   }
@@ -899,8 +1122,8 @@ map.on('style.load',()=>{
   }
   /* one circle per place, its area the people injured there */
   if(CRASH_STATS){
-    map.addSource('crashes',{type:'geojson',data:{type:'FeatureCollection',features:CRASH_STATS.drawn.map(p=>({
-      type:'Feature',properties:{inj:p.inj},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}))}});
+    map.addSource('crashes',{type:'geojson',data:{type:'FeatureCollection',features:CRASH_STATS.drawn.map((p,i)=>({
+      type:'Feature',properties:{i, inj:p.inj},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}))}});
     dot('crashDots','crashes',{'circle-color':'#14120F','circle-opacity':.6,'circle-stroke-color':'#FCFAF5','circle-stroke-width':1,
       'circle-radius':['interpolate',['linear'],['zoom'],13,['*',1.3,['sqrt',['get','inj']]],17,['*',4.4,['sqrt',['get','inj']]]]});
   }
@@ -908,13 +1131,25 @@ map.on('style.load',()=>{
   map.addSource('aves',{type:'geojson',data:{type:'FeatureCollection',features:AVES.map(([ft,name])=>({
     type:'Feature',properties:{name},geometry:{type:'Point',coordinates:at(ft)}}))}});
   map.addLayer({id:'aveLab',type:'symbol',source:'aves',slot:'top',
-    layout:{'text-field':['get','name'],'text-size':11,'text-offset':[0,-1.5],'text-letter-spacing':.16,
-      'text-font':['DIN Pro Medium','Arial Unicode MS Regular'],'text-transform':'uppercase'},
+    layout:{'text-field':['get','name'],'text-size':13,'text-offset':[0,-1.3],
+      'text-font':['DIN Pro Medium','Arial Unicode MS Regular']},
     paint:{'text-color':'#14120F','text-halo-color':'#FCFAF5','text-halo-width':2.2,'text-emissive-strength':1}});
   /* avenue names are not a layer, they are how the sheet is read. always on. */
   map.setLayoutProperty('aveLab','visibility','visible');
 
-  wire(); LAYERS.forEach(paint); syncRuler();
+  /* the picked item, marked in ink over everything: a ring round a point, a casing along a
+     curb face or a shed's lot. its own geometry, no data colour. */
+  map.addSource('pick',{type:'geojson',data:{type:'FeatureCollection',features:[]}});
+  /* zoom has to be the outermost expression, so the ring's extra is added inside it */
+  const ringAt=d=>['interpolate',['linear'],['zoom'],13,['+',['get','r13'],d],17,['+',['get','r17'],d]], ringR=ringAt(0), isPt=['==',['geometry-type'],'Point'];
+  map.addLayer({id:'pickLine',type:'line',source:'pick',slot:'top',filter:['!',isPt],layout:{'line-cap':'butt','line-join':'round'},
+    paint:{'line-color':'#14120F','line-width':4,'line-emissive-strength':1}});
+  map.addLayer({id:'pickHalo',type:'circle',source:'pick',slot:'top',filter:isPt,
+    paint:{'circle-opacity':0,'circle-radius':ringR,'circle-stroke-color':'#FCFAF5','circle-stroke-width':5.5,'circle-emissive-strength':1}});
+  map.addLayer({id:'pickRing',type:'circle',source:'pick',slot:'top',filter:isPt,
+    paint:{'circle-opacity':0,'circle-radius':ringAt(1.5),'circle-stroke-color':'#14120F','circle-stroke-width':2.5,'circle-emissive-strength':1}});
+
+  wire(); LAYERS.forEach(paint); syncPick(); syncRuler();
 });
 
 /* ── hover and select ─────────────────────────────────────────────────── */
@@ -934,13 +1169,22 @@ function wire(){
     if(hoverLot!==null) map.setFeatureState({source:'lots',id:hoverLot},{hover:false});
     hoverLot=null; map.getCanvas().style.cursor='';
   });
-  /* any spot on the map is a station. a lot under the click opens inside the same card. */
+  /* any spot on the map is a station. a drawn item under the press is picked at its own station,
+     as its list button would. a lot under the press opens inside the same card. */
+  const ITEM={benchDots:'benches',countDot:'people',crashDots:'crashes',curbLine:'curb',shedLine:'sheds',shedFill:'sheds'};
   map.on('click',e=>{
+    const ids=Object.keys(ITEM).filter(id=>map.getLayer(id)), box=[[e.point.x-5,e.point.y-5],[e.point.x+5,e.point.y+5]];
+    const it=ids.length?map.queryRenderedFeatures(box,{layers:ids})[0]:null;
+    if(it){ const id=ITEM[it.layer.id], p=it.properties;
+      const i=id==='people'?0:id==='sheds'?PICKS.sheds.findIndex(x=>x.bbl===String(p.bbl)):+p.i;
+      if(PICKS[id][i]){ const L=row(id);
+        if(L&&!L.open&&!STACKED.matches){ setOpen(L,true); }
+        select({st:PICKS[id][i].ft, lot:null, pick:{row:id,i}},{fromMap:true}); return; } }
     const hit=map.getLayer('lotFill')?map.queryRenderedFeatures(e.point,{layers:['lotFill']}):[];
     const q=project(e.lngLat.lng,e.lngLat.lat);
     /* a click past the deepest drawn lot is off the sheet, not a place on the street */
     if(!hit.length&&q.off>REACH) return;
-    select({st:q.ft, lot:hit.length?String(hit[0].properties.bbl):null});
+    select({st:q.ft, lot:hit.length?String(hit[0].properties.bbl):null},{fromMap:true});
   });
   map.on('mousemove','treeDots',e=>{const p=e.features[0].properties;
     showTip(e,`<b>${p.common}</b><em>${p.latin||''}</em><span>${p.dbh} in trunk &middot; ${p.cond}</span>`);});
@@ -977,7 +1221,7 @@ function wire(){
      station gives the same figure as its circle */
   if(map.getLayer('curbLine')){
     map.on('mousemove','curbLine',e=>{const f=CURB[e.features[0].properties.i];
-      showTip(e,`<b>${f.who}</b><em>${f.side==='n'?'north':'south'} side, between ${f.from} and ${f.to}</em><span>${curbTerms(f)}</span>`);});
+      showTip(e,`<b>${f.who}</b><em>${f.side==='n'?'north':'south'} side, between ${crossName(f.from)} and ${crossName(f.to)}</em><span>${curbTerms(f)}</span>`);});
     map.on('mouseleave','curbLine',()=>tip.dataset.show='false');
   }
   if(map.getLayer('shedLine')){
@@ -994,122 +1238,85 @@ function wire(){
   map.on('move',syncRuler);
 }
 
-/* ── the station card ─────────────────────────────────────────────────── */
-/* one selection, one place. st is feet from the west end, lot is a bbl or null, hour is the
-   hour of day every timed figure is read at. it opens on the street's slowest hour. */
-const HOUR_START=BUS_STATS?BUS_STATS.slowHour[0]:17;
-const SEL={st:null, lot:null, hour:HOUR_START};
-const AVE_FULL={Mad:'Madison',Lex:'Lexington'};
-const aveShort=n=>AVE_FULL[n]||n;
-const aveName=n=>aveShort(n)+' Avenue';
-/* the numbered street an address names. a label only: the lot rule is frontage (METHODOLOGY 4) */
-const streetNo=a=>((a||'').toUpperCase().replace(/\s+/g,' ').trim().replace(/\b(\d+)(ST|ND|RD|TH)\b/g,'$1').match(/^(?:[0-9][0-9A-Z-]* )?(?:EAST|WEST|E|W) (\d+) (?:STREET|ST)$/)||[])[1];
-/* the lot row's figures, all from the drawn lots. on is the lots addressed on 42nd Street. */
-const LOT_STATS=(()=>{ const P=LOTS.features.map(f=>f.properties), sum=l=>l.reduce((t,p)=>t+(p.unbuilt||0),0), lm=P.filter(p=>p.lm===1);
-  return {all:P.length, room:P.filter(p=>p.unbuilt>0).length, on:P.filter(p=>streetNo(p.addr)==='42').length,
-    lm:lm.length, unbuilt:sum(P), lmUnbuilt:sum(lm)}; })();
-const feet=v=>v==null?'not measured here':v+' ft';
-/* '2026-05-20' to '20 May 2026', '2026-05' to 'May 2026'. no Date object, so no timezone slip. */
-const day=iso=>{const [y,m,d]=iso.split('-'); return (d?+d+' ':'')+MON[m-1]+' '+y;};
-const srcDate=k=>(window.SOURCE_DATE||{})[k]?`, updated ${day(window.SOURCE_DATE[k])}`:'';
-const away=x=>x.dir?`${commas(x.dist)} ft ${x.dir}`:'at this station';
-/* a count window from the baked hours, 24 hour clock in: 'weekday 4 to 7pm' */
-const span=w=>w?`${w.day} ${hr(w.from).slice(0,(w.from<12)===(w.to<12)?-2:undefined)} to ${hr(w.to)}`:'PM';
-const PM_WIN=span((window.PED_COUNT||{}).windows&&window.PED_COUNT.windows.pm);
-/* a shed permit in one line, the same words on the map, in the card and in the lot list */
-const shedSays=x=>x.state==='in force'?`in force to ${day(x.expires)}`:`ran out ${day(x.expires)}, no sign-off recorded`;
-const block=x=>x.west===x.east?`at ${aveShort(x.west)}`:!x.west?`west of ${aveShort(x.east)}`:!x.east?`east of ${aveShort(x.west)}`:`${aveShort(x.west)} to ${aveShort(x.east)}`;
-/* source, date and caveat travel with the figures, whichever layers are on */
-/* the rendered file on GitHub. a relative .md link is not served the same way by every host. */
-const METHOD='https://github.com/judy-huynh/river-to-river/blob/main/METHODOLOGY.md';
-const NOTE_WALK=`Walk widths are gross concrete. Sheds, stairs, newsstands and kiosks are not deducted, `
-  +`so each width is an upper bound, not a clear width. Sidewalks: NYC planimetric sidewalk polygons `
-  +`via Sidewalk Widths NYC, source file dated 20 Apr 2020. Roadway: NYC CSCL street centerline. `
-  +`Trees: NYC Parks Forestry Tree Points. `
-  +`Benches: NYC DOT Seating Locations${srcDate('BENCHES')}, ${(window.BENCHES||[]).length} on the street, `
-  +`distance measured along it. The source holds only benches DOT placed. Seating in parks and plazas, `
-  +`or put out by a building or a business improvement district, is not in it. `
-  +`Pedestrian count: NYC DOT Bi-Annual Pedestrian Counts${srcDate('PED_COUNT')}. The figure is the total for `
-  +`${PM_WIN} on one count day, both sidewalks, not an average. Shown within ${COUNT_REACH} ft of the `
-  +`counter and only on its own block.`
-  +(TIER_STATS?` Priority tier: NYC DOT Pedestrian Mobility Plan${srcDate('PED_TIER')}. A tier is the plan's rank `
-  +`for the street segment, 1 the highest. It is not a count of people.`:'')
-  +(CURB_STATS?` Curb: NYC DOT ParkNYC Block Faces${srcDate('CURB')}. No meter does not mean free to park: other posted `
-  +`rules apply and are not in the source.`:'')
-  +(CRASH_STATS?` Crashes: NYPD Motor Vehicle Collisions${srcDate('CRASHES')}, ${day(CRASH_META.since)} to ${day(CRASH_META.to)}, `
-  +`police points within ${CRASH_META.near_ft} ft of the centreline, usually the nearest intersection. Counts of people hurt. No rate can be computed.`:'')
-  +(BUS_STATS?` Bus: MTA Bus Route Segment Speeds, ${BUS_META.route}, weekdays in ${busMonth()}${srcDate('BUS')}. `
-  +`A speed is the average over a whole leg between two timepoints, not a reading at this station. `
-  +`A leg with a timepoint off 42nd Street is left out, so some stations have none.`:'');
-const NOTE_LOT=`Unbuilt floor area is lot area &times; the base floor area ratio of the zoning district, minus `
-  +`floor area built. Special district rules are not applied, and a landmarked lot may not be able `
-  +`to use it. Lots: NYC MapPLUTO.`
-  +(SHED_STATS?` Shed permits: DOB NOW: Build, Approved Permits${srcDate('SHEDS')}, read as of ${day(SHEDS_META.asof)}. `
-  +`A permit is a record. It does not confirm a shed is standing, and the length of a shed is not in it.`:'');
-const note=t=>`<p class="note">${t} <a href="${METHOD}">Method</a></p>`;
-/* the line runs on past the first and last avenue, so a station can have one on one side only */
-const whereName=x=>x.west&&x.west===x.east?`At ${aveName(x.west)}`
-  : !x.west?`West of ${aveName(x.east)}`
-  : !x.east?`East of ${aveName(x.west)}`
-  : `Between ${aveShort(x.west)} and ${aveName(x.east)}`;
-const where=P=>whereName(between(P.ft));
-
 /* a slider must always carry a value: with no station picked it reports the middle of the view */
 function restSlider(){
   const r=$('#ruler');
   r.setAttribute('aria-valuenow',Math.round((VIEW[0]+VIEW[1])/2));
   r.setAttribute('aria-valuetext','No station picked');
 }
-let pin=null;
+let pin=null, pickedLot=null;
 const STACKED=matchMedia('(max-width:899px)');   /* the same width style.css stacks the sheet at */
-function select(next,boot){
+const REDUCED=matchMedia('(prefers-reduced-motion:reduce)');
+const pickOf=()=>SEL.pick?PICKS[SEL.pick.row][SEL.pick.i]:null;
+/* the one way a selection changes. a selection is a station and, when a listed or drawn item
+   made it, that item: pick={row,i}. a new station that arrives without an item clears the item.
+   opt.boot: the layout has not settled. opt.fromMap: the reader pressed the map itself. */
+function select(next,opt={}){
+  if('st' in next&&!('pick' in next)) next={...next,pick:null};
   Object.assign(SEL,next);
   if(SEL.st!=null) SEL.st=Math.max(0,Math.min(LEN,Math.round(SEL.st)));
   if(SEL.lot&&!LOT_BY_BBL.has(SEL.lot)) SEL.lot=null;
+  /* a pick that does not stand at the station is stale */
+  if(SEL.pick&&!(PICKS[SEL.pick.row]&&PICKS[SEL.pick.row][SEL.pick.i]&&PICKS[SEL.pick.row][SEL.pick.i].ft===SEL.st)) SEL.pick=null;
   const open=SEL.st!=null;
-  const panel=$('#readout'), mark=$('#rulerMark'), ruler=$('#ruler');
-  panel.hidden=!open; mark.hidden=!open;
+  const panel=$('#readout'), ruler=$('#ruler');
+  panel.hidden=!open; document.body.dataset.card=open;
   if(open){
-    const P=stationProfile(SEL.st,SEL.hour);
-    mark.style.left=(share(SEL.st)*100)+'%';
+    const P=stationProfile(SEL.st,SEL.hour), k=pickOf();
     ruler.setAttribute('aria-valuenow',SEL.st);
-    ruler.setAttribute('aria-valuetext',`${commas(SEL.st)} ft from the west end. ${where(P)}`
+    ruler.setAttribute('aria-valuetext',`${commas(SEL.st)} ft from the Hudson River. ${where(P)}`
       +(P.vision?`. Published vision, ${VISION.by}: ${P.vision.place}`:''));   /* the band has no other text form */
     const lot=SEL.lot&&LOT_BY_BBL.get(SEL.lot);
     /* one short line is announced, not the whole card. walking the ruler already speaks
        through the slider, so it stays quiet then. */
     $('#said').textContent=document.activeElement===ruler?''
       : lot?`${lot.addr||'Unnamed lot'}. ${lot.owner||'owner not recorded'}.`
-      : `Station ${commas(SEL.st)} ft. ${where(P)}.`;
-    panel.innerHTML=lot?lotHTML(lot):stationHTML(P);
-    /* the rail is taller than the window, and stacked the card sits below the ruler:
-       either way it must be brought into view or it updates out of sight */
-    panel.scrollTop=0;
-    /* not on the boot call: the layout has not settled and the page lands past the card.
-       wide, the card floats inside the map and is already in view. */
-    if(!boot&&STACKED.matches) panel.scrollIntoView({block:'nearest'});
+      : `${k?pickTitle(k)+'. ':''}Station ${commas(SEL.st)} ft. ${where(P)}.`;
+    renderCard(); panel.scrollTop=0;
+    /* stacked, the card takes the screen under the ruler, so the ruler goes to the top of it */
+    if(!opt.boot&&STACKED.matches) $('#rulerBox').scrollIntoView({block:'start'});
     if(MAP_OK){
       if(!pin) pin=new mapboxgl.Marker({element:el('div','pin'),anchor:'center'});
       pin.setLngLat(at(SEL.st)).addTo(map);
-      if(!boot) clearPin();
     }
   } else {
     panel.innerHTML=''; $('#said').textContent=''; restSlider();
     if(pin) pin.remove();
   }
-  printMark();
+  syncPick(opt);
+  if(open&&!opt.boot) showStation(!!opt.fromMap);
   link();
 }
-/* the view is a link: ?st=4000 opens this card, &lot= opens the lot inside it, &hr=17 is the
-   hour, &q=benches is the open row, &on=lots,trees is what is drawn. hr is written whenever the
-   hour shows: bus drawn, bus row open, or the hour moved. on is written once the drawn set or
-   the open row has moved from how the sheet starts, and always beside hr, so hr alone stays
-   the hand-typed short form that also switches the bus on.
-   &by=lots.capacity is what a row is coloured by, written only once it has moved. */
+/* after every selection the list, the map, the ruler and the card show the same station and item */
+function syncPick(opt={}){
+  const b=markCurrent(), k=pickOf();
+  /* an item picked on the map is brought into view in its list. only the rail is scrolled. */
+  if(b&&opt.fromMap&&!STACKED.matches){ const rail=$('#layerList'), R=rail.getBoundingClientRect(), B=b.getBoundingClientRect();
+    if(B.top<R.top||B.bottom>R.bottom) rail.scrollTop+=B.top-R.top-R.height/3; }
+  if(MAP_OK&&map.getSource&&map.getSource('pick'))
+    map.getSource('pick').setData({type:'FeatureCollection',features:k?[{type:'Feature',
+      properties:{r13:(k.r?k.r[0]:0)+5, r17:(k.r?k.r[1]:0)+5}, geometry:k.geo}]:[]});
+  if(MAP_OK&&map.getSource&&map.getSource('lots')&&pickedLot!==SEL.lot){
+    if(pickedLot) map.setFeatureState({source:'lots',id:pickedLot},{picked:false});
+    pickedLot=SEL.lot; if(pickedLot) map.setFeatureState({source:'lots',id:pickedLot},{picked:true}); }
+  const mark=$('#rulerMark'); mark.hidden=SEL.st==null;
+  if(SEL.st!=null){ const s=share(SEL.st); mark.style.left=(s*100)+'%'; mark.dataset.flip=s>.8;
+    $('#rulerMarkFt').textContent=`${commas(SEL.st)} ft`; }
+  pickRing(); printMark(); clearHubs();
+  try{ syncRuler(); }catch(e){}
+}
+/* the view is a link: ?st=4000 opens this card, &lot= opens the lot inside it, &pick=benches.0 is
+   the item the station came from, &hr=17 is the hour, &q=benches is the open row, &on=lots,trees is
+   what is drawn. hr is written whenever the hour shows: bus drawn, bus row open, or the hour moved.
+   on is written once the drawn set or the open row has moved from how the sheet starts, and always
+   beside hr, so hr alone stays the hand-typed short form that also switches the bus on.
+   &by=lots.capacity is what a row is coloured by, written only once it has moved.
+   &no=lm,pub is what the ranked lot list leaves out, written only when ticked. */
 function link(){
   const q=new URLSearchParams(location.search), open=SEL.st!=null;
   open?q.set('st',SEL.st):q.delete('st');
   SEL.lot&&open?q.set('lot',SEL.lot):q.delete('lot');
+  SEL.pick&&open?q.set('pick',SEL.pick.row+'.'+SEL.pick.i):q.delete('pick');
   const bus=row('bus'), timed=!!bus&&(bus.on||bus.open||SEL.hour!==HOUR_START);
   timed?q.set('hr',SEL.hour):q.delete('hr');
   const o=LAYERS.find(L=>L.open), on=LAYERS.filter(L=>L.on).map(L=>L.id).join(',');
@@ -1117,6 +1324,8 @@ function link(){
   o||timed||on!==ON_START?q.set('on',on):q.delete('on');
   const by=LAYERS.filter(L=>L.styles&&L.style!==BY_START.get(L.id)).map(L=>L.id+'.'+L.style).join(',');
   by?q.set('by',by):q.delete('by');
+  const lots=row('lots'), no=lots?[lots.noLm&&'lm',lots.noPub&&'pub'].filter(Boolean).join(','):'';
+  no?q.set('no',no):q.delete('no');
   /* commas are legal in a query, and a link that is printed is read by eye */
   const qs=q.toString().replace(/%2C/g,',');
   try{ history.replaceState(null,'',location.pathname+(qs?'?'+qs:'')+location.hash); }catch(e){}
@@ -1125,87 +1334,110 @@ function link(){
 
 /* where a published stretch runs, in the piece's own terms. a stretch the piece gives no cross streets
    for says so, and names the avenue crossings it is drawn between. */
-const crossName=n=>{ const v=(window.AVES||[]).find(x=>x.name===n); return v&&v.label?aveName(v.label):n; };
 const visionWhere=v=>v.stated?(v.basis?`${v.place}. ${v.basis}`:`${v.place}, as the piece gives it.`)
   : `The piece names ${v.place} without cross streets. Drawn ${v.from?crossName(v.from):'the west end'} to ${v.to?crossName(v.to):'the east end'}, approximate.`;
 let MORE_OPEN=false;   /* whether the reader has the long card open. kept across stations. */
+/* the card as it stands. the long half and the scroll position are kept. */
+function renderCard(){
+  if(SEL.st==null) return;
+  const p=$('#readout'), t=p.scrollTop, lot=SEL.lot&&LOT_BY_BBL.get(SEL.lot);
+  p.innerHTML=lot?lotHTML(lot):stationHTML(stationProfile(SEL.st,SEL.hour));
+  p.scrollTop=t; markCurrent();
+}
+/* the short card: title, the item picked, the position, the cross-section, three facts. the fact
+   that belongs to the open row or the picked item comes first. whatever is not shown short is
+   under More, and nothing is said twice. */
+const ROW_FACT={people:'count',benches:'bench',sheds:'shed',crashes:'crash',bus:'bus',curb:'curb',trees:'trees'};
 function stationHTML(P){
   const parts=[['n',P.north,'North walk'],['r',P.road&&P.road.w,'Roadway'],['s',P.south,'South walk']];
-  const whole=parts.every(x=>x[1]!=null);
   const said=parts.map(([,v,t])=>`${t} ${feet(v)}`).join(', ');
+  const none=parts.every(x=>x[1]==null), k=pickOf(), is=id=>!!k&&SEL.pick.row===id;
+  const openRow=LAYERS.find(L=>L.open), here=[...P.lots.n,...P.lots.s];
+  const openBtn=id=>row(id)&&!row(id).open?`<button class="linkbtn" type="button" data-open-row="${id}">Open ${row(id).name}</button>`:'';
+  const fact=(dt,dd,cls)=>`<div${cls?` class="${cls}"`:''}><dt>${dt}</dt><dd>${dd}</dd></div>`;
+  const width=v=>v!=null?`${v} ft`:`not measured here <a href="${METHOD}">Method</a>`;
+  const shedsHere=here.map(p=>[p,SHED_BY_BBL.get(String(p.bbl))]).filter(x=>x[1]);
+  /* every fact the station has, keyed. short takes three, More takes the rest. */
+  const F={
+    bench:fact('Nearest DOT bench',is('benches')?'this bench':P.bench?`${P.bench.dir?`${feetMiles(P.bench.dist)} ${P.bench.dir}`:'at this station'}, ${block(P.bench)}`:'no DOT bench recorded on the street'),
+    bus:P.bus?fact(`M42 bus, ${hourSpan(P.bus.hour)}`,[P.bus.e,P.bus.w].some(Boolean)?[['east',P.bus.e],['west',P.bus.w]].filter(x=>x[1]).map(([d,r])=>
+      `${d} ${r.mph!=null?r.mph.toFixed(2)+' mph':'no buses measured'}`).join(' &middot; '):'no M42 speed kept here'):'',
+    lot:P.biggest?fact('Largest lot here',`<button class="linkbtn" type="button" data-lot="${P.biggest.bbl}">${addrShow(P.biggest)}</button>`
+      +`<span>${P.biggest.zone==='PARK'?'park':P.biggest.unbuilt>0?commas(P.biggest.unbuilt)+' sq ft allowed and unbuilt':'no unbuilt floor area'}</span>`):'',
+    count:P.count?fact('Pedestrians counted',`${commas(P.count.pm)}<span>${span(P.count.win)}, one day in ${day(P.count.p)}, ${is('people')?'this counter':`counter ${away(P.count)}, ${block(P.count)}`}</span>`):'',
+    shed:SHED_STATS?is('sheds')?fact('Shed permit',`this building<span>${k.sub}</span>`):fact('Shed permit here',shedsHere.length?shedsHere.map(([p,x])=>`${p.addr}<span>${shedSays(x)}</span>`).join(''):'none on record at this station'):'',
+    crash:P.crashes?fact('Nearest crash place',(c=>c?`${commas(c.inj)} injured<span>in ${commas(c.n)} crash${c.n===1?'':'es'}${c.name?` at ${crossName(c.name)}`:''}, ${is('crashes')?'this place':away(c)}, counts only</span>`
+       :`none within ${P.crashes.reach} ft`)(P.crashes.place)+openBtn('crashes')):'',
+    curb:is('curb')?fact('Metered curb',`this side of the block<span>${k.sub}</span>`):P.curb?fact('Metered curb here',[['north',P.curb.n],['south',P.curb.s]].map(([s,f])=>
+       `<span>${s}: ${f?`${f.who.toLowerCase()}, ${(f.com||f.all).hours}`:'no meter'}</span>`).join('')):'',
+    trees:fact(`Trees within ${TREE_REACH} ft`,`${P.trees.all}${P.trees.all?`<span>${P.trees.n} north, ${P.trees.s} south</span>`:''}`+openBtn('trees'))
+  };
+  const lead=openRow&&openRow.id==='lots'?'lots':(k&&ROW_FACT[SEL.pick.row])||(openRow&&ROW_FACT[openRow.id]);
+  const order=[...new Set([lead,'bench','bus'])].filter(id=>F[id]);
+  const short=order.slice(0,3), rest=Object.keys(F).filter(id=>F[id]&&!short.includes(id));
   /* flags come from the record: the lot's own address and whether it is the largest listed here */
-  const tags=p=>{const t=[];
-    if(P.biggest&&p.bbl===P.biggest.bbl) t.push('largest lot here');
+  const tags=p=>{const t=[`${commas(p.unbuilt)} sq ft unbuilt`]; if(p.lm===1) t.push('landmark');
     if(p.addr&&streetNo(p.addr)!=='42') t.push('not a 42 Street address');
     const shed=SHED_BY_BBL.get(String(p.bbl)); if(shed) t.push('shed permit '+shedSays(shed));
-    return t.length?`<span class="num">${t.join(' &middot; ')}</span>`:'';};
-  const none=parts.every(x=>x[1]==null);
+    return t.join(' &middot; ');};
+  /* with the lots row open, the lots that front this station lead the card */
+  const lotsLead=lead==='lots'?`<p class="lab">Lots at this station</p>`+(here.length?`<ul class="lotrows">${here.map(p=>
+      `<li><button type="button" data-lot="${p.bbl}"><b>${addrShow(p)}</b><span>${p.side==='n'?'north':'south'} side &middot; ${tags(p)}</span></button></li>`).join('')}</ul>`
+    :`<p class="none">No drawn lot fronts the street here.</p>`):'';
   /* a lot the rule took out that fronts here is named, so a gap is not read as a data hole */
-  const outList=out=>out.map(p=>`<p class="none">${p.addr} is the nearest lot here. It is outside the lot set because ${p.why}, and the set takes lots within ${window.LOTS_META.front_ft} ft. <a href="${METHOD}#4-the-lot-rule-frontage">Method</a></p>`).join('');
-  const lotList=(side,list,out)=>`<h4 class="micro">${side} side &middot; ${list.length} lot${list.length===1?'':'s'}</h4>`
-    +(list.length?`<ul class="lotrows">${list.map(p=>
-      `<li><button type="button" data-lot="${p.bbl}">`
-      +`<b>${p.addr||'Unnamed lot'}</b><span>${p.owner||'owner not recorded'}</span>`
-      +`<span class="num">${commas(p.unbuilt)} sq ft unbuilt${p.lm===1?' &middot; landmark':''}</span>`
-      +tags(p)
-      +`</button></li>`).join('')}</ul>`
-    :`<p class="none">No drawn lot fronts this side here.</p>`)+outList(out);
+  const outList=[...P.outside.n,...P.outside.s].map(p=>`<p class="note">${p.addr} is the nearest lot here. It is outside the lot set because ${p.why}, and the set takes lots within ${window.LOTS_META.front_ft} ft. <a href="${METHOD}#4-the-lot-rule-frontage">Method</a></p>`).join('');
+  const walkLab=(t,v)=>`<span><span class="lab">${t}</span><b>${width(v)}</b></span>`;
   return `<div class="card__top"><h3>${where(P)}</h3>`
-    +`<button class="mini" type="button" data-close>close</button></div>`
-   +`<span class="micro">${commas(P.ft)} ft from the west end`
-   +(P.at?'':` &middot; `+[P.west&&`${commas(P.ft-P.west.ft)} ft past ${aveShort(P.west.name)}`, P.east&&`${commas(P.east.ft-P.ft)} ft to ${aveShort(P.east.name)}`].filter(Boolean).join(', '))+`</span>`
+    +`<button class="mini" type="button" data-close>Close</button></div>`
+   +(k?`<p class="card__pick">${pickTitle(k)}</p>`:'')
+   +`<p class="lab card__pos">${commas(P.ft)} ft from the Hudson River</p>`
    /* flex-grow is the width in feet, so the bar is to scale by construction */
-   +`<div class="xsec${none?' xsec--none':''}" role="img" aria-label="Cross-section. ${said}.">${parts.map(([k,v])=>
-      v!=null?`<i class="xsec__${k}" style="flex:${v} 1 0"></i>`:`<i class="xsec__gap"></i>`).join('')}</div>`
-   /* the three widths are read off the bar itself, so the short card needs no rows for them */
-   +`<div class="xsec__lab xsec__lab--fig"><span class="micro">north walk<b>${feet(P.north)}</b></span>`
-   +`<span class="micro">roadway<b>${P.road?P.road.w+' ft':feet(null)}</b></span>`
-   +`<span class="micro">south walk<b>${feet(P.south)}</b></span></div>`
-   +`<dl>`
-   +`<div><dt>Nearest DOT bench</dt><dd>${P.bench?`${away(P.bench)}<span>${P.bench.side==='n'?'north':'south'} side, ${block(P.bench)}</span>`:'no DOT bench recorded on the street'}</dd></div>`
-   +(P.bus?`<div><dt>M42 bus here, ${hourSpan(P.bus.hour)}</dt><dd>${[P.bus.e,P.bus.w].some(Boolean)?[P.bus.e,P.bus.w].filter(Boolean).map(r=>
-       `${r.mph!=null?r.mph.toFixed(2)+' mph':'no buses measured'} ${DIRS[r.dir]}<span>whole leg, ${legName(r)}, ${commas(r.b-r.a)} ft</span>`).join('')
-       :'no M42 speed kept here'}</dd></div>`:'')
-   +(P.biggest?`<div><dt>Largest lot here</dt><dd><button class="linkbtn" type="button" data-lot="${P.biggest.bbl}">${P.biggest.addr||'Unnamed lot'}</button>`
-     +`<span>${P.biggest.owner||'owner not recorded'}, ${commas(P.biggest.unbuilt)} sq ft unbuilt</span></dd></div>`:'')
+   +`<div class="xsec${none?' xsec--none':''}" role="img" aria-label="Cross-section, drawn to scale. ${said}.">${parts.map(([c,v])=>
+      v!=null?`<i class="xsec__${c}" style="flex:${v} 1 0"></i>`:`<i class="xsec__gap"></i>`).join('')}</div>`
+   +`<div class="xsec__lab">${walkLab('North walk',P.north)}`
+   +`<span><span class="lab">Roadway</span><b>${width(P.road?P.road.w:null)}</b></span>`
+   +walkLab('South walk',P.south)+`</div>`
+   +(SW_STATS&&!none?`<p class="lab xsec__ref">Whole street: median sidewalk ${SW_STATS.med} ft, average roadway ${ROAD_STATS.avgW} ft</p>`:'')
+   +lotsLead
+   +`<dl>${short.filter(id=>!(lead==='lots'&&id==='lot')).map(id=>F[id]).join('')}</dl>`
    /* the card opens short, so it sits under the street and the map never has to move aside for it.
       everything else recorded here is one press away, and stays open while the reader walks the street. */
-   +`</dl><details class="more"${MORE_OPEN?' open':''}><summary>More recorded at this spot</summary><dl>`
-   +`<div><dt>Cross-section</dt><dd>${whole?'drawn to scale':none?'not measured here':'measured parts to scale'}</dd></div>`
-   +`<div><dt><i class="key-n"></i>North walk</dt><dd>${feet(P.north)}</dd></div>`
-   +`<div><dt><i class="key-r"></i>Roadway</dt><dd>${P.road?`${P.road.w} ft &middot; ${P.road.lanes} moving + ${P.road.park} parked`:feet(null)}</dd></div>`
-   +`<div><dt><i class="key-n"></i>South walk</dt><dd>${feet(P.south)}</dd></div>`
-   +(P.bench&&P.bench.installed?`<div><dt>Nearest bench installed</dt><dd>${day(P.bench.installed)}</dd></div>`:'')
-   +`<div><dt>Trees within ${TREE_REACH} ft</dt><dd>${P.trees.all}${P.trees.all?`<span>${P.trees.n} north, ${P.trees.s} south</span>`:''}</dd></div>`
-   +(P.curb?`<div><dt>Metered curb here</dt><dd>${[['north',P.curb.n],['south',P.curb.s]].map(([k,f])=>
-       `<span>${k}: ${f?`${f.who.toLowerCase()}, ${(f.com||f.all).hours}`:'no meter'}</span>`).join('')}</dd></div>`:'')
-   +(P.crashes?`<div><dt>Nearest crash place</dt><dd>${(c=>c?`${commas(c.inj)} injured<span>in ${commas(c.n)} crash${c.n===1?'':'es'}${c.name?` at ${c.name}`:''}, ${away(c)}, ${day(CRASH_META.since)} to ${day(CRASH_META.to)}, counts only</span>`
-       :`none within ${P.crashes.reach} ft`)(P.crashes.place)}</dd></div>`:'')
-   +(TIER_STATS?`<div><dt>DOT pedestrian priority tier</dt><dd>${P.tier?`${P.tier.name}<span>tier ${P.tier.rank} of ${TIER_META.length}. A planning rank. It does not count people.</span>`:'no tier in the source here'}</dd></div>`:'')
-   +(P.count?`<div><dt>Pedestrians counted</dt><dd>${commas(P.count.pm)}<span>${span(P.count.win)}, one day in ${day(P.count.p)}, counter ${away(P.count)}, ${block(P.count)}</span></dd></div>`:'')
-   +(P.vision?`<div class="pub"><dt>Published vision: ${VISION.by}</dt><dd>${P.vision.says}<span>${visionWhere(P.vision)} `
-     +`<a href="${VISION.url}">${VISION.title}</a>, ${VISION.by}, read ${day(VISION.accessed)}. <a href="${METHOD}">Method</a></span></dd></div>`:'')
-   +`</dl>`+note(NOTE_WALK)
-   +lotList('North',P.lots.n,P.outside.n)+lotList('South',P.lots.s,P.outside.s)
-   +(P.lots.n.length+P.lots.s.length?note(NOTE_LOT):'')+`</details>`;
+   +`<details class="more"${MORE_OPEN?' open':''}><summary>More</summary><dl>`
+   +(P.road?fact('Roadway lanes',`${P.road.lanes} moving + ${P.road.park} parked`):'')
+   +(P.at?'':fact('Along the block',[P.west&&`${commas(P.ft-P.west.ft)} ft past ${aveShort(P.west.name)}`, P.east&&`${commas(P.east.ft-P.ft)} ft to ${aveShort(P.east.name)}`].filter(Boolean).join(', ')))
+   +(P.bus&&[P.bus.e,P.bus.w].some(Boolean)?fact('Whole legs',[['east',P.bus.e],['west',P.bus.w]].filter(x=>x[1]).map(([d,r])=>`<span>${d}: ${legName(r)}, ${commas(r.b-r.a)} ft</span>`).join('')):'')
+   +(P.bench?fact('Nearest bench',`${P.bench.side==='n'?'north':'south'} side${P.bench.installed?`, installed ${day(P.bench.installed)}`:''}`):'')
+   +rest.map(id=>F[id]).join('')
+   +(lead==='lots'?'':fact('Lots here',`${here.length}<span>${P.lots.n.length} north, ${P.lots.s.length} south</span>`+openBtn('lots')))
+   +(TIER_STATS?fact('DOT pedestrian priority tier',P.tier?`${P.tier.name}<span>tier ${P.tier.rank} of ${TIER_META.length}. A planning rank. It does not count people.</span>`:'no tier in the source here'):'')
+   +(P.vision?fact(`Published vision: ${VISION.by}`,P.vision.says,'pub'):'')
+   +`</dl>`+`<details class="about"><summary>About this data</summary>`+outList
+   +(P.vision?`<p class="note">Published vision: ${visionWhere(P.vision)} <a href="${VISION.url}">${VISION.title}</a>, ${VISION.by}, read ${day(VISION.accessed)}.</p>`:'')+note(NOTE_WALK)+(here.length?note(NOTE_LOT+(shedsHere.length?NOTE_SHED:'')):'')+`</details></details>`
+   +`<p class="card__foot"><a href="${METHOD}">Sources and method</a></p>`;
 }
 
 function lotHTML(p){
-  const used=p.allowed>0?Math.min(100,p.built/p.allowed*100):0;
-  return `<div class="card__top"><button class="mini" type="button" data-back>&larr; station ${commas(SEL.st)} ft</button>`
-    +`<button class="mini" type="button" data-close>close</button></div>`
-   +`<span class="micro">${p.side==='n'?'North side':'South side'} &middot; ${p.year||'year unknown'}</span>`
-   +`<h3>${p.addr||'Unnamed lot'}</h3>`
-   +`<span class="zonechip" style="background:${ZONE[p.zone]||'#B9B1A1'}">${p.zone||'no district'}</span>`
-   +`<div class="gauge"><i style="width:${used}%"></i></div>`
-   +`<div class="gauge__lab"><span class="micro">built ${p.built}&times;</span><span class="micro">allowed ${p.allowed}&times;</span></div>`
+  const used=p.allowed>0?Math.min(100,p.built/p.allowed*100):0, shed=SHED_BY_BBL.get(String(p.bbl));
+  const fact=(dt,dd)=>`<div><dt>${dt}</dt><dd>${dd}</dd></div>`;
+  return `<div class="card__top"><h3>${addrShow(p)}</h3>`
+    +`<button class="mini" type="button" data-close>Close</button></div>`
+   +`<p class="lab card__pos">${p.side==='n'?'North side':'South side'}`
+   +` <span class="zonechip" style="background:${ZONE[p.zone]||'#B9B1A1'}">${p.zone||'no district'}</span></p>`
+   +`<div class="gauge" role="img" aria-label="Built ${p.built} times the lot area, allowed ${p.allowed} times."><i style="width:${used}%"></i></div>`
+   +`<div class="gauge__lab"><span class="lab">built ${p.built}&times;</span><span class="lab">allowed ${p.allowed}&times;</span></div>`
    +`<dl>`
-   +`<div><dt>Owner</dt><dd>${p.owner||'not recorded'}</dd></div>`
-   +`<div><dt>Lot area</dt><dd>${commas(p.lotarea)} sq ft</dd></div>`
-   +`<div><dt>Floors</dt><dd>${p.floors||'not recorded'}</dd></div>`
-   +`<div><dt>Unbuilt floor area</dt><dd>${commas(p.unbuilt)} sq ft</dd></div>`
-   +(p.lm===1?`<div><dt>Landmark</dt><dd>protected</dd></div>`:'')
-   +`</dl>`+note(NOTE_LOT);
+   +fact('Owner',p.owner||'not recorded')
+   +fact('Lot area',`${commas(p.lotarea)} sq ft`)
+   +fact('Floors',p.floors||'not recorded')
+   +fact('Year built',p.year||'not recorded')
+   +fact('Unbuilt floor area',`${commas(p.unbuilt)} sq ft`)
+   +fact('Landmark',p.lm===1?'designated':'none on record')
+   +fact('BBL',p.bbl)
+   +(shed?fact('Shed permit',shedSays(shed)):'')
+   +`</dl>`
+   +`<details class="about"><summary>About this data</summary><dl>${fact('Floor area built',p.bldgarea!=null?`${commas(p.bldgarea)} sq ft`:'not recorded')}${fact('Floor area allowed',`${commas(p.allowed*p.lotarea)} sq ft`)}</dl>${note(shed?NOTE_LOT+NOTE_SHED:NOTE_LOT)}</details>`
+   +`<p class="card__foot"><button class="linkbtn" type="button" data-back>Back to station ${commas(SEL.st)} ft</button>`
+   +`<a href="${METHOD}">Sources and method</a></p>`;
 }
 
 /* toggle does not bubble, so it is caught on the way down */
@@ -1216,220 +1448,171 @@ $('#readout').addEventListener('click',e=>{
   const from=SEL.lot;
   if(b.dataset.lot) select({lot:b.dataset.lot});
   else if('back' in b.dataset) select({lot:null});
+  else if(b.dataset.openRow){ const L=row(b.dataset.openRow); if(L){ setOpen(L,true); link(); } }
   else if('close' in b.dataset){ closeCard(); return; }
   /* the pressed button is gone after a re-render: back returns to the lot's own row,
      anything else to the first button left */
   const f=('back' in b.dataset&&from&&$(`#readout [data-lot="${from}"]`))||$('#readout button');
   if(f) f.focus();
 });
-/* the floating card never sits on the station it describes. when the pin would fall under the
-   card, the map is moved so the station stands in the middle of the part the card leaves open. */
+/* the floating card never sits on the station it describes, and a station picked from a list or
+   the ruler is brought into the open part of the map. the station is set in the middle of what
+   the card leaves uncovered. a press on the map itself moves it only from under the card. */
 const PIN_ROOM=24;   /* px kept between the pin and the card's edge */
-function clearPin(){
-  if(!MAP_OK||STACKED.matches||SEL.st==null) return;
+const PICK_ZOOM=15.5;   /* an item picked from a list is shown at least this close */
+function showStation(fromMap){
+  if(!MAP_OK||SEL.st==null) return;
   requestAnimationFrame(()=>{ if(SEL.st==null) return;
-    const c=$('#readout').getBoundingClientRect(), m=map.getContainer().getBoundingClientRect(), p=map.project(at(SEL.st));
-    if(!c.width||m.left+p.x<c.left-PIN_ROOM||m.top+p.y<c.top-PIN_ROOM) return;
+    const m=map.getContainer().getBoundingClientRect(), p=map.project(at(SEL.st));
+    const c=STACKED.matches?null:$('#readout').getBoundingClientRect(), covered=c&&c.width;
+    const span=covered?Math.max(120,c.left-m.left):m.width;
+    const under=covered&&m.left+p.x>=c.left-PIN_ROOM&&m.top+p.y>=c.top-PIN_ROOM;
+    const out=p.x<span*.1||p.x>span*.9||p.y<0||p.y>m.height;
+    const close=!fromMap&&SEL.pick&&map.getZoom()<PICK_ZOOM;
+    if(!(under||(!fromMap&&(out||close)))) return;
     userMoved=true;
-    map.easeTo({center:at(SEL.st), offset:[-(m.right-c.left)/2,0], bearing:BEARING, duration:300}); });
+    map.easeTo({center:at(SEL.st), offset:[(span-m.width)/2,0], bearing:BEARING, duration:REDUCED.matches?0:300,
+      ...(close?{zoom:PICK_ZOOM}:{})}); });
 }
-/* wide, the card floats inside the map's box. style.css is told where that box sits in the sheet
-   and how far down the zoom control comes, so the card never covers the control or the first screen. */
+/* wide, the card floats inside the map's box. style.css is told where that box sits in the sheet,
+   so the card never covers the first screen. */
 function placeCard(){
   const sheet=$('.sheet'), m=$('#map'); if(!sheet||!m) return;
   const S=sheet.getBoundingClientRect(), M=m.getBoundingClientRect();
-  const ctl=m.querySelector('.mapboxgl-ctrl-top-right .mapboxgl-ctrl-group');
   const px=(k,v)=>sheet.style.setProperty(k,Math.max(0,Math.round(v))+'px');
   px('--map-top',M.top-S.top); px('--map-bot',S.bottom-M.bottom);
-  px('--map-clear',ctl?ctl.getBoundingClientRect().bottom-M.top:0);
 }
 if(window.ResizeObserver){ const ro=new ResizeObserver(placeCard); ro.observe($('#map')); ro.observe($('.sheet')); }
 addEventListener('resize',placeCard); placeCard();
-/* narrow, the title block keeps the title and the subject line: the meta list goes to the foot of
-   the page. the node is moved, so reading order is what is seen. paper always has it in the title block. */
-const NARROW_HEAD=matchMedia('(max-width:620px)');
-function placeMeta(){ const meta=$('#headMeta');
-  if(NARROW_HEAD.matches&&!PRINTING) $('#pageFoot').append(meta); else $('.head__tools').before(meta); }
-NARROW_HEAD.addEventListener('change',placeMeta);
-function closeCard(){ select({st:null,lot:null}); $('#ruler').focus(); }
+function closeCard(){ select({st:null,lot:null}); $('#ruler').focus();
+  /* stacked, the rail comes back where the reader left it */
+  const L=LAYERS.find(o=>o.open); if(L&&STACKED.matches) L._row.scrollIntoView({block:'nearest'}); }
 /* Escape in the card shuts the card only. stopped here, or the first screen's handler shuts that too and takes the focus. */
 $('#readout').addEventListener('keydown',e=>{ if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); closeCard(); } });
 
 /* ── ruler ────────────────────────────────────────────────────────────── */
 const NS='http://www.w3.org/2000/svg';
-/* the evidence the ruler carries, top to bottom. each band has a caption and a bar drawn to the
-   street's own scale. keep is the order bands are held on to when the ruler runs out of height:
-   it shows fewer bands, never smaller type. wide marks a band left off a narrow ruler. bar is
-   the bar's height. joins lets a band's caption share the line of the band above when both fit.
-   ink and the colours already on the sheet, nothing new. */
-const RULER_MAX=128, RULER_MAX_SHORT=96, SHORT_WINDOW=720;   /* px. the ruler's ceiling, and on a window under 720px high */
-const RULER_KEEP=2;   /* the DOT tier and the bus are drawn whatever the height comes to */
+/* the ruler's job is position: the street, the avenues, the four hubs, the map's window and the
+   station. it carries one band of evidence, the open row's, drawn to the street's own scale.
+   every key is in the row, never on the ruler. ink and the colours already on the sheet. */
 /* colours are read from the tokens in style.css, so the sheet has one source for them */
 const token=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const INK=token('--ink'), PAPER=token('--paper'), LABEL=token('--ink-label'), LEAF=token('--leaf'), ALARM=token('--alarm');
+const INK=token('--ink'), PAPER=token('--paper'), LABEL=token('--ink-3'), LEAF=token('--leaf'), ALARM=token('--alarm');
 /* four ink strengths, strongest first, and the lowest tier an outline. every bar is ruled in
    ink, as the bus bars are, so a pale tier still stands off the ruler. */
-const TIER_INK={1:'--ink-70',2:'--ink-30',3:'--hair-2',4:'--hair'};
 const tierFill=rank=>({fill:TIER_INK[rank]?token(TIER_INK[rank]):'none',stroke:INK,'stroke-width':.6});
 /* a published stretch: ink already on the sheet, dashed where its ends are approximate */
 const visionBar=stated=>stated?{fill:token('--hair-2'),stroke:INK,'stroke-width':.6}:{fill:'none',stroke:INK,'stroke-width':.8,'stroke-dasharray':'2 2'};
 const blankLine=(add,X,a,b,y)=>add('line',{x1:X(a),x2:X(b),y1:y,y2:y,stroke:INK,'stroke-opacity':.5,'stroke-width':.8,'stroke-dasharray':'2 3'});
-const RULER_BANDS=[
-  { id:'tier', has:!!TIER_STATS, keep:1,
+const BAND_H=18;
+/* one band per row that has one. cap is the ruler's caption while the band shows. an item that
+   can be picked carries data-pick, so the ring finds it under the pin. */
+const RULER_BANDS={
+  people:{ has:!!(TIER_STATS||PED_STATS),
     /* a tier is the plan's rank for a segment. the caption never calls it demand or a count. */
-    caption:()=>[t=>`${t.tier}, tier ${t.rank} of ${TIER_META.length}`, t=>`${t.rank} ${t.tier}`].map(say=>
-      [{t:'DOT pedestrian priority tier'}, ...TIER_STATS.on.map(t=>({sw:tierFill(t.rank), t:say(t)}))]),
+    cap:()=>[TIER_STATS&&'DOT pedestrian priority tier',PED_STATS&&'the DOT counter'].filter(Boolean).join(' and '),
     draw(add,X,y,h){
-      TIER_STATS.runs.forEach(([a,b,rank])=>add('rect',{x:X(a)+.5,y,width:Math.max(1,X(b)-X(a)-1),height:h,...tierFill(rank)}));
-      TIER_STATS.blank.forEach(([a,b])=>blankLine(add,X,a,b,y+h/2)); } },
-  { id:'bus', has:!!BUS_STATS, keep:2, bar:10,
-    /* every stop of the ramp is keyed, and the name says a speed is a leg's average, so the band
-       reads with the bus row shut */
-    caption:()=>{ const R=BUS_RAMP, n=R.length-1, bar=c=>({fill:c,stroke:INK,'stroke-width':.6}),
-        name=long=>({t:`${BUS_META.route} bus, ${long?'average speed over each leg':'speed by leg'}, ${hourSpan(SEL.hour)}`}),
-        key=unit=>R.map(([v,c],i)=>({sw:bar(c), t:`${v}${unit||i===0||i===n?' mph':''}${i===0?' or less':i===n?' and over':''}`}));
-      return [[name(1),...key(1),{t:'westbound above, eastbound below'}],[name(1),...key(0)],[name(0),...key(0)]]; },
+      if(TIER_STATS){ TIER_STATS.runs.forEach(([a,b,rank])=>add('rect',{x:X(a)+.5,y:y+4,width:Math.max(1,X(b)-X(a)-1),height:h-8,...tierFill(rank)}));
+        TIER_STATS.blank.forEach(([a,b])=>blankLine(add,X,a,b,y+h/2)); }
+      if(PED_STATS) add('circle',{cx:X(PED.ft),cy:y+h/2,r:4.5,fill:PAPER,stroke:INK,'stroke-width':2,'data-pick':'people:0'}); } },
+  benches:{ has:!!BENCH_STATS,
+    cap:()=>'DOT benches and stretches with none',
+    draw(add,X,y,h){
+      BENCH_STATS.none.forEach(([a,b])=>add('rect',{x:X(a),y:y+4,width:Math.max(1,X(b)-X(a)),height:h-8,fill:token('--hair-2')}));
+      BENCHES.forEach((b,i)=>add('circle',{cx:X(b.ft),cy:y+h/2,r:5,fill:INK,stroke:PAPER,'stroke-width':1,'data-pick':'benches:'+i})); } },
+  sheds:{ has:!!SHED_STATS,
+    /* a building with a permit in force is a narrow bar at its station, never a length */
+    cap:()=>'Buildings with a shed permit in force',
+    draw(add,X,y,h){ add('line',{x1:X(0),x2:X(LEN),y1:y+h/2,y2:y+h/2,stroke:INK,'stroke-opacity':.13,'stroke-width':1});
+      SHED_STATS.live.forEach((x,i)=>add('rect',{x:X(x.ft)-1.5,y,width:3,height:h,fill:INK,'data-pick':'sheds:'+i})); } },
+  crashes:{ has:!!CRASH_STATS,
+    cap:()=>'Places where anyone was injured',
+    draw(add,X,y,h){ add('line',{x1:X(0),x2:X(LEN),y1:y+h/2,y2:y+h/2,stroke:INK,'stroke-opacity':.13,'stroke-width':1});
+      CRASH_STATS.drawn.forEach((p,i)=>add('rect',{x:X(p.ft)-.75,y:y+2,width:1.5,height:h-4,fill:INK,'fill-opacity':.6,'data-pick':'crashes:'+i})); } },
+  bus:{ has:!!BUS_STATS,
+    cap:()=>`${BUS_META.route} speed by leg, ${hourSpan(SEL.hour)}, westbound above`,
     /* either side of the band as on the street. one bar per leg at true length. where no leg is
-       kept, a dashed blank. */
-    draw(add,X,y,h){ const Y={W:y,E:y+h/2+1}, bh=h/2-1;
+       kept, a dashed blank. the hour's slowest leg is ruled in ink. */
+    draw(add,X,y,h){ const Y={W:y,E:y+h/2+1}, bh=h/2-1, slow=busSlowest(SEL.hour);
       BUS.filter(r=>r.h===SEL.hour).forEach(r=>add('rect',{x:X(r.a)+.5,y:Y[r.dir],width:Math.max(1,X(r.b)-X(r.a)-1),height:bh,
-        fill:r.mph!=null?busColour(r.mph):'none',stroke:INK,'stroke-width':.6}));
+        fill:r.mph!=null?busColour(r.mph):'none',stroke:INK,'stroke-width':r===slow?1.5:.6}));
       Object.entries(BUS_STATS.blank).forEach(([d,list])=>list.forEach(([a,b])=>blankLine(add,X,a,b,Y[d]+bh/2))); } },
-  { id:'trees', has:TREES.length>0, wide:true, keep:5,
-    caption:()=>[[{sw:{fill:LEAF,'fill-opacity':.9}, t:'Street trees'},{sw:{fill:ALARM,'fill-opacity':.45}, t:`over ${TREE_GAP_MIN} ft with none`}]],
+  trees:{ has:TREES.length>0,
+    cap:()=>`Street trees and stretches over ${TREE_GAP_MIN} ft with none`,
     draw(add,X,y,h){
       TREE_GAPS.forEach(([a,b])=>add('rect',{x:X(a),y,width:X(b)-X(a),height:h,fill:ALARM,'fill-opacity':.45}));
       TREES.forEach(t=>add('rect',{x:X(t.ft),y,width:1,height:h,fill:LEAF,'fill-opacity':.9})); } },
-  { id:'marks', has:!!(BENCH_STATS||PED_STATS||SHED_STATS), keep:4, joins:true,
-    /* each bench solid, the counter a ring, as on the map. a building with a shed permit in
-       force is a narrow bar at its station, never a length: narrow so it clears the counter's ring */
-    caption:()=>[[...(SHED_STATS?[{sw:{fill:INK}, t:`shed permit in force, ${SHED_STATS.live.length} building${SHED_STATS.live.length===1?'':'s'}`}]:[]),
-      ...(BENCH_STATS?[{dot:{fill:INK}, t:`DOT bench${BENCHES.length===1?'':'es'}`}]:[]),
-      ...(PED_STATS?[{dot:{fill:PAPER,stroke:INK,'stroke-width':1.5}, ring:true, t:'DOT pedestrian counter'}]:[])]],
-    draw(add,X,y,h){ const cy=y+h/2;
-      add('line',{x1:X(0),x2:X(LEN),y1:cy,y2:cy,stroke:INK,'stroke-opacity':.13,'stroke-width':1});
-      if(SHED_STATS) SHED_STATS.live.forEach(x=>add('rect',{x:X(x.ft)-1.5,y,width:3,height:h,fill:INK}));
-      if(BENCH_STATS) BENCHES.forEach(b=>add('circle',{cx:X(b.ft),cy,r:3,fill:INK}));
-      if(PED_STATS) add('circle',{cx:X(PED.ft),cy,r:4,fill:PAPER,stroke:INK,'stroke-width':1.5}); } },
-  { id:'vision', has:!!VISION, keep:3,
-    /* the stretches the piece names. one whose ends the piece gives is a ruled bar, one drawn
-       between the nearest avenue crossings, or to the end of the street, is a dashed outline, and the key says which */
-    caption:()=>{ const n=VISION.stretches.filter(v=>!v.stated).length, some=n>0,
-        keys=(full)=>[{sw:visionBar(true), t:full?'stretch, extent given in the piece':'extent given'},
-          ...(some?[{sw:visionBar(false), t:full?'extent not given, ends approximate':'approximate'}]:[])];
-      return [[{t:`Published vision: ${VISION.by}, ${VISION.title}`},...keys(1)],[{t:`Published vision: ${VISION.by}`},...keys(1)],[{t:`Published vision: ${VISION.by}`},...keys(0)]]; },
+  /* both sidewalks as the street's own section laid flat: north up from the middle, south down,
+     each stretch as tall as it is wide, in the green the map draws them. the ink lines are the median. */
+  road:{ has:!!SW_STATS,
+    cap:()=>`Sidewalk width, north side above, street median ${SW_STATS.med} ft ruled`,
+    draw(add,X,y,h){ const mid=y+h/2, k=(h/2)/SW_STATS.max;
+      SW.forEach(r=>{ const t=Math.max(1,r.w*k); add('rect',{x:X(r.a),y:r.s===1?mid-t:mid,width:Math.max(1,X(r.b)-X(r.a)),height:t,fill:LEAF}); });
+      [-1,1].forEach(d=>add('line',{x1:X(0),x2:X(LEN),y1:mid+d*SW_STATS.med*k,y2:mid+d*SW_STATS.med*k,stroke:INK,'stroke-width':.8})); } },
+  /* the stretches the piece names, asked for in the ground row. one whose ends the piece gives is
+     a ruled bar, one drawn between the nearest avenue crossings is a dashed outline. */
+  vision:{ has:!!VISION,
+    cap:()=>`Published vision: ${VISION.by}, ${VISION.title}`,
     draw(add,X,y,h){ VISION.stretches.forEach(v=>
-      add('rect',{x:X(v.a)+.5,y:y+.5,width:Math.max(1,X(v.b)-X(v.a)-1),height:h-1,...visionBar(v.stated)})); } }
-];
+      add('rect',{x:X(v.a)+.5,y:y+3.5,width:Math.max(1,X(v.b)-X(v.a)-1),height:h-7,...visionBar(v.stated)})); } }
+};
+const bandNow=()=>{ const L=LAYERS.find(o=>o.open), id=L&&(L.id==='road'&&VISION_ON?'vision':L.id), B=id&&RULER_BANDS[id];
+  return B&&B.has?B:null; };
 
 /* drawn to the ruler's own width, or to a width handed in when the sheet is about to print */
 function buildRuler(force){
-  const host=$('#ruler'), svg=$('#rulerSvg');
+  const host=$('#ruler'), svg=$('#rulerSvg'), aves=$('#rulerAves');
   /* the street's ends sit where the fitted map draws them. paper keeps the screen's shares. */
   const SCREEN=Math.max(320,Math.round(host.clientWidth||960)), W=force>0?force:SCREEN;
   const fit=streetFit(SCREEN); SCALE={lo:fit.lo,hi:fit.hi};
   const X=ft=>share(ft)*W;
-  svg.innerHTML='';
+  svg.innerHTML=''; aves.innerHTML='';
   const add=(n,a)=>{const e=document.createElementNS(NS,n); for(const k in a) e.setAttribute(k,a[k]); svg.appendChild(e); return e;};
-  const MONO='ui-monospace,SFMono-Regular,Menlo,monospace';
-  /* measure for real. an advance-width estimate was close enough on a wide screen
-     and let "GRAND CENTRAL" run off the right edge on a phone. */
-  const label=(txt,px,tracking)=>{
+  const SANS=token('--sans');
+  /* measure for real. an advance-width estimate let a hub name run off the edge on a phone. */
+  const label=(txt,px)=>{
     const t=document.createElementNS(NS,'text');
-    t.setAttribute('font-family',MONO); t.setAttribute('font-size',px);
-    if(tracking) t.setAttribute('letter-spacing',tracking);
+    t.setAttribute('font-family',SANS); t.setAttribute('font-size',px);
     t.textContent=txt; svg.appendChild(t);
-    let w=0; try{ w=t.getComputedTextLength(); }catch(e){ w=txt.length*px*.66; }
-    if(!w) w=txt.length*px*.66;
+    let w=0; try{ w=t.getComputedTextLength(); }catch(e){ w=txt.length*px*.55; }
+    if(!w) w=txt.length*px*.55;
     return {node:t, w};
   };
-  /* the height one line of label really takes here. a reader's minimum font size can make it
-     taller than asked for, and every row below is set out from it. */
-  const PX=11, LH=(()=>{ const {node}=label('Xg',PX); let h=0; try{ h=node.getBBox().height; }catch(e){}
-    node.remove(); return Math.ceil(Math.max(h,PX*1.2)); })();
-  const BAR=8, GAP=3, PAD=1;   /* PAD keeps a descender off the bar under it */
-  /* a narrow ruler shows fewer bands rather than smaller ones */
-  const NARROW=W<620;
-  let bands=RULER_BANDS.filter(B=>B.has&&!(NARROW&&B.wide));
-  /* a caption is a run of parts, left to right: words, with a swatch, dot or ring before them
-     when they are a key. a band offers its caption long and then shorter, and the first that
-     fits the ruler on one line is drawn. if none fits, the shortest is wrapped onto more lines
-     and the ruler grows, so a key is never dropped or left half said. */
-  const MARK=15, SEP=12;
-  const sized=parts=>parts.map(p=>{ const {node,w}=label(p.t,PX); node.remove(); return {...p,w:(p.sw||p.dot?MARK:0)+w}; });
-  const wide=f=>f.reduce((x,p)=>x+p.w+SEP,4-SEP);
-  const lines=forms=>{
-    const all=forms.map(sized), one=all.find(f=>wide(f)<=W-4);
-    if(one) return [one];
-    const out=[[]]; let x=4;
-    all[all.length-1].forEach(p=>{ const row=out[out.length-1];
-      if(row.length&&x+p.w>W-4){ out.push([p]); x=4+p.w+SEP; } else { row.push(p); x+=p.w+SEP; } });
-    return out;
-  };
-  const caption=(rows,y)=>rows.forEach((parts,k)=>{
-    let x=4; const top=y+k*LH, mid=top+LH/2;
-    parts.forEach(p=>{
-      if(p.gap){ x+=p.gap; return; }
-      const {node}=label(p.t,PX), mark=p.sw||p.dot?MARK:0;
-      if(p.sw) add('rect',{x,y:mid-4,width:10,height:8,...p.sw});
-      if(p.dot) add('circle',{cx:x+5,cy:mid,r:p.ring?4:3,...p.dot});
-      node.setAttribute('x',x+mark); node.setAttribute('y',top+LH-3); node.setAttribute('fill',LABEL);
-      x+=p.w+SEP;
-    });
-  });
-  /* rows from the top: hub names, then a caption and a bar per band, then the axis and avenues.
-     a band that joins has no caption row of its own: its key runs on in the line above, and its
-     bar sits under that band's bar. */
-  const top=NARROW?4:LH+1;
-  const layout=list=>{ let y=top; const set=[];
-    list.forEach(B=>{ const rows=lines(B.caption()), h=B.bar||BAR, last=set[set.length-1];
-      if(B.joins&&last&&rows.length===1&&last.rows.length===1&&wide(last.rows[0])+2*SEP+wide(rows[0])<=W-4){
-        last.rows[0]=[...last.rows[0],{gap:SEP},...rows[0]]; y-=GAP-2;
-        set.push({B,rows:[],bar:y,h}); y+=h+GAP; return; }
-      set.push({B,rows,y,bar:y+rows.length*LH+PAD,h}); y+=rows.length*LH+PAD+h+GAP; });
-    const axis=y+3; return {set,axis,H:axis+5+LH+1}; };
-  /* over the ceiling, the band held least goes, down to the ones always drawn */
-  /* the published band came after the ceilings were set: where it is drawn the ceiling is one
-     band taller. the bands drawn before it are unchanged and the map is one band shorter. */
-  const ceiling=(!force&&innerHeight<SHORT_WINDOW?RULER_MAX_SHORT:RULER_MAX)+(bands.some(B=>B.id==='vision')?LH+PAD+BAR+GAP:0);
-  let laid=layout(bands);
-  while(laid.H>ceiling&&bands.length>RULER_KEEP){
-    const drop=bands.reduce((x,B)=>B.keep>x.keep?B:x); bands=bands.filter(B=>B!==drop); laid=layout(bands); }
-  const {set,axis,H}=laid;
+  /* the height one line of label really takes here, and every row below is set out from it */
+  const PX=16, LH=(()=>{ const {node}=label('Xg',PX); let h=0; try{ h=node.getBBox().height; }catch(e){}
+    node.remove(); return Math.ceil(Math.max(h,PX*1.15)); })();
+  const NARROW=W<620, B=bandNow();
+  $('#rulerCap').textContent=B?B.cap():`42nd Street, ${commas(LEN)} ft`;
+  /* rows from the top: hub names over their brackets, the band, then the axis and the avenues.
+     the band's room is kept when no row is open, so the map does not change height under the reader. */
+  const hubY=NARROW?0:LH, bandY=hubY+(NARROW?4:10), axis=bandY+BAND_H+6, H=axis+5+LH;
   svg.setAttribute('viewBox',`0 0 ${W} ${H}`); host.style.height=H+'px';
-  /* the station mark is ruled through the bars and the axis only, never through a caption */
-  const inked=[...set.map(({bar,h})=>[bar-1,bar+h+1]),[axis-5,axis+5]];
-  host.style.setProperty('--mark-dot',(axis-4)+'px');   /* its dot rides the axis, clear of the hub names */
-  host.style.setProperty('--mark-rule',`linear-gradient(to bottom,${inked.map(([a,b])=>
-    `transparent ${a}px,currentColor ${a}px,currentColor ${b}px,transparent ${b}px`).join(',')})`);
+  host.style.setProperty('--mark-top',(bandY-3)+'px'); host.style.setProperty('--mark-h',(axis+5-bandY+3)+'px');
 
-  /* the four hubs, shaded. label only where it genuinely fits inside its own band. */
-  /* Below ~620px the four hub bands are each a few pixels wide and their names
-     cannot be placed without crowding or clipping. Draw the shading, drop the
-     names: the bands still read as the four busy stretches. */
+  /* the four hubs: a name, and a bracket under it as long as the stretch. a name is dropped
+     where it would crowd the one before it. */
   let hubRight=-1e9;
-  HUBS.forEach(([a,b,name])=>{
-    const x=X(a), w=X(b)-X(a);
-    add('rect',{x,y:0,width:w,height:H,fill:INK,'fill-opacity':.06});
-    if(NARROW) return;
-    const {node,w:tw}=label(name.toUpperCase(),PX,.4);
+  if(!NARROW) HUBS.forEach(([a,b,name])=>{
+    const x=X(a), w=X(b)-X(a), {node,w:tw}=label(name,PX);
     const half=tw/2, cx=Math.min(Math.max(x+w/2,half+3),W-half-3);
     if(tw<=W-6 && cx-half > hubRight+8){
-      node.setAttribute('x',cx); node.setAttribute('y',top-3);
-      node.setAttribute('text-anchor','middle'); node.setAttribute('fill','rgba(20,18,15,.5)');
+      node.setAttribute('x',cx); node.setAttribute('y',hubY-4);
+      node.setAttribute('text-anchor','middle'); node.setAttribute('fill',LABEL); node.setAttribute('class','hubname');
+      add('path',{d:`M${x} ${hubY+4}V${hubY+1}H${x+w}V${hubY+4}`,fill:'none',stroke:LABEL,'stroke-width':1});
       hubRight=cx+half;
     } else node.remove();
   });
 
-  set.forEach(({B,rows,y,bar,h})=>{ caption(rows,y); B.draw(add,X,bar,h); });
+  if(B) B.draw(add,X,bandY,BAND_H);
 
-  add('line',{x1:0,x2:W,y1:axis,y2:axis,stroke:INK,'stroke-opacity':.3,'stroke-width':.8});
-  /* avenues, decluttered left to right: a label is drawn only if it clears the
-     last one drawn, so nothing ever collides no matter how narrow the window */
-  let lastRight=-1e9;
+  /* the street */
+  add('line',{x1:X(0),x2:X(LEN),y1:axis,y2:axis,stroke:INK,'stroke-width':1.5});
+  /* avenues, decluttered left to right: a label is drawn only if it clears the last one drawn.
+     each drawn label gets a real button over it, as tall as a finger, that stands at the avenue. */
+  let lastRight=-1e9; const drawn=[];
   AVES.forEach(([ft,name])=>{
     const x=X(ft);
-    add('line',{x1:x,x2:x,y1:axis-4,y2:axis+4,stroke:INK,'stroke-opacity':.35,'stroke-width':.8});
+    add('line',{x1:x,x2:x,y1:axis-4,y2:axis+4,stroke:INK,'stroke-opacity':.62,'stroke-width':1});
     const {node,w:tw}=label(name,PX);
     const half=tw/2;
     let tx=x, anchor='middle';
@@ -1437,24 +1620,47 @@ function buildRuler(force){
     if(x-half<6){ tx=6; anchor='start'; }
     else if(x+half>W-6){ tx=W-6; anchor='end'; }
     const left = anchor==='start' ? tx : anchor==='end' ? tx-tw : x-half;
-    if(left > lastRight+7){
-      node.setAttribute('x',tx); node.setAttribute('y',axis+5+LH-3);
+    if(left > lastRight+(NARROW?14:7)){
+      node.setAttribute('x',tx); node.setAttribute('y',axis+5+LH-4);
       node.setAttribute('text-anchor',anchor); node.setAttribute('fill',LABEL);
-      lastRight=left+tw;
+      lastRight=left+tw; drawn.push({ft,name,node,mid:left+tw/2,tw});
     } else node.remove();
   });
-  /* Final guarantee. Font metrics vary by machine, so rather than trust any
-     placement calculation, measure what actually got drawn and drop anything that
-     sticks out of the box. A missing label is fine; a label sliced in half by the
-     edge of the ruler looks broken. */
+  /* Final guarantee. Font metrics vary by machine, so measure what actually got drawn and drop
+     anything that sticks out of the box. A missing label is fine; one sliced by the edge looks broken. */
   [...svg.querySelectorAll('text')].forEach(t=>{
     let bb; try{ bb=t.getBBox(); }catch(e){ return; }
     if(bb.width && (bb.x < 1 || bb.x + bb.width > W - 1)) t.remove();
   });
-  RULER_GEO={W,inked,axis}; printMark();
+  const kept=drawn.filter(d=>d.node.isConnected);
+  kept.forEach((d,i)=>{
+    const room=Math.min(i?d.mid-kept[i-1].mid:1e9, i<kept.length-1?kept[i+1].mid-d.mid:1e9);
+    const w=Math.max(d.tw+8,Math.min(44,room)), b=el('button','ruler__ave');
+    b.type='button'; b.dataset.ave=d.ft; b.setAttribute('aria-label',`${aveName(d.name)}, ${commas(d.ft)} ft`);
+    b.style.left=((d.mid-w/2)/W*100)+'%'; b.style.width=(w/W*100)+'%';
+    aves.append(b);
+  });
+  RULER_GEO={W,top:bandY-3,axis};
+  pickRing(); printMark();
   /* the scale may have moved with the width: the mark and the window follow it */
   if(SEL.st!=null) $('#rulerMark').style.left=(share(SEL.st)*100)+'%';
+  clearHubs();
   try{ syncRuler(); }catch(e){}
+}
+/* a hub name the station's feet would sit on is left out while they do. its bracket stays. */
+function clearHubs(){
+  const lab=$('#rulerMarkFt'), L=SEL.st!=null&&lab.getClientRects().length?lab.getBoundingClientRect():null;
+  $('#rulerSvg').querySelectorAll('.hubname').forEach(t=>{ const r=t.getBoundingClientRect();
+    t.style.visibility=L&&r.right>L.left-6&&r.left<L.right+6?'hidden':''; });
+}
+/* the picked item, ringed on the band, so it shows under the pin. in the drawing, so it prints. */
+function pickRing(){
+  const svg=$('#rulerSvg'); svg.querySelectorAll('.pring').forEach(n=>n.remove());
+  const k=SEL.pick, t=k&&svg.querySelector(`[data-pick="${k.row}:${k.i}"]`); if(!t) return;
+  let bb; try{ bb=t.getBBox(); }catch(e){ return; }
+  const c=document.createElementNS(NS,'circle'); c.setAttribute('class','pring');
+  const a={cx:bb.x+bb.width/2,cy:bb.y+bb.height/2,r:Math.max(6,bb.width/2+2.5),fill:'none',stroke:INK,'stroke-width':1.5};
+  for(const n in a) c.setAttribute(n,a[n]); svg.appendChild(c);
 }
 /* the station mark again, inside the drawing, shown only in print. paper scales the svg whole,
    and the mark on screen is ruled in screen px, so it would not land on the bars. */
@@ -1462,11 +1668,11 @@ let RULER_GEO=null;
 function printMark(){
   const svg=$('#rulerSvg'); svg.querySelectorAll('.pmark').forEach(n=>n.remove());
   if(SEL.st==null||!RULER_GEO) return;
-  const {W,inked,axis}=RULER_GEO, x=share(SEL.st)*W;
+  const {top,axis}=RULER_GEO, x=share(SEL.st)*RULER_GEO.W;
   const add=(n,a)=>{const e=document.createElementNS(NS,n); e.setAttribute('class','pmark');
     for(const k in a) e.setAttribute(k,a[k]); svg.appendChild(e);};
-  inked.forEach(([a,b])=>add('line',{x1:x,x2:x,y1:a,y2:b,stroke:INK,'stroke-width':1.5}));
-  add('circle',{cx:x,cy:axis,r:4,fill:INK});
+  add('line',{x1:x,x2:x,y1:top,y2:axis+5,stroke:INK,'stroke-width':3});
+  add('circle',{cx:x,cy:top,r:4,fill:INK});
 }
 
 /* redraw on resize, debounced, because the drawing is now width-dependent */
@@ -1482,29 +1688,35 @@ function syncRuler(){
   const on=ft=>Math.max(0,Math.min(LEN,ft)), lo=on(Math.min(a,c)), hi=on(Math.max(a,c));
   VIEW=[lo,hi];
   if(SEL.st==null) restSlider();
-  const win=$('#rulerWin'), edge=ft=>Math.max(0,Math.min(1,share(ft)));
+  const win=$('#rulerWin'), edge=ft=>Math.max(0,Math.min(1,share(ft))), mid=$('#rulerMid');
+  if(MAP_OK){ win.style.left=(edge(a)*100)+'%'; win.style.width=Math.max(.5,(edge(c)-edge(a))*100)+'%'; }
+  else win.hidden=true;
+  /* one feet value on the screen at a time: the station's, in the card's own two strings. with no
+     station it names where the map is, and gives no feet. */
+  if(SEL.st!=null){ mid.textContent=`${commas(SEL.st)} ft from the Hudson River · ${whereName(placeAt(SEL.st))}`; return; }
   /* with no map there is no view to mark: the ruler says only what it is */
-  if(!MAP_OK){ win.hidden=true; $('#rulerMid').textContent=`the whole street · ${commas(LEN)} ft`; return; }
-  win.style.left=(edge(a)*100)+'%';
-  win.style.width=Math.max(.5,(edge(c)-edge(a))*100)+'%';
-  const mid=(lo+hi)/2, ave=AVES.reduce((x,y)=>Math.abs(y[0]-mid)<Math.abs(x[0]-mid)?y:x);
-  /* says it is the map, so it is not read as the place of the open station card */
-  $('#rulerMid').textContent = 'map view '+(mid<120?'at the Hudson' : mid>LEN-120?'at the East River'
-    : `near ${aveName(ave[1])} · ${commas(mid)} ft from the Hudson`);
+  if(!MAP_OK){ mid.textContent=`The whole street · ${commas(LEN)} ft`; return; }
+  const m=(lo+hi)/2, ave=AVES.reduce((x,y)=>Math.abs(y[0]-m)<Math.abs(x[0]-m)?y:x);
+  mid.textContent='Map view '+(m<120?'at the Hudson River' : m>LEN-120?'at the East River' : `near ${aveName(ave[1])}`);
 }
 let VIEW=[0,LEN];
 (function drag(){
-  const r=$('#ruler'); let down=false,cap=false,sx=0;
-  const ftAt=e=>{const box=r.getBoundingClientRect();
-    return Math.max(0,Math.min(LEN,((e.clientX-box.left)/box.width-SCALE.lo)/(SCALE.hi-SCALE.lo)*LEN));};
+  /* the handlers sit on the box that holds the slider and the avenue buttons, so a drag can
+     start anywhere on it. a press that never became a drag on a button is left to the button. */
+  const box=$('#rulerBox'), r=$('#ruler'); let down=false,cap=false,sx=0;
+  const ftAt=e=>{const b=r.getBoundingClientRect();
+    return Math.max(0,Math.min(LEN,((e.clientX-b.left)/b.width-SCALE.lo)/(SCALE.hi-SCALE.lo)*LEN));};
   const go=e=>{ userMoved=true; map.easeTo({center:at(ftAt(e)),duration:down&&cap?0:600,bearing:BEARING}); };
-  r.addEventListener('pointerdown',e=>{down=true;cap=false;sx=e.clientX;go(e);});
-  r.addEventListener('pointermove',e=>{ if(!down) return;
-    if(!cap&&Math.abs(e.clientX-sx)>4){cap=true; try{r.setPointerCapture(e.pointerId);}catch(err){}}
+  const onBtn=e=>!!(e.target.closest&&e.target.closest('.ruler__ave'));
+  box.addEventListener('pointerdown',e=>{down=true;cap=false;sx=e.clientX; if(!onBtn(e)) go(e);});
+  box.addEventListener('pointermove',e=>{ if(!down) return;
+    if(!cap&&Math.abs(e.clientX-sx)>4){cap=true; try{box.setPointerCapture(e.pointerId);}catch(err){}}
     if(cap) go(e);});
   /* a press that never became a drag is a pick: stand at that station */
-  r.addEventListener('pointerup',e=>{ if(down&&!cap) select({st:ftAt(e),lot:null}); });
-  addEventListener('pointerup',()=>down=false);
+  box.addEventListener('pointerup',e=>{ if(down&&!cap&&!onBtn(e)) select({st:ftAt(e),lot:null}); });
+  addEventListener('pointerup',()=>{ down=false; setTimeout(()=>{cap=false;},0); });
+  /* an avenue's name stands at the avenue */
+  $('#rulerAves').addEventListener('click',e=>{ const b=e.target.closest('.ruler__ave'); if(b&&!cap) select({st:+b.dataset.ave,lot:null}); });
   /* arrows walk the street 100 ft at a time and the card follows */
   const STEP=100;
   r.addEventListener('keydown',e=>{
@@ -1514,7 +1726,6 @@ let VIEW=[0,LEN];
     if(e.key==='Escape'&&SEL.st!=null){ select({st:null,lot:null}); return; }
     if(to===undefined) return;
     e.preventDefault(); select({st:to,lot:null});
-    if(SEL.st<VIEW[0]||SEL.st>VIEW[1]){ userMoved=true; map.easeTo({center:at(SEL.st),duration:300,bearing:BEARING}); }
   });
 })();
 
@@ -1564,7 +1775,7 @@ function snapshot(){
   /* the basemap's credit, in its own words, and its mark */
   const credit=$('#mapCredit'), logo=document.querySelector('#map .mapboxgl-ctrl-logo');
   credit.innerHTML=''; if(logo){ const l=logo.cloneNode(false); l.removeAttribute('href'); credit.append(l); }
-  const words=el('span','mono'); words.textContent=basemapCredit(); credit.append(words);
+  const words=el('span'); words.textContent=basemapCredit(); credit.append(words);
   /* a picture off a narrow screen is enlarged to fill the sheet, and the sheet says so */
   $('#printShot').hidden=cw>=PRINT_W*.6;
   $('#printShotText').textContent=`taken from a screen ${commas(Math.round(cw))} px wide and enlarged to fill the sheet`;
@@ -1585,17 +1796,17 @@ function printFoot(){
 /* the ruler is set out for the sheet's width, then scaled */
 /* on paper the drawing is read first. it is lifted above the rail for the print and put back after. */
 function placeDraw(){ const rail=$('#layers'), draw=$('.draw'); PRINTING?rail.before(draw):rail.after(draw); }
-addEventListener('beforeprint',()=>{ PRINTING=true; placeMeta(); placeDraw(); snapshot(); printFoot(); buildRuler(PRINT_W); });
-addEventListener('afterprint',()=>{ PRINTING=false; placeMeta(); placeDraw(); buildRuler(); refit(); });
+addEventListener('beforeprint',()=>{ PRINTING=true; placeDraw(); snapshot(); printFoot(); buildRuler(PRINT_W); });
+addEventListener('afterprint',()=>{ PRINTING=false; placeDraw(); buildRuler(); refit(); });
 (()=>{ /* the button's own words change, so the confirmation is never colour alone */
   const b=$('#copyLink'), REST=b.textContent; let t;
-  /* as wide as its longest label, measured as drawn, so the tools do not shift when it answers */
-  b.style.minWidth=Math.ceil(Math.max(...[REST,'Link copied','Not copied'].map(w=>{ b.textContent=w; return b.getBoundingClientRect().width; })))+'px';
-  b.textContent=REST;
   /* the live region is shared: it is cleared only if nothing else has spoken since */
   const say=(label,msg)=>{ const said=$('#said'); b.textContent=label; said.textContent=msg; clearTimeout(t);
     t=setTimeout(()=>{ b.textContent=REST; if(said.textContent===msg) said.textContent=''; },2400); };
-  const ok=()=>say('Link copied','Link to this view copied.'), no=()=>say('Not copied','Could not copy. The link is in the address bar.');
+  /* what was copied, in strings already on the screen: the card's title and the open row */
+  const what=()=>{ const lot=SEL.lot&&LOT_BY_BBL.get(SEL.lot), o=LAYERS.find(L=>L.open);
+    return [SEL.st==null?null:lot?(lot.addr||'Unnamed lot'):whereName(placeAt(SEL.st)), o&&o.short].filter(Boolean).join(', '); };
+  const ok=()=>{ const w=what(), m='Link copied'+(w?': '+w:''); say(m,m+'.'); }, no=()=>say('Not copied','Could not copy. The link is in the address bar.');
   /* the older way, for a page that is not allowed the clipboard */
   const byHand=href=>{ const a=el('textarea','sr'); a.value=href; a.readOnly=true; document.body.append(a); a.select();
     let done=false; try{ done=document.execCommand('copy'); }catch(e){} a.remove(); b.focus(); done?ok():no(); };
@@ -1614,7 +1825,6 @@ addEventListener('afterprint',()=>{ PRINTING=false; placeMeta(); placeDraw(); bu
   /* sheet number and build time are working notes, not something the public needs.
      they only appear when the page is served from this machine. */
   if(!/^(127\.0\.0\.1|localhost)$/.test(location.hostname)) return;
-  const dev=$('#devline'); if(dev) dev.hidden=false;
   fetch('scripts.js',{method:'HEAD'}).then(r=>{
     const d=r.headers.get('last-modified');
     el.textContent = d ? 'built '+new Date(d).toISOString().slice(0,16).replace('T',' ') : 'build unknown';
@@ -1623,6 +1833,7 @@ addEventListener('afterprint',()=>{ PRINTING=false; placeMeta(); placeDraw(); bu
 $('#metaExtent').textContent=`Hudson to East River, ${(LEN/5280).toFixed(2)} mi`;
 $('#metaLots').textContent=LOTS.features.length+' lots';
 $('#metaTrees').textContent=TREES.length+' trees';
+$('#printExtent').textContent=$('#metaExtent').textContent;
 $('#ruler').setAttribute('aria-valuemax',LEN);
 (()=>{ /* ?on=lots,trees is exactly what is drawn. ?hr=17 sets the hour. in a hand-typed link
      with no on, hr also draws the bus and opens its row, and ?q=benches draws the row it opens. */
@@ -1630,12 +1841,13 @@ $('#ruler').setAttribute('aria-valuemax',LEN);
   const timed=BUS_STATS&&v>=0&&v<=23, want=row(qs.get('q'))||(timed&&!qs.has('on')?row('bus'):null);
   if(qs.has('on')){ const ids=qs.get('on').split(','); LAYERS.forEach(L=>{ L.on=ids.includes(L.id); }); }
   if(timed){ SEL.hour=v; if(!qs.has('on')) row('bus').on=true; }
-  if(want){ LAYERS.forEach(L=>{ L.open=L===want; }); if(!qs.has('on')) want.on=true; }
+  if(want){ LAYERS.forEach(L=>{ L.open=L===want; }); if(!qs.has('on')){ if(row('trees')&&want.id!=='trees') row('trees').on=false; want.on=true; } }
   /* ?by=lots.capacity. a style the row does not offer is ignored. */
   (qs.get('by')||'').split(',').forEach(x=>{ const [id,v]=x.split('.'), L=row(id);
     if(L&&L.styles&&L.styles.some(o=>o[0]===v)) L.style=v; });
+  if(row('lots')){ const no=(qs.get('no')||'').split(','); row('lots').noLm=no.includes('lm'); row('lots').noPub=no.includes('pub'); }
 })();
-placeMeta(); buildPanel(); buildRuler();
+buildPanel(); buildRuler();
 (()=>{ /* the first screen. shut once, it stays shut on this browser. ?intro=1 opens it again,
      and so does the button in the title block. storage can be blocked, so it is only tried. */
   const card=$('#intro'), KEY='r2r.intro'; if(!card) return;
@@ -1654,7 +1866,9 @@ placeMeta(); buildPanel(); buildRuler();
      never the page, so a stacked layout stays where the station link puts it. */
   const L=LAYERS.find(o=>o.open), rail=$('#layerList'); if(!L||!rail) return;
   const go=()=>requestAnimationFrame(()=>{ if(rail.scrollHeight>rail.clientHeight)
-    rail.scrollTop+=L._row.getBoundingClientRect().top-rail.getBoundingClientRect().top; });
+    rail.scrollTop+=L._row.getBoundingClientRect().top-rail.getBoundingClientRect().top;
+    /* stacked, the rail is under the map, so a link to a row with no station lands on the row */
+    else if(STACKED.matches&&!new URLSearchParams(location.search).has('st')&&!new URLSearchParams(location.search).has('lot')) L._row.scrollIntoView({block:'start'}); });
   if(document.readyState==='complete') go(); else addEventListener('load',go,{once:true});
 })();
 (()=>{ /* ?st=4000 opens the card at 4,000 ft. ?lot=<bbl> alone stands at that lot. */
@@ -1663,11 +1877,14 @@ placeMeta(); buildPanel(); buildRuler();
   let st=q.has('st')?parseFloat(q.get('st')):NaN;
   /* a hand-edited link can name a lot and a station that are nowhere near each other */
   if(p&&!(st>=k.a&&st<=k.b)) st=p.ft>=k.a&&p.ft<=k.b?p.ft:(k.a+k.b)/2;
-  if(Number.isFinite(st)) select({st, lot:p?lot:null},true); else restSlider();
+  /* &pick=benches.0 is kept only if the item exists and stands at this station */
+  const [pr,pi]=(q.get('pick')||'').split('.'), item=PICKS[pr]&&PICKS[pr][+pi];
+  const pick=item&&Number.isFinite(st)&&item.ft===Math.round(st)?{row:pr,i:+pi}:null;
+  if(Number.isFinite(st)) select({st, lot:p?lot:null, pick},{boot:true}); else restSlider();
   /* stacked, the card sits under the map: once the layout has settled, put the ruler at the
      top so the mark and the card share the first screen */
   if(Number.isFinite(st)&&STACKED.matches){
-    const go=()=>requestAnimationFrame(()=>$('#ruler').scrollIntoView({block:'start'}));
+    const go=()=>requestAnimationFrame(()=>$('#rulerBox').scrollIntoView({block:'start'}));
     if(document.readyState==='complete') go(); else addEventListener('load',go,{once:true});
   }
 })();

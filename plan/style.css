@@ -1,16 +1,17 @@
 /* ═══════════════════════════════════════════════════════════════════════
    42nd STREET · PLAN SHEET
-   A drawing sheet with a layer stack. Every legend lives inside the layer
-   it belongs to, and every legend is written for someone who has never
-   read a zoning map.
+   A drawing sheet with a rail of questions. A shut row shows the question and
+   its figure. What explains the figure is one press lower, never on the way.
    ═══════════════════════════════════════════════════════════════════════ */
 
 :root{
   --paper:#FCFAF5; --paper-2:#F4F0E6; --paper-3:#E9E4D6;
-  --ink:#14120F; --ink-70:rgba(20,18,15,.72); --ink-50:rgba(20,18,15,.60); --ink-30:rgba(20,18,15,.30);
-  /* 4.53:1 on paper. every uppercase label uses this. --ink-30 (1.98:1) is kept only for
-     the knob of a switch that is off, where looking inactive is the point. */
-  --ink-label:rgba(20,18,15,.58);
+  /* text inks. three, and no others. */
+  --ink:#14120F;
+  --ink-2:rgba(20,18,15,.78);   /* legend text, range labels. 9.16:1 on paper */
+  --ink-3:rgba(20,18,15,.62);   /* labels, captions, ticks, units. 5.16:1 on paper, 5.0:1 on paper-2 */
+  /* structure, and the tier ramp on the ruler. not for text. */
+  --ink-fill:rgba(20,18,15,.72); --ink-30:rgba(20,18,15,.30);
   --hair:rgba(20,18,15,.13); --hair-2:rgba(20,18,15,.22);
 
   --c5-2:#FFC24D; --c5-25:#FF9E2C; --c5-3:#FF5A36;
@@ -19,367 +20,339 @@
   --leaf:#2E9E4F; --alarm:#FF5A36; --asphalt:#6E6A62;
 
   --sans:"Helvetica Neue",Inter,Arial,sans-serif;
-  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+  --serif:Charter,"Bitstream Charter","Sitka Text",Cambria,"Iowan Old Style",Georgia,serif;
+  --mono:Menlo,Consolas,monospace;   /* kept as a token. used nowhere unless a digit-aligned table needs it */
   --rail:clamp(310px,27vw,392px);
 
-  --t-micro:11px; --t-small:12px; --t-body:14px;
-  /* label tracking, pulled back from .16-.2em so uppercase mono still fits the rail */
-  --track:.1em;
+  /* one scale, designed on a 16px floor */
+  --t-fine:.8125rem;   /* the map credit and the print foot only */
+  --t-base:1rem;       /* labels, values, captions, legends, ticks, controls */
+  --t-read:1.03rem;    /* serif prose */
+  --t-q:1.125rem;      /* row question, card section heads, key h4 */
+  --t-card:1.25rem;    /* card title */
+  --t-fig:1.5rem;      /* row headline figure */
+  --t-title:clamp(1.5rem,3vw,2.125rem);
 }
 
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
-body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-size:15px;
-  -webkit-font-smoothing:antialiased; display:flex; flex-direction:column; overflow:hidden}
+body{background:var(--paper); color:var(--ink); font:400 var(--t-base)/1.35 var(--sans);
+  font-variant-numeric:lining-nums; -webkit-font-smoothing:antialiased;
+  display:flex; flex-direction:column; overflow:hidden}
+button,input,select{font:inherit; color:inherit}
+a{color:var(--ink); text-underline-offset:2px}
 
-.micro{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
-  text-transform:uppercase; color:var(--ink-50)}
+/* a label: what a thing is, in the quiet ink. below 18px rank comes from weight and ink. */
+.lab{margin:0; font:400 var(--t-base)/1.35 var(--sans); color:var(--ink-3)}
+/* running sentences, and nothing else, are set in the serif */
+.says, .lead, .flag p, .note, .src, .intro p, .intro li, .mapnone p{
+  font:400 var(--t-read)/1.55 var(--serif); font-variant-numeric:lining-nums; color:var(--ink); max-width:38em}
+.says b, .flag p b, .note b{font-weight:400}
+.sr{position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap}
 
-/* ── title block ──────────────────────────────────────────────────────── */
-.head{display:flex; justify-content:space-between; align-items:flex-end; gap:16px 24px; flex-wrap:wrap;
-  max-width:100%; overflow:hidden;
-  padding:14px clamp(14px,2vw,24px) 12px; border-bottom:1.5px solid var(--ink); flex:0 0 auto}
-.kicker{display:block; margin-top:6px; font-family:var(--mono); font-size:var(--t-micro);
-  letter-spacing:var(--track); text-transform:uppercase; color:var(--ink-label)}
-#stamp{letter-spacing:.06em}
-.head__subject{margin:6px 0 0; font-size:var(--t-body); font-weight:600; line-height:1.2}
-.head h1{margin:0; font-size:clamp(22px,3vw,34px); letter-spacing:-.035em;
-  text-transform:uppercase; font-weight:700; line-height:.95}
-.head__meta{display:flex; gap:10px clamp(16px,2.4vw,30px); margin:0; flex-wrap:wrap;
-  justify-content:flex-end; min-width:0; max-width:100%}
-.head__meta div{min-width:0}
-/* the meta list and the button after it keep to the right of the title */
-/* the list gives way before the tools do: it folds onto a second line of its own, so the tools
-   stay on the title's row and the title block keeps its height */
-.head__meta{margin-left:auto; flex:1 1 40%}
+/* ── title block: one line ────────────────────────────────────────────── */
+.head{display:flex; justify-content:space-between; align-items:center; gap:4px 24px; flex-wrap:wrap;
+  max-width:100%; min-height:60px; padding:8px clamp(16px,2vw,24px); border-bottom:1.5px solid var(--ink); flex:0 0 auto}
+.head__id{display:flex; align-items:baseline; gap:4px 16px; flex-wrap:wrap; min-width:0}
+.head h1{margin:0; font:700 var(--t-title)/1.1 var(--sans); letter-spacing:-.035em; text-transform:uppercase}
+.head__subject{margin:0; color:var(--ink)}
 .head__tools{display:flex; flex-wrap:wrap; gap:8px; flex:0 0 auto; min-width:0}
 /* only the printed sheet has these: the picture of the map, the station mark inside the ruler
    drawing, and the foot */
-#mapShot, .mapnone, .printfoot, .pmark{display:none}
-.head__meta dd{overflow-wrap:break-word}
-.head__meta div{display:flex; flex-direction:column; gap:3px; justify-content:flex-end}
-.head__meta dt{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
-  text-transform:uppercase; color:var(--ink-label); white-space:nowrap}
-.head__meta dd{margin:0; font-family:var(--mono); font-size:var(--t-small); color:var(--ink-70)}
+#mapShot, .mapnone, .head__meta.printfoot, .pmark{display:none}
 
-/* the foot of the page. it holds the meta list on a narrow screen and is otherwise empty. */
-.foot{flex:0 0 auto; padding:16px; border-top:1.5px solid var(--ink)}
-.foot:empty{display:none}
+/* a worded button */
+.mini{min-height:44px; min-width:44px; padding:8px 12px; background:none; border:1px solid var(--hair-2);
+  color:var(--ink); cursor:pointer; white-space:nowrap}
+.mini:hover{border-color:var(--ink)}
+.mini:focus-visible, .linkbtn:focus-visible, .intro__go:focus-visible, summary:focus-visible,
+.ctl select:focus-visible, .ctl input:focus-visible, .check input:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
 
 /* ── sheet ────────────────────────────────────────────────────────────── */
 .sheet{flex:1; display:grid; grid-template-columns:var(--rail) minmax(0,1fr); min-height:0}
 /* grid items default to min-width:auto, so the map canvas was forcing this column
    wider than the viewport and dragging the ruler off the right edge with it */
 .sheet > *{min-width:0}
+
 /* ── the rail of questions ────────────────────────────────────────────── */
 .layers{border-right:1.5px solid var(--ink); background:var(--paper);
   display:flex; flex-direction:column; min-height:0; overflow:hidden}
-#layerList{flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain;
-  scrollbar-gutter:stable}
-.layers::-webkit-scrollbar{width:9px}
-.layers::-webkit-scrollbar-thumb{background:var(--hair-2)}
+#layerList{flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain}
 
 /* the three headings the questions sit under */
-.group{display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:44px;
-  padding:4px 16px; background:var(--paper-2); border-bottom:1px solid var(--hair)}
-.group h2{margin:0; font-family:var(--mono); font-size:var(--t-micro); font-weight:500;
-  letter-spacing:var(--track); text-transform:uppercase; color:var(--ink-label)}
-.mini{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.12em; text-transform:uppercase;
-  background:none; border:1px solid var(--hair); color:var(--ink-50); padding:6px 10px;
-  cursor:pointer; white-space:nowrap}
-.mini:hover{border-color:var(--ink); color:var(--ink)}
-.mini:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+.group{display:flex; align-items:center; min-height:32px; padding:4px 16px; background:var(--paper-2);
+  border-bottom:1px solid var(--hair)}
+.group h2{margin:0; font:600 var(--t-base)/1.35 var(--sans); color:var(--ink-3)}
+.group--foot{justify-content:space-between; min-height:60px; background:none; border-bottom:0}
 
-/* a row is two buttons: the switch, then the question with its answer at the right */
+/* a shut row is one button: the question and its figure, then the unit under them */
 .layer{border-bottom:1px solid var(--hair)}
-.layer__bar{display:grid; grid-template-columns:44px minmax(0,1fr); align-items:start;
-  padding:0 0 0 16px; transition:background .12s}
-.layer__bar:hover{background:var(--paper-2)}
-.layer__q{position:relative; display:grid; grid-template-columns:minmax(0,1fr) fit-content(46%) 14px;
-  gap:0 12px; align-items:start; min-width:0; min-height:44px; padding:12px 16px 12px 8px}
-.layer__q > *{min-width:0}
-.layer__q h3{margin:0; font:inherit}
-/* the button is the question. its hit area and focus ring cover the whole answer. */
-.layer__head{display:block; width:100%; padding:0; border:0; background:none; color:var(--ink);
-  font:inherit; font-size:15px; font-weight:600; letter-spacing:-.012em; line-height:1.25;
-  text-align:left; cursor:pointer; overflow-wrap:break-word}
-.layer__head::after{content:""; position:absolute; inset:0}
-.layer__head:focus-visible{outline:none}
-.layer__head:focus-visible::after, .sw:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
-.group--foot{justify-content:flex-end; border-bottom:0}
-/* the plain line runs the full width under the question and its figure */
-.layer__sub{grid-column:1 / 3}
-.layer__count{display:block; font-family:var(--sans); font-size:var(--t-micro);
-  letter-spacing:var(--track); color:var(--ink-50); margin-top:4px; line-height:1.4;
-  overflow-wrap:break-word}
-.layer__fig{text-align:right}
-.layer__fig b{display:block; font-size:17px; font-weight:600; letter-spacing:-.02em; line-height:1.15;
-  font-variant-numeric:tabular-nums; overflow-wrap:break-word}
-.layer__fig small{display:block; font-family:var(--mono); font-size:var(--t-micro); color:var(--ink-50);
-  margin-top:4px; line-height:1.4; overflow-wrap:break-word}
-.spark{display:block; max-width:100%; margin-top:6px; overflow:visible}
+.layer__bar{margin:0; font:inherit}
+.layer__head{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 12px; align-items:baseline;
+  width:100%; min-height:64px; padding:8px 16px; border:0; background:none; text-align:left; cursor:pointer;
+  font:600 var(--t-q)/1.25 var(--sans); letter-spacing:-.012em; color:var(--ink)}
+.layer__head:hover{background:var(--paper-2)}
+.layer__head:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+.layer__name{min-width:0; overflow-wrap:break-word}
+/* the square says the row is drawn on the map. it keeps its room when it is not, so questions line up. */
+.layer__on{display:inline-block; width:8px; height:8px; margin-right:8px; vertical-align:2px; border:1px solid transparent}
+.layer[data-on="true"] .layer__on{background:var(--ink)}
+.layer__on--key{background:var(--ink)}
+.layer__fig{display:contents}
+.layer__fig b{font:600 var(--t-fig)/1.1 var(--sans); font-variant-numeric:tabular-nums lining-nums;
+  letter-spacing:-.02em; text-align:right; white-space:nowrap}
+.layer__fig small{grid-column:1 / -1; font:400 var(--t-base)/1.35 var(--sans); letter-spacing:0; color:var(--ink-3);
+  text-align:right; overflow-wrap:break-word}
+.layer[data-open="true"] .layer__head{background:var(--paper-2)}
+
+.layer__body{display:none; padding:12px 16px 12px}
+.layer[data-open="true"] .layer__body{display:block}
+.says{margin:0 0 12px}
+.lead{margin:0 0 12px}
+/* one rhythm down an open row, whatever the blocks are */
+.layer__body [data-legend] > * + *{margin-top:14px}
+.layer__body [data-legend] > .lab + .lotrows{margin-top:4px}
+
+/* controls inside a row */
+.ctl{display:flex; flex-direction:column; gap:4px; margin-bottom:12px}
+.ctl label{color:var(--ink-3)}
+.ctl select, .ctl input[type="text"]{min-height:44px; padding:8px 12px; border:1px solid var(--hair-2);
+  background:var(--paper); color:var(--ink); border-radius:0; width:100%}
+/* the hour of day. label and reading share a line, the slider gets a 44px row to itself */
+.ctl--hour{flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:0 12px}
+.ctl--hour > *{min-width:0}
+.ctl--hour output{font-weight:500; font-variant-numeric:tabular-nums lining-nums}
+.ctl--hour input{flex:1 1 100%; width:100%; min-height:44px; margin:0; accent-color:var(--ink); cursor:pointer}
+
+/* show on map: the drawn switch is a 34 by 19 track and knob inside a 44px button */
+.swrow{display:flex; align-items:center; gap:8px; width:100%; min-height:44px; padding:0; margin:0 0 4px;
+  border:0; background:none; cursor:pointer; text-align:left; color:var(--ink)}
+.swrow:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.sw{position:relative; flex:0 0 34px; height:19px; border:1.5px solid var(--ink); background:var(--paper)}
+.sw::after{content:""; position:absolute; top:2.5px; left:2.5px; width:12px; height:11px; background:var(--ink-30); transition:.16s}
+.swrow[aria-pressed="true"] .sw{background:var(--ink)}
+.swrow[aria-pressed="true"] .sw::after{left:16.5px; background:var(--paper)}
+.check{display:flex; align-items:center; gap:12px; min-height:44px; cursor:pointer}
+.check input{flex:0 0 auto; width:20px; height:20px; margin:0; accent-color:var(--ink)}
+.opt{display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px}
+.opt button{min-height:44px; padding:8px 12px; background:none; border:1px solid var(--hair-2); color:var(--ink);
+  cursor:pointer; text-align:left}
+.opt button:hover{border-color:var(--ink)}
+.opt button[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:var(--paper)}
+.opt button:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+
+/* ── the key ──────────────────────────────────────────────────────────── */
+.key{margin:0}
+.key h4, .flag h4, .panel h4{margin:0 0 4px; font:600 var(--t-q)/1.25 var(--sans); letter-spacing:-.012em; color:var(--ink)}
+.key p{margin:0 0 8px; color:var(--ink-3)}
+.key ul{list-style:none; margin:0; padding:0}
+.key li{display:flex; align-items:flex-start; gap:8px; padding:6px 0; border-bottom:1px solid var(--hair)}
+.key li:last-child{border-bottom:0}
+.key li span{flex:1 1 auto; min-width:0; color:var(--ink-2); overflow-wrap:break-word}
+.key li b{flex:0 0 auto; margin-left:auto; padding-left:8px; font-weight:500; color:var(--ink);
+  white-space:nowrap; font-variant-numeric:tabular-nums lining-nums}
+.key i{flex:0 0 auto; width:16px; height:12px; display:block; border:1px solid rgba(20,18,15,.25); margin-top:4px}
+.key i.dot{border-radius:50%; width:12px; height:12px; border:0}
+.key i.rule{height:0; border:0; border-top-style:solid; margin-top:8px}
+/* a long key of short names runs in two columns */
+.key--two ul{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 24px}
+.key--two li:nth-last-child(2):nth-child(odd){border-bottom:0}
+.key--three ul{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:0 8px}
+.key--three li{border-bottom:0; padding:4px 0}
+/* one ramp with its stops marked under it */
+.ramp i{display:block; width:auto; height:12px; margin:8px 0 0; border:1px solid rgba(20,18,15,.25)}
+.ramp div{position:relative; height:1.5em; margin:0 0 4px; color:var(--ink-2); font-variant-numeric:tabular-nums lining-nums}
+.ramp span{position:absolute; top:2px; transform:translateX(-50%)}
+.ramp span[data-end="lo"]{transform:none}
+.ramp span[data-end="hi"]{transform:translateX(-100%)}
+/* a filled and an outlined lot, as the shed permits are drawn on the map */
+.key i.mark{width:12px; height:12px; border:1.5px solid var(--ink)}
+.key i.mark--full{background:rgba(20,18,15,.72)}
+.keyline{display:flex; align-items:center; gap:8px}
+.keyline .dash{flex:0 0 16px; height:12px; border:1.5px dashed var(--ink)}
+.keyline .box{flex:0 0 16px; height:12px; border:1.5px solid var(--ink)}
+.keyline .dots{flex:0 0 16px; height:0; margin-left:12px; border-top:1.5px dotted var(--ink)}
+/* the list's order and its two filters read as one block */
+.filters .check{min-height:44px}
+.filters .lab{margin-bottom:0}
+.sparkrow{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-top:8px}
+.spark{display:block; flex:0 0 auto; overflow:visible}
 .spark polyline{fill:none; stroke:var(--ink); stroke-width:1.2; stroke-linejoin:round}
 .spark circle{fill:var(--ink)}
-.layer__caret{font-size:10px; color:var(--ink-label); transition:transform .18s;
-  justify-self:end; margin-top:5px}
-.layer[data-open="true"] .layer__caret{transform:rotate(90deg)}
-
-/* a 44px button. the drawn switch is the same 34 by 19 track and knob as before, inside it. */
-.sw{position:relative; width:44px; height:44px; padding:0; border:0; background:none; cursor:pointer}
-.sw::before{content:""; position:absolute; left:0; top:12px; width:34px; height:19px;
-  border:1.5px solid var(--ink); background:var(--paper)}
-.sw::after{content:""; position:absolute; top:15.5px; left:3.5px; width:12px; height:11px;
-  background:var(--ink-30); transition:.16s}
-.sw[aria-pressed="true"]::before{background:var(--ink)}
-.sw[aria-pressed="true"]::after{left:18.5px; background:var(--paper)}
-
-/* an open row reads whether or not it is drawn, so aria-expanded never lies */
-.layer__body{padding:2px 16px 18px; display:none}
-.layer[data-open="true"] .layer__body{display:block}
-
-/* one plain sentence at the top of every open layer */
-.says{font-size:var(--t-body); line-height:1.5; color:var(--ink-70); margin:0 0 14px}
-.says b{color:var(--ink); font-weight:600}
-.says a, .panel .none a{color:var(--ink)}
-
-/* controls inside a layer */
-.ctl{display:flex; flex-direction:column; gap:6px; margin:0 0 14px}
-.ctl > span, .ctl > label{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
-  text-transform:uppercase; color:var(--ink-label)}
-.ctl select{font:inherit; font-size:var(--t-body); padding:8px 10px; border:1px solid var(--hair-2);
-  background:var(--paper); color:var(--ink); border-radius:0; width:100%}
-.ctl select:focus{outline:2px solid var(--ink); outline-offset:-2px}
-.slider{display:grid; grid-template-columns:1fr 34px; gap:10px; align-items:center}
-.slider input{width:100%; accent-color:var(--ink); height:2px}
-.slider output{font-family:var(--mono); font-size:var(--t-micro); color:var(--ink-50); text-align:right}
-/* the hour of day. label and reading share a line and wrap when they must, the slider gets a
-   full 44px row to itself so it can be dragged by thumb */
-.ctl--hour{flex-direction:row; flex-wrap:wrap; justify-content:space-between; align-items:baseline; gap:4px 12px}
-.ctl--hour > *{min-width:0}
-.ctl--hour label{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
-  text-transform:uppercase; color:var(--ink-label)}
-.ctl--hour output{font-family:var(--mono); font-size:var(--t-small); color:var(--ink);
-  font-variant-numeric:tabular-nums}
-.ctl--hour input{flex:1 1 100%; width:100%; min-height:44px; margin:0; accent-color:var(--ink); cursor:pointer}
-.ctl--hour input:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
-
-/* ── legend ───────────────────────────────────────────────────────────── */
-.key{margin:0}
-.key + .key{margin-top:16px}
-.key h4{margin:0 0 3px; font-size:var(--t-body); font-weight:600; letter-spacing:-.01em; color:var(--ink)}
-.key p{margin:0 0 8px; font-size:12.5px; line-height:1.45; color:var(--ink-50)}
-.key ul{list-style:none; margin:0; padding:0}
-.key li{display:flex; align-items:flex-start; gap:10px; padding:8px 0;
-  border-bottom:1px solid var(--hair)}
-.key li:last-child{border-bottom:0}
-.key li span{flex:1 1 auto; min-width:0; font-family:var(--mono); font-size:var(--t-small);
-  letter-spacing:0; color:var(--ink-70); line-height:1.4; overflow-wrap:break-word}
-.key li b{flex:0 0 auto; margin-left:auto; padding-left:8px; font-family:var(--mono);
-  font-size:var(--t-small); font-weight:400; color:var(--ink-50); letter-spacing:0;
-  white-space:nowrap; font-variant-numeric:tabular-nums; line-height:1.4}
-.key i{flex:0 0 auto; width:16px; height:12px; display:block;
-  border:1px solid rgba(20,18,15,.25); margin-top:3px}
-.key i.dot{border-radius:50%; width:11px; height:11px; margin-left:2px; margin-top:4px; border:0}
-.key i.rule{height:0; border:0; border-top-style:solid; margin-top:8px}
-.key p a{color:var(--ink)}
-.flag + .key{margin-top:12px}
-.key--after{margin-top:16px}
-/* twenty-four bars, one an hour, heights to one scale. the rule across them is the walking reference,
-   the ink edge is the chosen hour. */
-.hours{position:relative; display:flex; align-items:flex-end; gap:1px; height:56px;
-  border-bottom:1px solid var(--ink)}
+/* bars to one scale. the rule across them is the walking reference, the ink edge is the chosen one. */
+.hours{position:relative; display:flex; align-items:flex-end; gap:1px; height:56px; border-bottom:1px solid var(--ink)}
 .hours i{flex:1 1 0; min-width:0; margin:0; width:auto; border:0; border-top:1px solid rgba(20,18,15,.25)}
 .hours i[data-now]{outline:1.5px solid var(--ink); outline-offset:-1px}
 .hours b{position:absolute; left:0; right:0; height:0; border-top:1px dashed var(--ink)}
-.hours__lab{display:flex; justify-content:space-between; margin-top:4px}
-/* one bar a month, same scale rule. the text under it follows at the key's own spacing */
-.hours--months + .hours__lab{margin-bottom:8px}
+.hours__lab{display:flex; justify-content:space-between; margin:4px 0 8px}
 /* the count series: plain ink bars, and a hatched slot where no count was taken */
-.hours--count i{background:var(--ink-50); border-top:0}
+.hours--count i{background:rgba(20,18,15,.6); border-top:0}
 .hours--count .hours__none{flex:2 1 0; height:100%;
   background:repeating-linear-gradient(90deg,var(--hair-2) 0 3px,transparent 3px 6px)}
-.hours--count + .hours__lab{margin-bottom:6px}
-
-/* species carry no colour of their own, so instead of four identical green dots the
-   row shows how common each one is. the bar is the same leaf green already in use. */
-.key--rank li{display:block; padding:9px 0}
-.key--rank .row{display:flex; align-items:baseline; gap:10px}
-.key--rank .row span{flex:1 1 auto; min-width:0}
-.key--rank .row b{flex:0 0 auto; margin-left:auto}
-.key--rank .bar{display:block; height:3px; margin-top:6px; background:var(--leaf); opacity:.45}
-
+/* species carry no colour of their own, so the row shows how common each one is */
+.key--rank li{display:block}
+.key--rank .row{display:flex; align-items:baseline; gap:8px}
+.key--rank .bar{display:block; height:3px; margin-top:4px; background:var(--leaf); opacity:.45; border:0}
 /* graduated circles, drawn at true relative size */
 .sizes{display:flex; align-items:flex-end; gap:16px; padding:8px 0 4px}
-.sizes figure{margin:0; display:flex; flex-direction:column; align-items:center; gap:6px}
+.sizes figure{margin:0; display:flex; flex-direction:column; align-items:center; gap:4px}
 .sizes span{display:block; border-radius:50%; background:var(--leaf); opacity:.9}
-/* the same graduated circles in ink, for a count that has no colour of its own */
 .sizes--ink span{background:var(--ink); opacity:.6}
-/* a filled and an outlined lot, as the shed permits are drawn on the map */
-.key h4 i.mark{display:inline-block; width:12px; height:12px; margin:0 8px 0 0; vertical-align:-1px;
-  border:1.5px solid var(--ink)}
-.key h4 i.mark--full{background:var(--ink-70)}
-.sizes figcaption{font-family:var(--mono); font-size:var(--t-micro); color:var(--ink-50); letter-spacing:.06em}
+.sizes figcaption{color:var(--ink-3); font-variant-numeric:tabular-nums lining-nums}
 
-/* toggle chips inside a layer */
-.opt{display:flex; gap:6px; flex-wrap:wrap; margin-top:14px}
-.opt button{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.1em; text-transform:uppercase;
-  background:none; border:1px solid var(--hair-2); color:var(--ink-50); padding:8px 11px;
-  cursor:pointer; text-align:left}
-.opt button:hover{border-color:var(--ink); color:var(--ink)}
-.opt button[aria-pressed="true"]{background:var(--ink); border-color:var(--ink); color:var(--paper)}
+/* one flag to an open row */
+.flag{padding:12px; border-left:3px solid var(--alarm); background:rgba(255,90,54,.07)}
+.flag p{margin:0}
+.src{margin:0; color:var(--ink-2)}
+/* a link inside a sentence is as tall as a finger without moving the line */
+.src a, .note a, .xsec__lab a, .panel .pub a{display:inline-block; padding:12px 0; margin:-12px 0}
+.note{margin:0 0 12px; overflow-wrap:break-word}
+/* what explains or qualifies the answer: one press lower, word for word */
+.about{border-top:1px solid var(--hair)}
+.about > summary, .more > summary{list-style:none; cursor:pointer; min-height:44px; display:flex; align-items:center;
+  justify-content:space-between; gap:8px; color:var(--ink)}
+.about > summary::-webkit-details-marker, .more > summary::-webkit-details-marker{display:none}
+.about > summary::after, .more > summary::after{content:"+"; font-size:1.25rem; line-height:1}
+.about[open] > summary::after, .more[open] > summary::after{content:"\2212"}
+.layer__body .about > * + *, .panel .about > * + *{margin-top:16px}
 
-.flag{margin:14px 0 0; padding:11px 12px; border-left:3px solid var(--alarm);
-  background:rgba(255,90,54,.07); font-size:var(--t-body); line-height:1.5; color:var(--ink-70)}
-.flag b{display:block; color:var(--ink); font-weight:600; margin-bottom:2px}
+/* a list of things to pick. the one picked carries an ink rule. */
+.lotrows{list-style:none; margin:4px 0 0; padding:0}
+.lotrows li{border-top:1px solid var(--hair)}
+.lotrows button{display:block; width:100%; min-height:44px; padding:4px 0; border:0; background:none;
+  text-align:left; cursor:pointer; color:var(--ink)}
+.lotrows button:hover b{text-decoration:underline}
+.lotrows button:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+.lotrows b{display:block; font-weight:500; overflow-wrap:break-word}
+.lotrows span{display:block; color:var(--ink-3); overflow-wrap:break-word; font-variant-numeric:tabular-nums lining-nums}
+.lotrows button[aria-current="true"]{border-left:3px solid var(--ink); padding-left:10px}
+.lotrows button[aria-current="true"] b{font-weight:600}
 
-/* ── selected feature ─────────────────────────────────────────────────── */
-.panel{border-top:1.5px solid var(--ink); padding:15px 16px 18px; background:var(--paper-2);
-  flex:0 0 auto; max-height:50%; overflow-y:auto; overscroll-behavior:contain}
-.panel h3{margin:7px 0 0; font-size:17px; letter-spacing:-.02em; line-height:1.2}
-.zonechip{display:inline-block; font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.12em;
-  padding:4px 8px; margin-top:9px; color:#fff}
-/* one explicit track, or the implicit one grows to its widest row and sticks out of the card */
-.panel dl{display:grid; grid-template-columns:minmax(0,1fr); margin:12px 0 0}
-.panel dl div{display:flex; flex-wrap:wrap; justify-content:space-between; gap:2px 12px; padding:7px 0;
-  border-top:1px solid var(--hair); align-items:baseline}
-.panel dl div > *{min-width:0}
-.panel dt{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.13em;
-  text-transform:uppercase; color:var(--ink-label)}
-.panel dd{margin:0; font-family:var(--mono); font-size:var(--t-small); text-align:right;
-  color:var(--ink-70); overflow-wrap:break-word; font-variant-numeric:tabular-nums}
-.gauge{height:10px; border:1px solid var(--ink); margin-top:13px; position:relative;
-  background:repeating-linear-gradient(90deg,var(--hair-2) 0 3px,transparent 3px 6px)}
-.gauge i{position:absolute; inset:0 auto 0 0; background:var(--ink)}
-.gauge__lab{display:flex; justify-content:space-between; margin-top:6px}
-
-/* ── the station card, inside the same panel ──────────────────────────── */
-.xsec__lab--fig{display:grid !important; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px}
-.xsec__lab--fig span{display:block; line-height:1.3}
-.xsec__lab--fig > :nth-child(2){order:0 !important; flex:none !important; text-align:center}
-.xsec__lab--fig > :nth-child(3){text-align:right}
-.xsec__lab--fig b{display:block; font-family:var(--sans); font-size:var(--t-body); font-weight:600;
-  letter-spacing:0; text-transform:none; color:var(--ink)}
-/* the long half of the station card, shut until asked for */
-.more{margin-top:8px; border-top:1px solid var(--hair)}
-.more > summary{list-style:none; cursor:pointer; min-height:44px; display:flex; align-items:center;
-  justify-content:space-between; gap:8px; font-family:var(--mono); font-size:var(--t-micro);
-  letter-spacing:var(--track); text-transform:uppercase; color:var(--ink-70)}
-.more > summary::-webkit-details-marker{display:none}
-.more > summary::after{content:"+"; font-size:16px; line-height:1; color:var(--ink)}
-.more[open] > summary::after{content:"\2212"}
-.more > summary:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
-.linkbtn{font:inherit; color:var(--ink); background:none; border:0; padding:0; text-align:right;
-  text-decoration:underline; text-underline-offset:2px; cursor:pointer; min-height:24px}
-.linkbtn:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
-.card__top{display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;
-  margin-bottom:8px}
-.card__top > *{min-width:0}
-.card__top{flex-wrap:nowrap !important; align-items:flex-start !important}
-.card__top h3{margin:0 !important; flex:1 1 auto}
-.panel .mini:focus-visible, .lotrows button:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+/* ── the station card, and the lot card inside it ─────────────────────── */
+.panel{padding:16px; background:var(--paper); flex:0 0 auto; overflow-y:auto; overscroll-behavior:contain}
+.card__top{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin:-4px 0 4px}
+.card__top h3{margin:8px 0 0; flex:1 1 auto; min-width:0; font:600 var(--t-card)/1.2 var(--sans); letter-spacing:-.012em}
+.card__pick{margin:0 0 4px; font-weight:500}
+.card__pos{font-variant-numeric:tabular-nums lining-nums}
+.zonechip{display:inline-block; padding:0 8px; margin-left:8px; color:#fff}
 /* to scale by construction: each cell's flex-grow is its width in feet */
 .xsec{display:flex; height:24px; margin-top:12px; border:1px solid var(--ink)}
 .xsec i{display:block; min-width:0}
-.xsec__n,.xsec__s,.key-n{background:var(--leaf)}
-.xsec__r,.key-r{background:var(--asphalt)}
+.xsec__n,.xsec__s{background:var(--leaf)}
+.xsec__r{background:var(--asphalt)}
 /* no measurement: drawn blank and hatched, never given a width */
-.xsec__gap{flex:0 0 16%;
-  background:repeating-linear-gradient(90deg,var(--hair-2) 0 3px,transparent 3px 6px)}
+.xsec__gap{flex:0 0 16%; background:repeating-linear-gradient(90deg,var(--hair-2) 0 3px,transparent 3px 6px)}
 .xsec--none .xsec__gap{flex:1 1 0}
-.xsec__lab{display:flex; justify-content:space-between; gap:4px 8px; flex-wrap:wrap; margin-top:4px}
-/* the scale note takes its own line, so north and south always sit under their ends */
-.xsec__lab > :nth-child(2){order:3; flex:1 1 100%}
-.panel dt i{display:inline-block; width:8px; height:8px; margin-right:8px}
+.xsec__lab{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:4px}
+.xsec__lab > span > *{display:block}
+.xsec__lab > :nth-child(2){text-align:center}
+.xsec__lab > :nth-child(3){text-align:right}
+.xsec__lab b{font-weight:500; font-variant-numeric:tabular-nums lining-nums}
+.xsec__lab b a{font-weight:400}
+.xsec__ref{margin:8px 0 0}
+/* one explicit track, or the implicit one grows to its widest row and sticks out of the card */
+.panel dl{display:grid; grid-template-columns:minmax(0,1fr); margin:12px 0 0}
+.panel dl div{display:flex; flex-wrap:wrap; justify-content:space-between; gap:0 12px; padding:8px 0;
+  border-top:1px solid var(--hair); align-items:baseline}
+.panel dl div > *{min-width:0}
+.panel dt{color:var(--ink-3)}
 /* when label and value do not fit side by side the value drops to its own line, whole */
-.panel dd{margin-left:auto}
-.panel dd span{display:block}
+.panel dd{margin:0 0 0 auto; text-align:right; font-weight:500; color:var(--ink); overflow-wrap:break-word;
+  font-variant-numeric:tabular-nums lining-nums}
+.panel dd span{display:block; font-weight:400; color:var(--ink-2)}
 /* a published proposal is a sentence, so it is set as one: full width, read from the left */
-.panel .pub dd{flex:1 1 100%; margin-left:0; text-align:left; line-height:1.45}
-.panel .pub dd span{margin-top:4px; color:var(--ink-50)}
-.panel dd a{color:var(--ink)}
-.panel h4{display:block; margin:16px 0 0; font-weight:400}
-.lotrows{list-style:none; margin:8px 0 0; padding:0}
-.lotrows li{border-top:1px solid var(--hair)}
-.lotrows button{display:block; width:100%; min-height:44px; padding:8px 0; border:0; background:none;
-  text-align:left; cursor:pointer; color:var(--ink); font:inherit}
-.lotrows button:hover b{text-decoration:underline}
-.lotrows b{display:block; font-size:var(--t-body); font-weight:600; letter-spacing:-.01em; line-height:1.3}
-.lotrows span{display:block; font-family:var(--mono); font-size:var(--t-small); color:var(--ink-70);
-  line-height:1.4; overflow-wrap:break-word}
-.lotrows .num{color:var(--ink-50); font-variant-numeric:tabular-nums}
-.panel .note{margin:12px 0 0; font-size:var(--t-small); line-height:1.45; color:var(--ink-70);
-  overflow-wrap:break-word}
-.panel .note a{color:var(--ink)}
-.sr{position:absolute; width:1px; height:1px; margin:-1px; overflow:hidden; clip-path:inset(50%);
-  white-space:nowrap}
-.panel .none{margin:8px 0 0; font-family:var(--mono); font-size:var(--t-small); color:var(--ink-50)}
-/* wide: the card floats over the map, bottom right, and the rail holds only the questions. it is
-   placed against .sheet, so the rail's overflow does not clip it. scripts.js measures the map's
-   box and the zoom control into --map-top, --map-bot and --map-clear, so the card stays inside
-   the map, under the zoom control, and scrolls inside itself. screen only: paper is 900px wide too. */
+.panel .pub dd{flex:1 1 100%; margin-left:0; text-align:left; font-weight:400}
+.panel .none{margin:8px 0 0; color:var(--ink-3)}
+.more{margin-top:4px; border-top:1px solid var(--hair)}
+.more > dl{margin-top:0}
+.more > dl > div:first-child{border-top:0}
+.linkbtn{display:inline-block; min-height:44px; padding:0; background:none; border:0; text-align:inherit;
+  text-decoration:underline; text-underline-offset:2px; cursor:pointer; color:var(--ink)}
+.panel dd .linkbtn{font-weight:500}
+.card__foot{display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:0 16px;
+  margin:0; border-top:1px solid var(--hair)}
+.card__foot a{display:inline-flex; align-items:center; min-height:44px}
+.gauge{height:12px; border:1px solid var(--ink); margin-top:12px; position:relative;
+  background:repeating-linear-gradient(90deg,var(--hair-2) 0 3px,transparent 3px 6px)}
+.gauge i{position:absolute; inset:0 auto 0 0; background:var(--ink)}
+.gauge__lab{display:flex; justify-content:space-between; margin-top:4px}
+/* wide: the card floats over the map, bottom right. scripts.js measures the map's box
+   into --map-top and --map-bot, so the card stays inside the map, and scrolls inside itself only
+   when More is open. screen only: paper is 900px wide too. */
 @media screen and (min-width:900px){
   .sheet{position:relative}
-  .panel{position:absolute; z-index:3; right:20px; bottom:calc(var(--map-bot,0px) + 28px); width:388px;
-    max-width:calc(100% - var(--rail) - 40px);
-    max-height:calc(100% - var(--map-top,0px) - var(--map-bot,0px) - var(--map-clear,0px) - 40px);
-    border:1.5px solid var(--ink); background:var(--paper)}
+  .panel{position:absolute; z-index:3; right:16px; bottom:calc(var(--map-bot,0px) + 16px); width:388px;
+    max-width:calc(100% - var(--rail) - 32px);
+    max-height:calc(100% - var(--map-top,0px) - var(--map-bot,0px) - 32px);
+    border:1.5px solid var(--ink)}
   .panel[hidden]{display:none}
 }
 
 /* ── drawing ──────────────────────────────────────────────────────────── */
 .draw{display:flex; flex-direction:column; min-height:0; min-width:0}
 #map{flex:1; min-height:320px; min-width:0; background:var(--paper-2)}
-.ruler{min-width:0; overflow:hidden}
-
-/* the height is set by buildRuler from the bands it draws and the label height it measures */
-.ruler{position:relative; min-height:58px; border-top:1.5px solid var(--ink); background:var(--paper-2);
-  cursor:ew-resize; user-select:none; touch-action:none; flex:0 0 auto}
-.ruler svg{display:block; width:100%; height:100%}
-.ruler__window{position:absolute; top:-1px; bottom:-1px; border:1.5px solid var(--ink);
-  background:rgba(20,18,15,.06); pointer-events:none; min-width:3px}
-/* the station being read, on the ruler and on the map */
-.ruler__mark{position:absolute; top:0; bottom:0; width:1.5px; color:var(--ink);
-  background:var(--mark-rule,currentColor); pointer-events:none}
-.ruler__mark::before{content:""; position:absolute; left:-3.25px; top:var(--mark-dot,4px); width:8px; height:8px;
-  border-radius:50%; background:var(--ink)}
-.ruler:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
-.pin{width:2px; height:72px; background:var(--ink); pointer-events:none}
-.pin::before{content:""; position:absolute; left:-6px; top:-8px; width:14px; height:14px;
+.pin{width:3px; height:72px; background:var(--ink); pointer-events:none}
+/* the head sits on the centreline, where the station is */
+.pin::before{content:""; position:absolute; left:-5.5px; top:calc(50% - 7px); width:14px; height:14px;
   box-sizing:border-box; border-radius:50%; background:var(--ink); border:2px solid var(--paper)}
-.ruler__foot{display:flex; justify-content:space-between; align-items:baseline; gap:8px 16px;
-  padding:8px 16px 10px; border-top:1px solid var(--hair); flex:0 0 auto; flex-wrap:wrap}
+
+/* ── the ruler: where you are on the street ───────────────────────────── */
+.ruler__cap{flex:0 0 auto; padding:4px 16px 0; border-top:1.5px solid var(--ink); background:var(--paper-2);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.rulerbox{position:relative; flex:0 0 auto; background:var(--paper-2); touch-action:none; user-select:none}
+/* the height is set by buildRuler from the label height it measures */
+.ruler{position:relative; min-width:0; min-height:48px; overflow:hidden; cursor:ew-resize}
+.ruler svg{display:block; width:100%; height:100%}
+.ruler text{font-variant-numeric:tabular-nums lining-nums}
+.ruler:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+/* the part of the street the map shows. the only rectangle on the ruler. */
+.ruler__window{position:absolute; top:0; bottom:0; border:1.5px solid var(--ink); pointer-events:none; min-width:3px}
+/* the station: the heaviest ink on the ruler, its feet beside it */
+.ruler__mark{position:absolute; top:var(--mark-top,0px); height:var(--mark-h,100%); width:3px; margin-left:-1.5px;
+  background:var(--ink); pointer-events:none}
+.ruler__mark::before{content:""; position:absolute; left:-2.5px; top:-4px; width:8px; height:8px; border-radius:50%; background:var(--ink)}
+.ruler__mark span{position:absolute; left:10px; top:calc(-1 * var(--mark-top,0px)); padding:0 4px; background:var(--paper-2); white-space:nowrap;
+  font-weight:600; line-height:1.2; font-variant-numeric:tabular-nums lining-nums}
+.ruler__mark[data-flip="true"] span{left:auto; right:10px}
+/* an avenue's name is a button, as tall as a finger, reaching up from the foot of the ruler */
+.ruler__aves{position:absolute; left:0; right:0; bottom:0; height:44px; pointer-events:none}
+.ruler__ave{position:absolute; top:0; height:44px; padding:0; border:0; background:none; cursor:pointer; pointer-events:auto}
+.ruler__ave:hover{box-shadow:inset 0 -2px 0 var(--ink)}
+.ruler__ave:focus-visible{outline:2px solid var(--ink); outline-offset:-2px}
+.ruler__foot{display:flex; justify-content:space-between; align-items:baseline; gap:0 16px; flex:0 0 auto;
+  padding:4px 16px 8px; background:var(--paper-2); color:var(--ink-3)}
 .ruler__foot > *{min-width:0}
-.ruler__foot > :nth-child(2){flex:1 1 100%; text-align:center; order:3}
-@media (min-width:620px){ .ruler__foot > :nth-child(2){flex:1 1 auto; order:0} }
+#rulerMid{flex:1 1 auto; text-align:center; font-weight:500; color:var(--ink); font-variant-numeric:tabular-nums lining-nums}
 
 /* ── the first screen ─────────────────────────────────────────────────── */
 /* a strip in its own row above the map, so it never covers the street that step 3 asks the
    reader to click. the rail runs the full height beside it. stacked, it is a row of the page. */
 .intro{overflow-y:auto; padding:12px 16px 16px; background:var(--paper); border-bottom:1.5px solid var(--ink)}
 .intro[hidden]{display:none}
-.intro h2{margin:0; font-weight:500}
+.intro h2{margin:0}
 /* the author's own sentence. the only line on the sheet in her voice. */
-.intro__lede{margin:6px 0 8px !important; font-size:17px !important; line-height:1.35 !important; font-weight:600;
-  letter-spacing:-.01em; color:var(--ink) !important; max-width:64ch}
-.intro p{margin:8px 0 12px; font-size:var(--t-body); line-height:1.5; color:var(--ink-70)}
+.intro .intro__lede{margin:4px 0 8px; font:600 var(--t-q)/1.35 var(--sans); letter-spacing:-.012em; max-width:64ch}
+.intro p{margin:0 0 12px; max-width:none}
 .intro ol{margin:0; padding:0; list-style:none; counter-reset:step; display:grid; gap:8px}
-.intro li{display:grid; grid-template-columns:24px minmax(0,1fr); gap:8px; align-items:start;
-  font-size:var(--t-body); line-height:1.45; counter-increment:step}
-.intro li::before{content:counter(step); font-family:var(--mono); font-size:var(--t-micro); font-weight:600;
-  line-height:20px; min-width:20px; text-align:center; background:var(--ink); color:var(--paper)}
-.intro__go{margin-top:16px; min-height:44px; padding:8px 20px; border:1.5px solid var(--ink); background:var(--ink);
-  color:var(--paper); font-family:var(--mono); font-size:var(--t-small); letter-spacing:var(--track);
-  text-transform:uppercase; cursor:pointer}
-.intro__go:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+.intro li{display:grid; grid-template-columns:24px minmax(0,1fr); gap:8px; align-items:start; counter-increment:step}
+.intro li::before{content:counter(step); font:600 var(--t-base)/24px var(--sans); text-align:center;
+  background:var(--ink); color:var(--paper)}
+.intro .about{margin-top:12px}
+.head__meta{display:flex; flex-wrap:wrap; gap:4px 32px; margin:0 0 8px}
+.head__meta div{display:flex; gap:8px; min-width:0}
+.head__meta dt{color:var(--ink-3)}
+.head__meta dd{margin:0; overflow-wrap:break-word; font-variant-numeric:tabular-nums lining-nums}
+.intro__go{margin-top:16px; min-height:44px; padding:8px 24px; border:1.5px solid var(--ink); background:var(--ink);
+  color:var(--paper); cursor:pointer}
 @media (min-width:900px){
   .sheet{grid-template-rows:auto minmax(0,1fr)}
   .layers{grid-column:1; grid-row:1 / 3}
   .draw{grid-column:2; grid-row:2}
   .intro{grid-column:2; grid-row:1; max-height:56vh; display:grid; grid-template-columns:minmax(0,1fr) auto;
-    gap:0 20px; align-items:start}
+    gap:0 24px; align-items:start}
   /* Start sits in the first row beside the title, so it is on screen however tall the text runs */
   .intro h2, .intro .intro__lede{grid-column:1}
-  .intro p:not(.intro__lede), .intro ol{grid-column:1 / -1}
+  .intro p:not(.intro__lede), .intro ol, .intro .about{grid-column:1 / -1}
   .intro ol{grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px}
   .intro .intro__go{grid-column:2; grid-row:1 / span 2; margin-top:0; align-self:start}
   /* while the strip is open the map gives up height, so the ruler stays on a short screen */
@@ -388,58 +361,58 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 /* a short window: the map gives up height before the ruler loses its axis and avenues */
 @media (min-width:900px) and (max-height:719px){ #map{min-height:120px} }
 
-/* ── tooltip ──────────────────────────────────────────────────────────── */
+/* ── tooltip. a mouse extra: everything in it is also in a row or the card ── */
 .tip{position:fixed; z-index:80; pointer-events:none; opacity:0; transform:translateY(3px);
   transition:opacity .12s, transform .12s; background:var(--ink); color:var(--paper);
-  padding:10px 13px; max-width:260px; border-left:3px solid var(--leaf)}
+  padding:8px 12px; max-width:260px; border-left:3px solid var(--leaf)}
 .tip[data-show="true"]{opacity:1; transform:none}
-.tip b{display:block; font-size:14.5px; letter-spacing:-.01em}
-.tip em{display:block; font-size:12px; opacity:.7; margin:2px 0 6px; font-style:italic}
-.tip span{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:.12em;
-  text-transform:uppercase; color:#D8F546}
+.tip b{display:block; font-weight:600}
+.tip em{display:block; font-style:normal; opacity:.78}
+.tip span{display:block; color:#D8F546}
 
 .mapboxgl-ctrl-group{border-radius:0 !important; border:1.5px solid var(--ink) !important; box-shadow:none !important}
-.mapboxgl-ctrl-attrib{font-family:var(--mono); font-size:9px}
-/* ── narrow screens ───────────────────────────────────────────────────────
-   a right-aligned flex row overflows to the right when it wraps, it does not
-   reflow left, so below 620px everything in the title block and under the ruler
-   aligns left and is allowed to wrap. */
-@media (max-width:620px){
-  .head{padding-left:14px; padding-right:14px}
-  .head{gap:8px 16px; padding-top:12px; padding-bottom:8px}
-  .head__id{flex:1 1 100%}
-  .head .kicker{display:none}
-  /* scripts.js moves the meta list to the foot of the page at this width */
-  .head__meta{justify-content:flex-start; width:100%; gap:8px 16px; flex:0 0 auto; margin:0}
-  .ruler__foot{padding-left:14px; padding-right:14px}
-  .ruler__foot > *{text-align:left !important; white-space:normal}
-  .ruler__foot > :nth-child(2){flex:1 1 100%}
-}
+.mapboxgl-ctrl-group button{width:44px !important; height:44px !important}
+.mapboxgl-ctrl-attrib{font-family:var(--sans); font-size:var(--t-fine)}
 
 /* ── stacked layout, phones and narrow windows ────────────────────────────
-   sits after the base rules on purpose. it used to sit above them, so .layers,
-   #layerList and .panel lost to the later base rules and the rail was a 138px box. */
+   sits after the base rules on purpose, so it wins over them. */
 @media (max-width:899px){
   body{overflow:auto}
+  .head{padding:8px 16px}
   /* the sheet grows with its rows here, or the rail is squeezed into what the map leaves */
-  .sheet{grid-template-columns:1fr; overflow:visible; flex:none}
-  .layers{overflow:visible; border-right:0; border-bottom:1.5px solid var(--ink); order:2}
+  .sheet{grid-template-columns:minmax(0,1fr); overflow:visible; flex:none}
+  .layers{overflow:visible; border-right:0; order:2}
   #layerList{overflow:visible; flex:none}
-  /* the card sits straight under the ruler, above the layer list, so a tap on the map or
-     ruler brings map, ruler and card into one screen. it scrolls inside itself. */
-  .panel{order:-1; max-height:44vh; border-top:0; border-bottom:1.5px solid var(--ink)}
-  .panel .mini, .group .mini, .head .mini, .opt button{min-height:44px; min-width:44px}
-  /* the drawing is as tall as its parts. a fixed height let the map's minimum push the line
-     under the ruler out of the box, where the card covered half of it. */
   .draw{order:1}
   #map{flex:0 0 auto; height:40vh; min-height:320px}
+  /* an open card takes the screen under the ruler, Close at its top, and the rail waits behind it */
+  .panel{order:-1; border-top:1.5px solid var(--ink)}
   /* the first screen is a sheet at the foot of the window, so the map shows above it. Start sits
      beside the heading, where it cannot scroll out of reach. */
-  .intro{position:fixed; z-index:60; left:0; right:0; bottom:0; max-height:45vh; padding:12px 16px 16px;
+  .intro{position:fixed; z-index:60; left:0; right:0; bottom:0; max-height:45vh;
     border-top:1.5px solid var(--ink); border-bottom:0; overscroll-behavior:contain;
     display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 16px; align-items:center}
-  .intro p, .intro ol{grid-column:1 / -1}
+  .intro p, .intro ol, .intro .about{grid-column:1 / -1}
   .intro .intro__go{grid-column:2; grid-row:1; margin-top:0}
+  /* while it is up the map gives way, so the whole ruler shows above it and step 2 has something to point at */
+  .intro:not([hidden]) ~ .draw #map{height:calc(55svh - 225px); min-height:160px}
+}
+/* screen only, so paper keeps the rail and the readout */
+@media screen and (max-width:899px){
+  .panel{min-height:calc(100svh - var(--ruler-h,120px))}
+  body[data-card="true"] #layerList{display:none}
+  /* the card under it names the same place, so the line is not said twice on a small screen */
+  body[data-card="true"] #rulerMid{display:none}
+}
+/* with no caption the ruler still opens on the sheet's ink rule */
+.ruler__cap:empty{display:none}
+.ruler__cap:empty + .rulerbox{border-top:1.5px solid var(--ink)}
+/* a phone: the rivers share a line and the readout takes the one under it */
+@media (max-width:619px){
+  .ruler__foot{flex-wrap:wrap; line-height:1.25; padding:4px 16px}
+  #rulerMid{flex:1 1 100%; order:3; text-align:left}
+  /* no hub row to set the feet in here, and the readout under the ruler says them */
+  .ruler__mark span{display:none}
 }
 
 @media (prefers-reduced-motion:reduce){ *{transition:none !important} }
@@ -449,12 +422,13 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
    then the open question and the station card, then the foot. controls come off. */
 @page{size:landscape; margin:12mm}
 @media print{
+  .hubname{visibility:visible !important}
   *{-webkit-print-color-adjust:exact; print-color-adjust:exact}
   html,body{height:auto; overflow:visible}
   body{display:block; background:none}
   .head{overflow:visible; padding:0 0 12px}
-  .head__tools, .intro, .tip, .foot, .sr, .sw, .layer__caret, .group--foot, .opt,
-  .ctl:not(.ctl--hour), .ctl--hour input, .card__top .mini, .ruler__mark, .mapboxgl-ctrl-top-right{display:none !important}
+  .head__tools, .intro, .tip, .sr, .swrow, .check, .mini, .group--foot, .opt, .ruler__aves, .ruler__window,
+  .ctl:not(.ctl--hour), .ctl--hour input, .ruler__mark, .mapboxgl-ctrl-top-left{display:none !important}
   .pmark{display:inline}
 
   /* the drawing comes after the rail in the source. scripts.js lifts it above the rail as the sheet
@@ -471,8 +445,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   /* no picture: the same frame, drawn empty and labelled. it is the default, so it also prints if the script never ran. */
   :root:not([data-shot]) .mapnone{display:flex; flex-direction:column; justify-content:center; gap:8px;
     aspect-ratio:1056 / 284; padding:16px 24px; border:1.5px solid var(--ink); border-top:0; break-inside:avoid}
-  .mapnone p{margin:0; max-width:64ch; font-size:var(--t-body); line-height:1.5; color:var(--ink-70)}
-  .mapnone .micro{color:var(--ink-label)}
+  .mapnone p{margin:0; max-width:64ch}
   /* a real picture, as wide as the frame, so what is set over it is measured against the same box */
   #mapPrint{display:block; width:100%; height:auto}
   .mapshot__pin{position:absolute; width:2px; height:72px; margin:-36px 0 0 -1px; background:var(--ink)}
@@ -480,7 +453,7 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   .mapshot__pin::before{content:""; position:absolute; left:-4px; top:-6px; width:10px; height:10px; border-radius:50%;
     background:var(--ink); box-shadow:0 0 0 2px var(--paper)}
   .mapshot__n, .mapshot__scale, .mapshot__credit{position:absolute; display:flex; align-items:center; gap:4px;
-    padding:4px 8px; background:var(--paper); color:var(--ink); font-size:var(--t-micro); letter-spacing:var(--track)}
+    padding:4px 8px; background:var(--paper); color:var(--ink); font-size:var(--t-fine)}
   .mapshot__n{top:8px; left:8px; flex-direction:column}
   /* the bar's width is a share of the whole picture, so its box spans the picture */
   .mapshot__scale{top:8px; left:0; right:0; justify-content:flex-end; background:none; padding:0}
@@ -488,7 +461,9 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   .mapshot__scale span{background:var(--paper); padding:0 4px}
   .mapshot__credit{bottom:0; right:0; gap:8px}
   .mapshot__credit .mapboxgl-ctrl-logo{display:block; margin:0}
-  .ruler{height:auto !important; border-top:0; background:none}
+  .ruler__cap, .rulerbox, .ruler__foot{background:none; padding-left:0; padding-right:0}
+  .ruler__cap{border-top:0}
+  .ruler{height:auto !important}
   .ruler svg{height:auto}
   .ruler__foot{padding:8px 0 12px; border-bottom:1.5px solid var(--ink)}
 
@@ -507,23 +482,19 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   /* a paragraph may run on into the next column, never by a single line */
   .key > p, .says{orphans:2; widows:2}
   .group{background:none; padding:4px 0; min-height:0; break-after:avoid}
-  .layer__bar{grid-template-columns:minmax(0,1fr); padding:0}
-  .layer__q{padding:8px 0; min-height:0; grid-template-columns:minmax(0,1fr) fit-content(46%)}
+  .layer__head{padding:8px 0; min-height:0; background:none !important}
   .layer__body{padding:0 0 16px}
   /* key rows are set closer on paper: there is no finger to aim at them */
   .key li, .key--rank li{padding:4px 0}
   .panel{max-height:none; overflow:visible; border:0; padding:0 0 16px; background:none}
-  .key li, .sizes, .panel dl div, .lotrows li, .xsec, .flag, .hours, .hours__lab{break-inside:avoid}
+  .key li, .sizes, .panel dl div, .lotrows li, .xsec, .xsec__lab, .flag, .hours, .hours__lab{break-inside:avoid}
   .hours, .key > p, .xsec{break-after:avoid}
   /* a heading is never left at a page end without what it heads */
   .panel h3, .panel h4, .layer__body h3, .layer__body h4, .card__top, .layer[data-open="true"] .layer__bar, .layer[data-on="true"] .layer__bar{break-after:avoid}
   .layer__bar{break-inside:avoid}
-  /* words that only mean something on a screen */
-  .scr{display:none}
-
   /* the foot closes the first page, under the ruler, so it can never be left on a page alone.
      a block of inline blocks: a flex box is split across pages, this is not */
-  .printfoot{display:block; margin:0; padding-top:8px; break-inside:avoid; break-before:avoid}
+  .head__meta.printfoot{font-size:var(--t-fine); display:block; margin:0; padding-top:8px; break-inside:avoid; break-before:avoid}
   .printfoot div{display:inline-flex; flex-direction:row; align-items:baseline; gap:8px; vertical-align:top; margin:0 24px 4px 0; break-inside:avoid}
   .printfoot div[hidden]{display:none}
 }

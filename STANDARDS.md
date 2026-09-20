@@ -19,8 +19,9 @@ The reference is the discipline of a graduate design school review: a drawing ma
 argument, and everything on the sheet either serves it or comes off.
 
 - **One argument per view.** Every row, card and band answers a question. Nothing decorative.
-- **Hierarchy by type, not by boxes.** One type scale (11 / 12 / 14 / 17 / 30). Two families: the
-  sans for statements, the mono for measurements and labels. No third voice on the sheet.
+- **Hierarchy by type, not by boxes.** One type scale on a 16px floor (16 / 16.5 / 18 / 20 / 24 /
+  title). Helvetica Neue for statements, labels and every figure. A system serif (Charter stack)
+  for running sentences only. No text below 16px except the map credit and the print foot.
 - **One spacing scale**, multiples of 4px. No arbitrary literals.
 - **Two line weights**: 1px hairline for division, 1.5px ink for structure.
 - **Colour means something or is absent.** The data palette is fixed and is never changed
@@ -45,6 +46,23 @@ argument, and everything on the sheet either serves it or comes off.
 - **Plain language.** No planner jargon in anything a resident reads.
 - **No copy in the author's voice** that she did not write. Placeholder slots stay visibly empty
   or are not rendered.
+- **A text budget.** Each region shows only the answer to the question the reader has open. What
+  explains or qualifies it sits one disclosure lower and is never deleted. Hard maximums for
+  visible words at 1440x900 with a 16px minimum font, counted with `notes/ux/run.sh`:
+
+  | Region | Max words | What counts |
+  |---|---|---|
+  | First-load rail | 100 | 9 rows, 3 group heads, the foot control |
+  | First-load page, intro shut | 160 | Rail 100, ruler and foot 50, header 8 words plus 3 buttons |
+  | First-load page, intro open | 250 | The intro text adds 89 words |
+  | A closed row | 14 | Question, one figure, unit of 7 words or fewer, no sub-line |
+  | An open row before any disclosure | 120 | Pick lists capped at 5 items plus "Show all N" |
+  | Station card, short state | 60 | Close and More included; no scrolling at 900px tall; at most 2 lines per fact |
+  | Station card, More open | +120 | Nothing repeated from the short state |
+  | Ruler | 50 | 16 avenue labels, 4 hub names, 2 river labels, one caption of 10 words or fewer, one readout of 12 words or fewer; zero legend words |
+
+  At most 6 type styles on screen, and at most 3 non-data emphases per state (the open answer, one
+  flag, the position mark).
 
 ## 3. Build standard (clean code)
 
