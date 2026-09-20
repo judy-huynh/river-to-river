@@ -528,7 +528,12 @@ const LAYERS=[
     get fig(){ return [`${LOTS.features.filter(f=>f.properties.unbuilt>0).length} of ${LOTS.features.length}`,'lots']; },
     get sub(){ return `have room left to build &middot; ${LOTS.features.filter(f=>f.properties.lm===1).length} landmarked`; },
     on:true, open:false, ids:['lotFill','lotLine','lmHatch'], opacity:.58,
-    says:`Every property fronting 42nd Street, at its real boundary from the city tax map. <b>Click one to see who owns it.</b>`,
+    /* the set as it is drawn, every count from the records (METHODOLOGY 4) */
+    get says(){ const all=LOTS.features.length, on=LOTS.features.filter(f=>streetNo(f.properties.addr)==='42').length;
+      const out=window.LOTS_OUT||[], nos=[...new Set(out.map(f=>streetNo(f.properties.addr)).filter(Boolean))].sort((a,b)=>a-b);
+      return `${all} lots along the street, at their boundary from the city tax map (MapPLUTO). ${on} are addressed on 42nd Street, East or West. ${all-on} are addressed on an avenue or a named street or place.`
+        +(out.length?` ${out.length} lot${out.length===1?'':'s'} addressed on ${nos.join(' or ')} Street ${out.length===1?'is':'are'} left out. <a href="${METHOD}#4-the-lot-rule-and-what-is-being-corrected">Method</a>.`:'')
+        +` <b>Click one to see who owns it.</b>`; },
     styles:[['zoning','The rules that govern it'],['capacity','Room left to build'],
       ['landmark','What cannot be touched'],['age','When it was built'],['plain','Outline only']],
     style:'zoning',
@@ -936,7 +941,8 @@ const SEL={st:null, lot:null, hour:BUS_STATS?BUS_STATS.slowHour[0]:17};
 const AVE_FULL={Mad:'Madison',Lex:'Lexington'};
 const aveShort=n=>AVE_FULL[n]||n;
 const aveName=n=>aveShort(n)+' Avenue';
-const ON_42=/\b42(nd)?\b/i;
+/* the numbered street an address names, as the lot rule reads it (scripts/bake/lot_rule.py) */
+const streetNo=a=>((a||'').toUpperCase().replace(/\s+/g,' ').trim().replace(/\b(\d+)(ST|ND|RD|TH)\b/g,'$1').match(/^(?:[0-9][0-9A-Z-]* )?(?:EAST|WEST|E|W) (\d+) (?:STREET|ST)$/)||[])[1];
 const feet=v=>v==null?'not measured here':v+' ft';
 /* '2026-05-20' to '20 May 2026', '2026-05' to 'May 2026'. no Date object, so no timezone slip. */
 const day=iso=>{const [y,m,d]=iso.split('-'); return (d?+d+' ':'')+MON[m-1]+' '+y;};
@@ -1046,18 +1052,20 @@ function stationHTML(P){
   /* flags come from the record: the lot's own address and whether it is the largest listed here */
   const tags=p=>{const t=[];
     if(P.biggest&&p.bbl===P.biggest.bbl) t.push('largest lot here');
-    if(p.addr&&!ON_42.test(p.addr)) t.push('not a 42 Street address');
+    if(p.addr&&streetNo(p.addr)!=='42') t.push('not a 42 Street address');
     const shed=SHED_BY_BBL.get(String(p.bbl)); if(shed) t.push('shed permit '+shedSays(shed));
     return t.length?`<span class="num">${t.join(' &middot; ')}</span>`:'';};
   const none=parts.every(x=>x[1]==null);
-  const lotList=(side,list)=>`<h4 class="micro">${side} side &middot; ${list.length} lot${list.length===1?'':'s'}</h4>`
+  /* a lot the rule took out that fronts here is named, so a gap is not read as a data hole */
+  const outList=out=>out.map(p=>`<p class="none">${p.addr} fronts here. It is ${p.why} and is outside the lot set. <a href="${METHOD}#4-the-lot-rule-and-what-is-being-corrected">Method</a></p>`).join('');
+  const lotList=(side,list,out)=>`<h4 class="micro">${side} side &middot; ${list.length} lot${list.length===1?'':'s'}</h4>`
     +(list.length?`<ul class="lotrows">${list.map(p=>
       `<li><button type="button" data-lot="${p.bbl}">`
       +`<b>${p.addr||'Unnamed lot'}</b><span>${p.owner||'owner not recorded'}</span>`
       +`<span class="num">${commas(p.unbuilt)} sq ft unbuilt${p.lm===1?' &middot; landmark':''}</span>`
       +tags(p)
       +`</button></li>`).join('')}</ul>`
-    :`<p class="none">No lot in the set at this station.</p>`);
+    :`<p class="none">No drawn lot fronts this side here.</p>`)+outList(out);
   return `<div class="card__top"><span class="micro">Station</span>`
     +`<button class="mini" type="button" data-close>close</button></div>`
    +`<h3>${where(P)}</h3>`
@@ -1085,7 +1093,7 @@ function stationHTML(P){
    +(TIER_STATS?`<div><dt>DOT pedestrian priority tier</dt><dd>${P.tier?`${P.tier.name}<span>tier ${P.tier.rank} of ${TIER_META.length}, a planning rank, not a count</span>`:'no tier in the source here'}</dd></div>`:'')
    +(P.count?`<div><dt>Pedestrians counted</dt><dd>${commas(P.count.pm)}<span>${span(P.count.win)}, one day in ${day(P.count.p)}, counter ${away(P.count)}, ${block(P.count)}</span></dd></div>`:'')
    +`</dl>`+note(NOTE_WALK)
-   +lotList('North',P.lots.n)+lotList('South',P.lots.s)
+   +lotList('North',P.lots.n,P.outside.n)+lotList('South',P.lots.s,P.outside.s)
    +(P.lots.n.length+P.lots.s.length?note(NOTE_LOT):'');
 }
 

@@ -35,12 +35,13 @@ function project(lon,lat){
    lot's extent along the street, off and far its nearest and farthest reach from it. */
 const FRONT_TOL=15;
 const LOT_EDGE=new Map(), LOT_BAND=new Map();
-LOTS.features.forEach(f=>{
+const LOTS_OUT=window.LOTS_OUT||[];
+[...LOTS.features,...LOTS_OUT].forEach((f,i)=>{
   const rings=f.geometry.type==='Polygon'?[f.geometry.coordinates[0]]:f.geometry.coordinates.map(g=>g[0]);
   const q=rings.map(r=>r.map(c=>project(c[0],c[1])));
   const v=q.flat(), fts=v.map(x=>x.ft), offs=v.map(x=>x.off);
   LOT_EDGE.set(f.properties.bbl,q);
-  LOT_BAND.set(f.properties.bbl,{a:Math.min(...fts), b:Math.max(...fts), off:Math.min(...offs), far:Math.max(...offs)});
+  if(i<LOTS.features.length) LOT_BAND.set(f.properties.bbl,{a:Math.min(...fts), b:Math.max(...fts), off:Math.min(...offs), far:Math.max(...offs)});
 });
 /* how far out the lot's boundary first crosses the perpendicular raised at a station.
    null when the lot does not reach that station. */
@@ -120,6 +121,16 @@ function stationProfile(ft,hour){
       .map(p=>[p,crossing(p.bbl,ft)]).filter(x=>x[1]!==null).sort((x,y)=>x[1]-y[1]);
     return hit.filter(x=>x[1]<=hit[0][1]+FRONT_TOL).map(x=>x[0]);
   };
+  /* lots the lot rule took out (METHODOLOGY 4) that front the street here, by the same test
+     run over drawn and taken-out lots together. listed apart, never counted. */
+  const outside=side=>{
+    const all=[...LOTS.features,...LOTS_OUT].map(f=>f.properties).filter(p=>p.side===side)
+      .map(p=>crossing(p.bbl,ft)).filter(d=>d!==null);
+    if(!all.length) return [];
+    const first=Math.min(...all);
+    return LOTS_OUT.map(f=>f.properties).filter(p=>p.side===side)
+      .filter(p=>{const d=crossing(p.bbl,ft); return d!==null&&d<=first+FRONT_TOL;});
+  };
   const n=lots('n'), s=lots('s');
   /* nearest bench along the street, either side. a tie goes to the one to the west. */
   const bn=BENCHES.reduce((x,y)=>!x||Math.abs(y.ft-ft)<Math.abs(x.ft-ft)?y:x,null);
@@ -144,10 +155,10 @@ function stationProfile(ft,hour){
     curb:CURB.length?{n:face('n'), s:face('s')}:null,
     crashes:CRASHES.length?{reach:CRASH_REACH, place:place?{ft:place.ft, name:place.name, n:place.n, inj:place.inj,
       dist:Math.abs(place.ft-ft), dir:place.ft>ft?'east':place.ft<ft?'west':null}:null}:null,
-    bench, count, bus:hour==null?null:busAt(ft,hour), lots:{n,s}, biggest};
+    bench, count, bus:hour==null?null:busAt(ft,hour), lots:{n,s}, outside:{n:outside('n'),s:outside('s')}, biggest};
 }
 
-const api={AVES, CROSS, TREE_REACH, CRASH_REACH, CRASH_JOIN, PLACES, SHED_BY_BBL, COUNT_REACH, COUNT_SPAN, PED_LAST, between, FRONT_TOL, REACH, LOT_BAND, crossing, LOT_BY_BBL, project, busAt, stationProfile};
+const api={AVES, CROSS, TREE_REACH, CRASH_REACH, CRASH_JOIN, PLACES, SHED_BY_BBL, COUNT_REACH, COUNT_SPAN, PED_LAST, between, FRONT_TOL, REACH, LOT_BAND, crossing, LOT_BY_BBL, LOTS_OUT, project, busAt, stationProfile};
 window.STATION=api;
 if(typeof module!=='undefined'&&module.exports) module.exports=api;
 })();

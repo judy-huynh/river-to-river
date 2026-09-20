@@ -14,6 +14,9 @@ From the repo root:
     python3 scripts/bake/owner_case.py --check  # owner names already re-cased, writes nothing
     python3 scripts/bake/owner_case.py          # re-case the owner names in window.LOTS_POLY
 
+    python3 scripts/bake/lot_rule.py --check    # the lot rule already applied, writes nothing
+    python3 scripts/bake/lot_rule.py            # lots addressed on another numbered street move to window.LOTS_OUT, the station card names them
+
     python3 scripts/bake/aves.py --check        # where the cross streets meet the centreline, writes nothing
     python3 scripts/bake/aves.py                # re-derive and write window.AVES
 

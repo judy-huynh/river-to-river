@@ -122,4 +122,26 @@ window.CRASHES.forEach(c=>{ assert.ok(c.off<=window.CRASH_META.near_ft&&c.d>=win
 window.SHEDS.forEach(s=>{ const D=window.SHEDS_META.asof;
   assert.strictEqual(s.state==='in force',s.expires>=D); assert.ok(s.since<=s.expires);
   assert.ok(S.LOT_BY_BBL.has(String(s.bbl))); });
+/* the lot rule: no drawn lot is addressed on another numbered street, no lot is both drawn and
+   taken out, and Grand Central Terminal is drawn (METHODOLOGY 4) */
+/* onStreet is a second derivation of the rule, written apart from the bake's regex on purpose:
+   it must agree with the bake in both directions, drawn lots and taken-out lots alike */
+const onStreet=a=>(a.toUpperCase().replace(/\b(\d+)(ST|ND|RD|TH)\b/g,'$1').match(/(?:EAST|WEST|E|W) (\d+) (?:STREET|ST)$/)||[])[1];
+window.LOTS_POLY.features.forEach(f=>{ const n=onStreet(f.properties.addr); assert.ok(!n||n==='42',f.properties.addr); });
+window.LOTS_OUT.forEach(f=>{ assert.ok(!S.LOT_BY_BBL.has(String(f.properties.bbl))); assert.ok(f.properties.why); });
+window.LOTS_OUT.forEach(f=>{ const n=onStreet(f.properties.addr); assert.ok(n&&n!=='42',f.properties.addr);
+  assert.strictEqual(f.properties.why,`addressed on ${n} Street`); });
+assert.ok(S.LOT_BY_BBL.has('1012800001'));
+/* a taken-out lot that fronts a station is named on that station's card and never counted;
+   --lots prints where, for METHODOLOGY 4 */
+{ const span=new Map();
+  for(let ft=0;ft<=LEN;ft++){ const P=S.stationProfile(ft);
+    ['n','s'].forEach(k=>P.outside[k].forEach(p=>{ assert.ok(!P.lots[k].includes(p)); assert.ok(!S.LOT_BY_BBL.has(String(p.bbl)));
+      const x=span.get(p.bbl)||{addr:p.addr,side:k,a:ft,b:ft,bare:0}; x.b=ft; if(!P.lots[k].length) x.bare++; span.set(p.bbl,x); })); }
+  if(process.argv.includes('--lots')){
+    span.forEach(x=>console.log(`${x.addr}  ${x.side}  fronts ${x.a} to ${x.b} ft  no drawn lot beside it for ${x.bare} ft`));
+    console.log('taken out, never fronting:',window.LOTS_OUT.filter(f=>!span.has(f.properties.bbl)).map(f=>f.properties.addr).join(', ')||'none');
+    const never=window.LOTS_POLY.features.map(f=>f.properties).filter(p=>{ const k=S.LOT_BAND.get(p.bbl);
+      for(let ft=Math.ceil(k.a);ft<=k.b;ft++) if(S.stationProfile(ft).lots[p.side].includes(p)) return false; return true; });
+    console.log('drawn, never listed at a station:',never.map(p=>p.addr).join(', ')||'none'); } }
 console.log('station checks pass');
