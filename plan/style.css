@@ -49,8 +49,13 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
   justify-content:flex-end; min-width:0; max-width:100%}
 .head__meta div{min-width:0}
 /* the meta list and the button after it keep to the right of the title */
-.head__meta{margin-left:auto}
-.head > .mini{flex:0 0 auto}
+/* the list gives way before the tools do: it folds onto a second line of its own, so the tools
+   stay on the title's row and the title block keeps its height */
+.head__meta{margin-left:auto; flex:1 1 40%}
+.head__tools{display:flex; flex-wrap:wrap; gap:8px; flex:0 0 auto; min-width:0}
+/* only the printed sheet has these: the picture of the map, the station mark inside the ruler
+   drawing, and the foot */
+#mapShot, .printfoot, .pmark{display:none}
 .head__meta dd{overflow-wrap:break-word}
 .head__meta div{display:flex; flex-direction:column; gap:3px; justify-content:flex-end}
 .head__meta dt{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
@@ -379,3 +384,77 @@ body{background:var(--paper); color:var(--ink); font-family:var(--sans); font-si
 }
 
 @media (prefers-reduced-motion:reduce){ *{transition:none !important} }
+
+/* ── the printed sheet ────────────────────────────────────────────────────
+   one landscape sheet, read top to bottom: title block, the map at full width, the ruler,
+   then the open question and the station card, then the foot. controls come off. */
+@page{size:landscape; margin:12mm}
+@media print{
+  *{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+  html,body{height:auto; overflow:visible}
+  body{display:block; background:none}
+  .head{overflow:visible; padding:0 0 12px}
+  .head__tools, .intro, .tip, .sr, .sw, .layer__caret, .group--foot, .opt,
+  .ctl:not(.ctl--hour), .ctl--hour input, .card__top .mini, .ruler__mark, .mapboxgl-ctrl-top-right{display:none !important}
+  .pmark{display:inline}
+
+  /* the drawing comes after the rail in the source, and first on paper */
+  .sheet{display:flex; flex-direction:column}
+  /* the drawing has the first page. the words start the second. */
+  .draw{display:block; order:-1; height:auto; min-height:0; break-after:page}
+  /* if the first page ever runs over, only the foot goes over, never the map */
+  #mapShot, .ruler{break-inside:avoid}
+  /* the picture stands in for the canvas. north, the scale bar and the basemap's credit sit on it. */
+  /* the live map never prints: a WebGL canvas comes out blank. with no picture yet, the sheet has no map. */
+  #map{display:none}
+  :root[data-shot] #mapShot{display:block; position:relative; border-bottom:1.5px solid var(--ink)}
+  /* a real picture, as wide as the frame, so what is set over it is measured against the same box */
+  #mapPrint{display:block; width:100%; height:auto}
+  .mapshot__pin{position:absolute; width:2px; height:72px; margin:-36px 0 0 -1px; background:var(--ink)}
+  .mapshot__pin[hidden]{display:none}
+  .mapshot__pin::before{content:""; position:absolute; left:-4px; top:-6px; width:10px; height:10px; border-radius:50%;
+    background:var(--ink); box-shadow:0 0 0 2px var(--paper)}
+  .mapshot__n, .mapshot__scale, .mapshot__credit{position:absolute; display:flex; align-items:center; gap:4px;
+    padding:4px 8px; background:var(--paper); color:var(--ink); font-size:var(--t-micro); letter-spacing:var(--track)}
+  .mapshot__n{top:8px; left:8px; flex-direction:column}
+  /* the bar's width is a share of the whole picture, so its box spans the picture */
+  .mapshot__scale{top:8px; left:0; right:0; justify-content:flex-end; background:none; padding:0}
+  .mapshot__scale i{display:block; flex:0 0 auto; margin-right:8px; height:4px; border:1.5px solid var(--ink); border-top:0; background:var(--paper)}
+  .mapshot__scale span{background:var(--paper); padding:0 4px}
+  .mapshot__credit{bottom:0; right:0; gap:8px}
+  .mapshot__credit .mapboxgl-ctrl-logo{display:block; margin:0}
+  .ruler{height:auto !important; border-top:0; background:none}
+  .ruler svg{height:auto}
+  .ruler__foot{padding:8px 0 12px; border-bottom:1.5px solid var(--ink)}
+
+  /* under the drawing everything runs on in three columns, the open question first and the
+     station card after it, starting a column of its own. with no question open, every question
+     prints shut under its group heading. */
+  .layers{display:block; columns:3; column-gap:24px; border:0; overflow:visible; background:none}
+  #layerList{overflow:visible; scrollbar-gutter:auto}
+  .panel{break-before:column}
+  #layerList:has(.layer[data-open="true"]) .layer:not([data-open="true"]),
+  #layerList:has(.layer[data-open="true"]) .group{display:none}
+  /* with no question open, what is drawn on the map still gets its key */
+  #layerList:not(:has(.layer[data-open="true"])) .layer[data-on="true"] .layer__body{display:block}
+  /* a shut question stays whole. an open one is long and has to run on. */
+  .layer:not([data-open="true"]), .group, .key > p, .says{break-inside:avoid}
+  .group{background:none; padding:4px 0; min-height:0; break-after:avoid}
+  .layer__bar{grid-template-columns:minmax(0,1fr); padding:0}
+  .layer__q{padding:8px 0; min-height:0; grid-template-columns:minmax(0,1fr) fit-content(46%)}
+  .layer__body{padding:0 0 16px}
+  .panel{max-height:none; overflow:visible; border:0; padding:0 0 16px; background:none}
+  .key li, .panel dl div, .lotrows li, .xsec, .flag, .hours, .hours__lab{break-inside:avoid}
+  .hours, .key > p, .xsec{break-after:avoid}
+  /* a heading is never left at a page end without what it heads */
+  .panel h3, .panel h4, .layer__body h3, .layer__body h4, .card__top, .layer[data-open="true"] .layer__bar{break-after:avoid}
+  .layer__bar{break-inside:avoid}
+  /* words that only mean something on a screen */
+  .scr{display:none}
+
+  /* the foot closes the first page, under the ruler, so it can never be left on a page alone.
+     a block of inline blocks: a flex box is split across pages, this is not */
+  .printfoot{display:block; margin:0; padding-top:8px; break-inside:avoid; break-before:avoid}
+  .printfoot div{display:inline-flex; flex-direction:row; align-items:baseline; gap:8px; vertical-align:top; margin:0 24px 4px 0; break-inside:avoid}
+  .printfoot div[hidden]{display:none}
+}

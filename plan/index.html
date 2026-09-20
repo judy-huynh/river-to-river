@@ -21,7 +21,11 @@
     <div><dt>Trees</dt><dd id="metaTrees"></dd></div>
     <div><dt>Sources</dt><dd>MapPLUTO &middot; NYC Parks &middot; NYC DOT &middot; MTA &middot; OSM</dd></div>
   </dl>
-  <button class="mini" type="button" id="introOpen" aria-controls="intro" aria-expanded="false">How to use</button>
+  <div class="head__tools">
+    <button class="mini" type="button" id="copyLink">Copy link</button>
+    <button class="mini" type="button" id="printSheet">Print</button>
+    <button class="mini" type="button" id="introOpen" aria-controls="intro" aria-expanded="false">How to use</button>
+  </div>
 </header>
 
 <main class="sheet">
@@ -39,7 +43,7 @@
   </section>
   <!-- the one rule for whether it opens: ?intro=1 always; never once shut, or on a link that points at something -->
   <script>(function(){ var q=location.search, done=false; try{ done=localStorage.getItem('r2r.intro')==='done'; }catch(e){}
-    document.getElementById('intro').hidden=!(/[?&]intro=1(&|$)/.test(q)||(!done&&!/[?&](st|lot|q|hr|on)=/.test(q))); })();</script>
+    document.getElementById('intro').hidden=!(/[?&]intro=1(&|$)/.test(q)||(!done&&!/[?&](st|lot|q|hr|on|by)=/.test(q))); })();</script>
 
   <!-- ══════════ the rail. each row is a question, grouped People, Movement, Built ══════════ -->
   <aside class="layers" id="layers" aria-label="Questions about the street">
@@ -52,6 +56,15 @@
   <!-- ══════════ the drawing ══════════ -->
   <section class="draw">
     <div id="map"></div>
+    <!-- the printed sheet only: a picture of the map, drawn by scripts.js as the sheet goes to print,
+         with north, a scale bar and the basemap credit set over it -->
+    <div class="mapshot" id="mapShot">
+      <img id="mapPrint" alt="The map as it was on screen">
+      <i class="mapshot__pin" id="shotPin" hidden></i>
+      <div class="mapshot__n"><svg viewBox="-12 -12 24 24" width="24" height="24" aria-hidden="true"><g id="northArrow"><path d="M0 -10 L5 8 L0 4 L-5 8 Z" fill="currentColor"/></g></svg><span class="mono">N</span></div>
+      <div class="mapshot__scale"><i id="scaleBar"></i><span class="mono" id="scaleLab"></span></div>
+      <div class="mapshot__credit" id="mapCredit"></div>
+    </div>
 
     <!-- the whole street, always visible, doubles as the navigator -->
     <!-- also a slider: a press picks a station, arrow keys walk it 100 ft at a time -->
@@ -63,9 +76,17 @@
     </div>
     <div class="ruler__foot">
       <span class="mono" id="rulerLeft">Hudson River</span>
-      <span class="mono" id="rulerMid">drag the bar to move along the street</span>
+      <span class="mono" id="rulerMid"><span class="scr">drag the bar to move along the street</span></span>
       <span class="mono" id="rulerRight">East River</span>
     </div>
+    <!-- the foot of the printed sheet. filled by scripts.js, never shown on screen. it closes the first page, under the ruler -->
+    <dl class="head__meta printfoot">
+      <div><dt>This view</dt><dd id="printLink"></dd></div>
+      <div><dt>Printed</dt><dd id="printDate"></dd></div>
+      <div id="printShot" hidden><dt>Map picture</dt><dd id="printShotText"></dd></div>
+      <div id="printBase" hidden><dt>Basemap</dt><dd id="printBaseText"></dd></div>
+      <div><dt>Method</dt><dd id="printMethod"></dd></div>
+    </dl>
   </section>
 
 </main>

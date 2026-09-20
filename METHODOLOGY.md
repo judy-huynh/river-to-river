@@ -71,6 +71,31 @@ so. Reproduce with `python3 scripts/bake/aves.py --check`.
 Nothing is loaded live. All data is clipped, stationed and baked into `plan/data.js` so the page
 depends on Mapbox for the basemap and on nothing else.
 
+## 1b. North and scale on the printed sheet (added 20 Sep 2026)
+
+The map is turned so the street runs flat, so the printed sheet says where north is and how long
+a distance is. Both are worked out in `plan/scripts.js` from the map itself, and neither is typed in.
+
+The map on the sheet is a picture. Each time the live map comes to rest, the strip of it about the
+street is copied and kept as one PNG, and north and scale are measured in that same moment, so they
+belong to the frame that prints. The picture fills its frame edge to edge, and the pin, the north
+arrow and the scale bar are placed as shares of that same frame. If the map has not yet come to
+rest once, the sheet prints without a map. A picture taken from a narrow screen is enlarged to
+fill the sheet, and the foot of the sheet says so and gives the screen's width.
+
+1. **North.** The arrow is turned by the map's own bearing, read from the map, not from a constant.
+2. **Scale bar.** The two ends of `LINE42` are placed on the map as the map projects them. Their
+   distance apart in pixels, divided by the line's length in feet, is pixels per foot at this
+   latitude and zoom. The bar is the largest of 1, 2 or 5 times a power of ten, in feet, that fits
+   in a fifth of the picture's width. Its width is set as a share of the picture, so it stays true
+   at any paper size. Checked on 20 Sep 2026 against two printed pins 3,700 ft apart: the pins give
+   131.8 pt for 2,000 ft and the bar measures 132.0 pt, inside the rounding of the PDF's own rules.
+3. **What it does not cover.** The scale is measured along the street. Web Mercator stretches
+   distance with latitude, and over a map this small the difference across the picture is far
+   below the width of the bar's own line.
+4. **The ruler** under the map is not at the map's scale. It always shows the whole street, river
+   to river, and the map may be zoomed in.
+
 ## 2. What is on the sheet today
 
 | Global in `plan/data.js` | Source | What was done to it |

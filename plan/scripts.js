@@ -375,7 +375,7 @@ const LAYERS=[
     says:`Every bench NYC DOT records on 42 Street. <b>Only benches DOT placed are in the source.</b> Seating in parks and plazas, or put out by a building or a business improvement district, is not.`,
     legend(){
       const S=BENCH_STATS;
-      let o=`<div class="key"><h4>Each bench</h4><p>Pick one to stand at its station.</p></div>
+      let o=`<div class="key"><h4>Each bench</h4><p><span class="scr">Pick one to stand at its station.</span></p></div>
         <ul class="lotrows">${BENCHES.map(b=>`<li><button type="button" data-st="${b.ft}">`
           +`<b>${b.side==='n'?'North':'South'} side, ${block(between(b.ft))}</b>`
           +`<span>${commas(b.ft)} ft from the west end${b.installed?` &middot; installed ${day(b.installed)}`:''}</span>`
@@ -399,7 +399,7 @@ const LAYERS=[
       const rows=(list,line)=>`<ul class="lotrows">${list.map(x=>`<li><button type="button" data-st="${x.ft}">`
         +`<b>${x.addr}</b><span>${x.side==='n'?'North':'South'} side &middot; ${commas(x.ft)} ft from the west end</span>`
         +`<span class="num">${line(x)}</span></button></li>`).join('')}</ul>`;
-      let o=`<div class="key"><h4><i class="mark mark--full"></i>Permit in force on ${day(M.asof)}</h4><p>${S.live.length} building${S.live.length===1?'':'s'}. Pick one to stand at its station.</p></div>`
+      let o=`<div class="key"><h4><i class="mark mark--full"></i>Permit in force on ${day(M.asof)}</h4><p>${S.live.length} building${S.live.length===1?'':'s'}. <span class="scr">Pick one to stand at its station.</span></p></div>`
         +rows(S.live,x=>`${x.n} permit${x.n===1?'':'s'} in a run since ${day(x.since)} &middot; runs to ${day(x.expires)}`);
       if(S.lapsed.length)
         o+=`<div class="key key--after"><h4><i class="mark"></i>Permit run out, no sign-off recorded</h4><p>${S.lapsed.length} building${S.lapsed.length===1?'':'s'}, newest first. The record does not say whether a shed still stands.</p></div>`
@@ -430,7 +430,7 @@ const LAYERS=[
       const rows=list=>`<ul class="lotrows">${list.map(p=>`<li><button type="button" data-st="${p.ft}">`
           +`<b>${p.name?`At ${p.name}`:whereName(between(p.ft))}</b><span>${commas(p.ft)} ft from the west end</span>`
           +`<span class="num">${commas(p.inj)} injured in ${commas(p.n)} crash${p.n===1?'':'es'}</span></button></li>`).join('')}</ul>`;
-      o+=`<div class="key key--after"><h4>The ${Math.min(CRASH_TOP,S.top.length)} places with most injured</h4><p>Pick one to stand at its station.</p></div>`+rows(S.top.slice(0,CRASH_TOP));
+      o+=`<div class="key key--after"><h4>The ${Math.min(CRASH_TOP,S.top.length)} places with most injured</h4><p><span class="scr">Pick one to stand at its station.</span></p></div>`+rows(S.top.slice(0,CRASH_TOP));
       o+=`<div class="key key--after"><h4>Every place with anyone injured, west to east</h4><p>${commas(S.drawn.length)} places, one circle each.</p></div>`+rows(S.drawn);
       o+=`<p class="flag"><b>A count, not a rate</b>No source counts how many people walk, cycle or drive along the street, so there is nothing to divide by. These figures say how many people were hurt. They do not say how dangerous the street is for one person using it, and a busy corner cannot be compared with a quiet one.</p>`;
       if(S.fdr.n)
@@ -513,7 +513,7 @@ const LAYERS=[
         S.who.map(([k,v])=>`<li><span>${k}</span><b>${v} face${v===1?'':'s'}</b></li>`).join('')}</ul></div>`;
       o+=`<div class="key"><h4>When the meters run</h4><ul>${
         S.hours.map(([k,v])=>`<li><span>${k}</span><b>${v} face${v===1?'':'s'}</b></li>`).join('')}</ul></div>`;
-      o+=`<div class="key key--after"><h4>Each block face, west to east</h4><p>Pick one to stand at its middle.</p></div>
+      o+=`<div class="key key--after"><h4>Each block face, west to east</h4><p><span class="scr">Pick one to stand at its middle.</span></p></div>
         <ul class="lotrows">${CURB.map(f=>`<li><button type="button" data-st="${Math.round((f.a+f.b)/2)}">`
           +`<b>${f.side==='n'?'North':'South'} side, between ${f.from} and ${f.to}</b>`
           +`<span>${commas(f.a)} to ${commas(f.b)} ft &middot; ${f.who}</span><span class="num">${curbTerms(f)}</span></button></li>`).join('')}</ul>`;
@@ -533,7 +533,7 @@ const LAYERS=[
       const out=window.LOTS_OUT||[], nos=[...new Set(out.map(f=>streetNo(f.properties.addr)).filter(Boolean))].sort((a,b)=>a-b);
       return `${all} lots along the street, at their boundary from the city tax map (MapPLUTO). ${on} are addressed on 42nd Street, East or West. ${all-on} are addressed on an avenue or a named street or place.`
         +(out.length?` ${out.length} lot${out.length===1?'':'s'} addressed on ${nos.join(' or ')} Street ${out.length===1?'is':'are'} left out. <a href="${METHOD}#4-the-lot-rule-and-what-is-being-corrected">Method</a>.`:'')
-        +` <b>Click one to see who owns it.</b>`; },
+        +` <b class="scr">Click one to see who owns it.</b>`; },
     styles:[['zoning','The rules that govern it'],['capacity','Room left to build'],
       ['landmark','What cannot be touched'],['age','When it was built'],['plain','Outline only']],
     style:'zoning',
@@ -578,6 +578,8 @@ const LAYERS=[
 const row=id=>LAYERS.find(L=>L.id===id);
 /* what is drawn before any link or reader has changed it */
 const ON_START=LAYERS.filter(L=>L.on).map(L=>L.id).join(',');
+/* and what each row is coloured by */
+const BY_START=new Map(LAYERS.filter(L=>L.styles).map(L=>[L.id,L.style]));
 
 /* ── panel ────────────────────────────────────────────────────────────── */
 function buildPanel(){
@@ -655,7 +657,7 @@ function renderBody(L){
   const hourIn=L._body.querySelector('#hourIn');
   if(hourIn) hourIn.oninput=e=>setHour(+e.target.value);
   const sel=L._body.querySelector('#style-'+L.id);
-  if(sel) sel.onchange=e=>{ L.style=e.target.value; paint(L); redraw(L); };
+  if(sel) sel.onchange=e=>{ L.style=e.target.value; paint(L); redraw(L); link(); };
   L._body.querySelectorAll('[data-extra]').forEach(b=>{
     b.onclick=()=>{ const k=b.dataset.extra; L.extraOn[k]=!L.extraOn[k];
       b.setAttribute('aria-pressed',L.extraOn[k]); paint(L); redraw(L); };
@@ -937,7 +939,8 @@ function wire(){
 /* ── the station card ─────────────────────────────────────────────────── */
 /* one selection, one place. st is feet from the west end, lot is a bbl or null, hour is the
    hour of day every timed figure is read at. it opens on the street's slowest hour. */
-const SEL={st:null, lot:null, hour:BUS_STATS?BUS_STATS.slowHour[0]:17};
+const HOUR_START=BUS_STATS?BUS_STATS.slowHour[0]:17;
+const SEL={st:null, lot:null, hour:HOUR_START};
 const AVE_FULL={Mad:'Madison',Lex:'Lexington'};
 const aveShort=n=>AVE_FULL[n]||n;
 const aveName=n=>aveShort(n)+' Avenue';
@@ -1028,21 +1031,30 @@ function select(next,boot){
     panel.innerHTML=''; $('#said').textContent=''; restSlider();
     if(pin) pin.remove();
   }
+  printMark();
   link();
 }
-/* the view is a link: ?st=4000 opens this card, &lot= opens the lot inside it, &hr=17 switches
-   the bus on at 5pm, &q=benches is the open row, &on=lots,trees is what is drawn. on is only
-   written once the drawn set or the open row has moved from how the sheet starts. */
+/* the view is a link: ?st=4000 opens this card, &lot= opens the lot inside it, &hr=17 is the
+   hour, &q=benches is the open row, &on=lots,trees is what is drawn. hr is written whenever the
+   hour shows: bus drawn, bus row open, or the hour moved. on is written once the drawn set or
+   the open row has moved from how the sheet starts, and always beside hr, so hr alone stays
+   the hand-typed short form that also switches the bus on.
+   &by=lots.capacity is what a row is coloured by, written only once it has moved. */
 function link(){
   const q=new URLSearchParams(location.search), open=SEL.st!=null;
   open?q.set('st',SEL.st):q.delete('st');
   SEL.lot&&open?q.set('lot',SEL.lot):q.delete('lot');
-  (row('bus')||{}).on?q.set('hr',SEL.hour):q.delete('hr');
+  const bus=row('bus'), timed=!!bus&&(bus.on||bus.open||SEL.hour!==HOUR_START);
+  timed?q.set('hr',SEL.hour):q.delete('hr');
   const o=LAYERS.find(L=>L.open), on=LAYERS.filter(L=>L.on).map(L=>L.id).join(',');
   o?q.set('q',o.id):q.delete('q');
-  o||on!==ON_START?q.set('on',on):q.delete('on');
-  const qs=q.toString();
+  o||timed||on!==ON_START?q.set('on',on):q.delete('on');
+  const by=LAYERS.filter(L=>L.styles&&L.style!==BY_START.get(L.id)).map(L=>L.id+'.'+L.style).join(',');
+  by?q.set('by',by):q.delete('by');
+  /* commas are legal in a query, and a link that is printed is read by eye */
+  const qs=q.toString().replace(/%2C/g,',');
   try{ history.replaceState(null,'',location.pathname+(qs?'?'+qs:'')+location.hash); }catch(e){}
+  printFoot();
 }
 
 function stationHTML(P){
@@ -1182,9 +1194,10 @@ const RULER_BANDS=[
       if(PED_STATS) add('circle',{cx:X(PED.ft),cy,r:4,fill:PAPER,stroke:INK,'stroke-width':1.5}); } }
 ];
 
-function buildRuler(){
+/* drawn to the ruler's own width, or to a width handed in when the sheet is about to print */
+function buildRuler(force){
   const host=$('#ruler'), svg=$('#rulerSvg');
-  const W=Math.max(320,Math.round(host.clientWidth||960)), X=ft=>ft/LEN*W;
+  const W=force>0?force:Math.max(320,Math.round(host.clientWidth||960)), X=ft=>ft/LEN*W;
   svg.innerHTML='';
   const add=(n,a)=>{const e=document.createElementNS(NS,n); for(const k in a) e.setAttribute(k,a[k]); svg.appendChild(e); return e;};
   const MONO='ui-monospace,SFMono-Regular,Menlo,monospace';
@@ -1291,6 +1304,19 @@ function buildRuler(){
     let bb; try{ bb=t.getBBox(); }catch(e){ return; }
     if(bb.width && (bb.x < 1 || bb.x + bb.width > W - 1)) t.remove();
   });
+  RULER_GEO={W,inked,axis}; printMark();
+}
+/* the station mark again, inside the drawing, shown only in print. paper scales the svg whole,
+   and the mark on screen is ruled in screen px, so it would not land on the bars. */
+let RULER_GEO=null;
+function printMark(){
+  const svg=$('#rulerSvg'); svg.querySelectorAll('.pmark').forEach(n=>n.remove());
+  if(SEL.st==null||!RULER_GEO) return;
+  const {W,inked,axis}=RULER_GEO, x=SEL.st/LEN*W;
+  const add=(n,a)=>{const e=document.createElementNS(NS,n); e.setAttribute('class','pmark');
+    for(const k in a) e.setAttribute(k,a[k]); svg.appendChild(e);};
+  inked.forEach(([a,b])=>add('line',{x1:x,x2:x,y1:a,y2:b,stroke:INK,'stroke-width':1.5}));
+  add('circle',{cx:x,cy:axis,r:4,fill:INK});
 }
 
 /* redraw on resize, debounced, because the drawing is now width-dependent */
@@ -1339,6 +1365,94 @@ let VIEW=[0,LEN];
   });
 })();
 
+/* ── the printed sheet, and the link to this view ─────────────────────── */
+/* a WebGL canvas prints blank, and a 2D canvas filled from one prints at the wrong width. so the
+   sheet is handed a plain picture. each time the map comes to rest its frame is copied, inside
+   the same render while the frame is still there, and kept as one PNG. nothing is kept on the GPU.
+   the copy is a strip about the street, which runs across the middle of the view, so map and
+   ruler share the first page. */
+const PRINT_W=11*96, SHOT_H=284;   /* a letter sheet on its side, in css px, and the strip of it the map gets */
+let SHOT=null, SHOT_N=0, SHOT_AT=0, SHOT_BUSY=false, PRINTING=false;
+function grab(){
+  /* the print layout resizes the map. that frame is not the view, and the picture must not change mid-print. */
+  if(PRINTING) return;
+  const gl=map.getCanvas(), cw=gl.clientWidth, ch=gl.clientHeight;
+  if(!cw||!ch||!gl.width) return;
+  const k=gl.width/cw, h=Math.min(ch,cw*SHOT_H/PRINT_W), top=(ch-h)/2;
+  const c=document.createElement('canvas'); c.width=Math.round(cw*k); c.height=Math.round(h*k);
+  try{ c.getContext('2d').drawImage(gl,0,-Math.round(top*k)); }catch(e){ return; }
+  /* north and scale belong to this frame, so they are measured with it: the map's own bearing,
+     and the two ends of the centreline as the map places them */
+  const a=map.project(at(0)), b=map.project(at(LEN));
+  const shot={cw,h,top,w:c.width,ht:c.height,bearing:map.getBearing(),pxFt:Math.hypot(b.x-a.x,b.y-a.y)/LEN}, n=++SHOT_N;
+  SHOT_BUSY=true;
+  /* pictures can finish out of order. a newer one is never replaced by an older one. */
+  c.toBlob(blob=>{ c.width=c.height=0; const end=()=>{ if(n===SHOT_N) SHOT_BUSY=false; };
+    if(!blob||n<SHOT_AT) return end();
+    const img=new Image(); img.onerror=end;
+    img.onload=()=>{ if(n>SHOT_AT&&!PRINTING){ SHOT_AT=n; SHOT=shot; const live=$('#mapPrint'), old=live.src;
+        live.width=shot.w; live.height=shot.ht; live.src=img.src; if(old) URL.revokeObjectURL(old); }
+      else URL.revokeObjectURL(img.src); end(); };
+    img.src=URL.createObjectURL(blob); });
+}
+if(MAP_OK) map.on('idle',grab);
+/* what is set over the picture as the sheet goes to print */
+function snapshot(){
+  const root=document.documentElement; delete root.dataset.shot;
+  if(!MAP_OK||!SHOT) return;
+  const {cw,h,top,bearing,pxFt}=SHOT;
+  /* the pin is not part of the map's canvas. it is placed as a share of the picture. */
+  const pin=$('#shotPin'); pin.hidden=SEL.st==null;
+  if(SEL.st!=null){ const p=map.project(at(SEL.st)); pin.style.left=(p.x/cw*100)+'%'; pin.style.top=((p.y-top)/h*100)+'%'; }
+  $('#northArrow').setAttribute('transform',`rotate(${-bearing})`);
+  /* the bar: the largest of 1, 2 or 5 times a power of ten within a fifth of the strip */
+  const room=cw/pxFt/5, pow=10**Math.floor(Math.log10(room)), n=[5,2,1].find(m=>m*pow<=room)*pow;
+  $('#scaleBar').style.width=(n*pxFt/cw*100)+'%'; $('#scaleLab').textContent=commas(n)+' ft';
+  /* the basemap's credit, in its own words, and its mark */
+  const credit=$('#mapCredit'), logo=document.querySelector('#map .mapboxgl-ctrl-logo');
+  credit.innerHTML=''; if(logo){ const l=logo.cloneNode(false); l.removeAttribute('href'); credit.append(l); }
+  const words=el('span','mono'); words.textContent=basemapCredit(); credit.append(words);
+  /* a picture off a narrow screen is enlarged to fill the sheet, and the sheet says so */
+  $('#printShot').hidden=cw>=PRINT_W*.6;
+  $('#printShotText').textContent=`taken from a screen ${commas(Math.round(cw))} px wide and enlarged to fill the sheet`;
+  root.dataset.shot='1';
+}
+function basemapCredit(){ if(!MAP_OK) return '';
+  return [...document.querySelectorAll('#map .mapboxgl-ctrl-attrib-inner a')].filter(a=>!a.classList.contains('mapbox-improve-map'))
+    .map(a=>a.textContent.trim()).filter(Boolean).join(' '); }
+/* the link to this view. intro is left out: it is how the first screen is asked for, not a view. */
+function viewLink(){ return location.href.replace(/([?&])intro=[^&#]*&?/,'$1').replace(/[?&](?=#|$)/,''); }
+/* the foot of the printed sheet: where this view lives and the day it was printed */
+function printFoot(){
+  const d=new Date(), iso=[d.getFullYear(),d.getMonth()+1,d.getDate()].map(n=>String(n).padStart(2,'0')).join('-');
+  $('#printLink').textContent=viewLink(); $('#printDate').textContent=day(iso); $('#printMethod').textContent=METHOD;
+  /* the basemap is credited only when there is one on the sheet */
+  const base=basemapCredit(); $('#printBaseText').textContent=base; $('#printBase').hidden=!base;
+}
+/* the ruler is set out for the sheet's width, then scaled */
+addEventListener('beforeprint',()=>{ PRINTING=true; snapshot(); printFoot(); buildRuler(PRINT_W); });
+addEventListener('afterprint',()=>{ PRINTING=false; buildRuler(); refit(); });
+(()=>{ /* the button's own words change, so the confirmation is never colour alone */
+  const b=$('#copyLink'), REST=b.textContent; let t;
+  /* as wide as its longest label, measured as drawn, so the tools do not shift when it answers */
+  b.style.minWidth=Math.ceil(Math.max(...[REST,'Link copied','Not copied'].map(w=>{ b.textContent=w; return b.getBoundingClientRect().width; })))+'px';
+  b.textContent=REST;
+  /* the live region is shared: it is cleared only if nothing else has spoken since */
+  const say=(label,msg)=>{ const said=$('#said'); b.textContent=label; said.textContent=msg; clearTimeout(t);
+    t=setTimeout(()=>{ b.textContent=REST; if(said.textContent===msg) said.textContent=''; },2400); };
+  const ok=()=>say('Link copied','Link to this view copied.'), no=()=>say('Not copied','Could not copy. The link is in the address bar.');
+  /* the older way, for a page that is not allowed the clipboard */
+  const byHand=href=>{ const a=el('textarea','sr'); a.value=href; a.readOnly=true; document.body.append(a); a.select();
+    let done=false; try{ done=document.execCommand('copy'); }catch(e){} a.remove(); b.focus(); done?ok():no(); };
+  b.onclick=()=>{ const href=viewLink();
+    if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(href).then(ok,()=>byHand(href));
+    else byHand(href); };
+  /* the button waits, briefly, for a picture of the map as it now stands */
+  $('#printSheet').onclick=()=>{ let tries=0;
+    const go=()=>{ if(MAP_OK&&(SHOT_BUSY||!SHOT||map.isMoving())&&tries++<30) return setTimeout(go,100); print(); };
+    go(); };
+})();
+
 /* ── boot ─────────────────────────────────────────────────────────────── */
 (()=>{ /* build stamp: the last-modified date of this file, so a stale cache is obvious */
   const el=$('#stamp'); if(!el) return;
@@ -1355,14 +1469,16 @@ $('#metaExtent').textContent=`Hudson to East River, ${(LEN/5280).toFixed(2)} mi`
 $('#metaLots').textContent=LOTS.features.length+' lots';
 $('#metaTrees').textContent=TREES.length+' trees';
 $('#ruler').setAttribute('aria-valuemax',LEN);
-(()=>{ /* ?on=lots,trees is exactly what is drawn. ?hr=17 switches the bus on at that hour.
-     ?q=benches opens that row, and in a hand-typed link with no on it draws it too.
-     with no q the bus row is the one opened. */
+(()=>{ /* ?on=lots,trees is exactly what is drawn. ?hr=17 sets the hour. in a hand-typed link
+     with no on, hr also draws the bus and opens its row, and ?q=benches draws the row it opens. */
   const qs=new URLSearchParams(location.search), v=parseInt(qs.get('hr'),10);
-  const timed=BUS_STATS&&v>=0&&v<=23, want=row(qs.get('q'))||(timed?row('bus'):null);
+  const timed=BUS_STATS&&v>=0&&v<=23, want=row(qs.get('q'))||(timed&&!qs.has('on')?row('bus'):null);
   if(qs.has('on')){ const ids=qs.get('on').split(','); LAYERS.forEach(L=>{ L.on=ids.includes(L.id); }); }
-  if(timed){ SEL.hour=v; row('bus').on=true; }
+  if(timed){ SEL.hour=v; if(!qs.has('on')) row('bus').on=true; }
   if(want){ LAYERS.forEach(L=>{ L.open=L===want; }); if(!qs.has('on')) want.on=true; }
+  /* ?by=lots.capacity. a style the row does not offer is ignored. */
+  (qs.get('by')||'').split(',').forEach(x=>{ const [id,v]=x.split('.'), L=row(id);
+    if(L&&L.styles&&L.styles.some(o=>o[0]===v)) L.style=v; });
 })();
 buildPanel(); buildRuler();
 (()=>{ /* the first screen. shut once, it stays shut on this browser. ?intro=1 opens it again,
