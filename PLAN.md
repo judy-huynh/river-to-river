@@ -70,6 +70,22 @@ decisions the author has not made yet.
 - **Text contrast may be corrected without asking.** Scoped to text alphas. The data palette is not
   to be changed.
 
+## Decisions made on the author's behalf, 20 Sep 2026
+
+She delegated the judgement calls. Each is reversible and recorded here so she can overrule it.
+
+- **Station card opens short.** Widths on the cross-section bar, bus, nearest bench, largest lot,
+  and one control for everything else. A short card sits under the street, so the map never has
+  to move aside for it and the map and ruler stay in register.
+- **Row sub-lines carry one fact** and are set in the sans. The rest is in the row's own text.
+- **Every label that read as voice was flattened** to a plain factual label. The one sentence in
+  the author's voice is the first line of the first screen, assembled from her own recorded words.
+- **Bus:** walking reference is 3.0 mph; the displayed month is the latest complete month of
+  weekdays; the claim is only what the record supports.
+- **Sheds:** the headline is buildings with a permit in force, not a count of sheds standing.
+- **Sidewalks:** zero-length fragments dropped, heading read at the midpoint.
+- **Fieldwork:** six stations confirmed, Saturday midday to match the city's own count.
+
 ## Still open
 
 - **The chronology.** Whether the author appears on it, and in what words. Nothing about her is

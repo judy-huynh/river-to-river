@@ -383,7 +383,7 @@ const LAYERS=[
     id:'people', group:'People', short:'Count', name:'How many people are here?', has:!!PED_STATS,
     get fig(){ return [commas(PED_LAST.pm), day(PED_LAST.p)]; },
     /* the bake stops unless the source has exactly one location on 42 Street, so this is the whole set */
-    get sub(){ return `${PM_WIN} &middot; the city counts at one place on the street`; },
+    get sub(){ return `${PM_WIN}, at the one place the city counts`; },
     get chart(){ return spark(120,18); },
     on:false, open:false, ids:['countDot'],
     get says(){ return `NYC DOT counts people on foot at one place on 42nd Street, twice a year: ${PED.street}, ${PED.from} to ${PED.to}. <b>Each figure is one count day, both sidewalks.</b>`; },
@@ -431,9 +431,9 @@ const LAYERS=[
   {
     id:'sheds', group:'People', short:'Sheds', name:'What is in the way?', has:!!SHED_STATS,
     get fig(){ const n=SHED_STATS.live.length; return [commas(n), `building${n===1?'':'s'}`]; },
-    get sub(){ const S=SHED_STATS; return `with a sidewalk shed permit in force on ${day(SHEDS_META.asof)}`+(S.oldest?` &middot; longest run of permits began ${day(S.oldest.since)}`:''); },
+    get sub(){ const S=SHED_STATS; return `with a shed permit in force`+(S.oldest?` &middot; oldest run since ${day(S.oldest.since)}`:''); },
     on:false, open:false, ids:['shedFill','shedLine'],
-    says:`Buildings addressed on 42nd Street with a Department of Buildings permit for a sidewalk shed. <b>A permit is a record, not a sighting.</b> It does not say a shed is standing, how long it is, or which side of a corner building it covers.`,
+    says:`Buildings addressed on 42nd Street with a Department of Buildings permit for a sidewalk shed. <b>Permit records only.</b> A permit does not say a shed is standing, how long it is, or which side of a corner building it covers.`,
     legend(){
       const S=SHED_STATS, M=SHEDS_META;
       const rows=(list,line)=>`<ul class="lotrows">${list.map(x=>`<li><button type="button" data-st="${x.ft}">`
@@ -452,7 +452,7 @@ const LAYERS=[
   {
     id:'crashes', group:'People', short:'Crashes', name:'Who gets hurt?', has:!!CRASH_STATS,
     get fig(){ return [commas(CRASH_STATS.inj),'people injured']; },
-    get sub(){ return `in ${commas(CRASH_STATS.n)} police-reported crashes, ${day(CRASH_META.since)} to ${day(CRASH_META.to)} &middot; a count, not a rate`; },
+    get sub(){ return `in ${commas(CRASH_STATS.n)} reported crashes since ${day(CRASH_META.since)}`; },
     on:false, open:false, ids:['crashDots'],
     get says(){ return `Every crash the police reported within ${CRASH_META.near_ft} ft of the centre of 42nd Street. <b>A circle is the people injured at one place.</b> The police put most crashes at the nearest intersection, not at the spot, so a place is an intersection far more often than a spot.`; },
     legend(){
@@ -472,7 +472,7 @@ const LAYERS=[
           +`<span class="num">${commas(p.inj)} injured in ${commas(p.n)} crash${p.n===1?'':'es'}</span></button></li>`).join('')}</ul>`;
       o+=`<div class="key key--after"><h4>The ${Math.min(CRASH_TOP,S.top.length)} places with most injured</h4><p><span class="scr">Pick one to stand at its station.</span></p></div>`+rows(S.top.slice(0,CRASH_TOP));
       o+=`<div class="key key--after"><h4>Every place with anyone injured, west to east</h4><p>${commas(S.drawn.length)} places, one circle each.</p></div>`+rows(S.drawn);
-      o+=`<p class="flag"><b>A count, not a rate</b>No source counts how many people walk, cycle or drive along the street, so there is nothing to divide by. These figures say how many people were hurt. They do not say how dangerous the street is for one person using it, and a busy corner cannot be compared with a quiet one.</p>`;
+      o+=`<p class="flag"><b>Counts only</b>No source counts how many people walk, cycle or drive along the street, so there is nothing to divide by. These figures say how many people were hurt. They do not say how dangerous the street is for one person using it, and a busy corner cannot be compared with a quiet one.</p>`;
       if(S.fdr.n)
         o+=`<p class="flag"><b>Not every crash here was on 42nd Street</b>The rule is distance, so a crash on an avenue inside one of the street's intersections is counted. ${commas(S.fdr.n)} of the crashes are ones the source names on the FDR Drive, at the east end, with ${commas(S.fdr.inj)} people injured.</p>`;
       if(M.unlocated.n)
@@ -487,7 +487,7 @@ const LAYERS=[
     get fig(){ const v=busCorridor(SEL.hour);
       return [v!=null?v.toFixed(2):'none', `${v!=null?'mph':'no buses measured'}, ${hourSpan(SEL.hour)}`]; },
     get sub(){ const r=busSlowest(SEL.hour);
-      return `average over the measured legs &middot; `+(r?`slowest leg ${r.mph.toFixed(2)} mph &middot; `:'')+`walking reference ${WALK} mph`; },
+      return (r?`slowest leg ${r.mph.toFixed(2)} mph &middot; `:'')+`walking is ${WALK} mph`; },
     on:false, open:false, ids:['busCase','busLine','busNone'], opacity:1,
     says:BUS_STATS?`The M42 on each leg between two MTA timepoints, averaged over the weekdays of ${busMonth()}. <b>One bar is one leg.</b> The speed is the whole leg's, not a reading at any point inside it.`:'',
     legend(){
@@ -537,7 +537,7 @@ const LAYERS=[
     get fig(){ return [SW_STATS?`${ROAD_STATS.avgW} : ${SW_STATS.med}`:ROAD_STATS.avgW,'feet']; },
     get sub(){ return SW_STATS?'average roadway to typical sidewalk, each side':'average roadway &middot; no sidewalk widths baked'; },
     on:false, open:false, ids:['roadLine','swLine'], opacity:.85,
-    says:`The roadway and both sidewalks, drawn at their real widths on the same scale. <b>The comparison is the point.</b>`,
+    says:`The roadway and both sidewalks, drawn at their real widths on the same scale.`,
     legend(){
       let h=`<div class="key"><h4>Drawn at real width</h4>
         <ul>
@@ -545,7 +545,7 @@ const LAYERS=[
       if(SW_STATS) h+=`
           <li><i class="rule" style="border-top-width:3px;border-top-color:#2E9E4F"></i><span>Sidewalk, each side</span><b>${SW_STATS.med} ft typical</b></li>`;
       h+=`</ul></div>
-        <p class="flag"><b>Six lanes, and two of them do not move</b>On ${ROAD_STATS.share}% of the street it is four lanes for moving traffic and two more for cars that are parked.</p>`;
+        <p class="flag"><b>How the roadway is divided</b>On ${ROAD_STATS.share}% of the street it is four lanes for moving traffic and two more for cars that are parked.</p>`;
       if(SW_STATS){
         h+=`<div class="key"><h4>The walking surface</h4>
           <p>Measured across ${SW_STATS.n} stretches of the street's own sidewalk.</p>
@@ -584,7 +584,7 @@ const LAYERS=[
     id:'lots', group:'Built', short:'Lots', name:'What could be built?', has:LOTS.features.length>0,
     /* the sum of unbuilt floor area over the drawn lots, in millions of sq ft (METHODOLOGY 2, 4) */
     get fig(){ return [`${(LOT_STATS.unbuilt/1e6).toFixed(1)}m`,'sq ft on paper']; },
-    get sub(){ return `floor area allowed and not built &middot; most of it cannot be used`; },
+    get sub(){ return `allowed and not built &middot; ${pct(LOT_STATS.lmUnbuilt,LOT_STATS.unbuilt)}% of it on landmarked lots`; },
     on:true, open:false, ids:['lotFill','lotLine','lmHatch'], opacity:.58,
     /* the set as it is drawn, every count from the records (METHODOLOGY 4) */
     get says(){ const S=LOT_STATS, M=window.LOTS_META, out=(window.LOTS_OUT||[]).length;
@@ -612,7 +612,7 @@ const LAYERS=[
         return `<div class="key"><h4>Floor area allowed and never built</h4>
           <p>The gap between what the rules permit and what is standing.</p><ul>${
           CAP.map(([v,c],i)=>`<li><i style="background:${c}"></i><span>${i===0?'nothing spare':commas(v)+'+ sq ft'}</span></li>`).join('')}</ul></div>
-          <p class="flag"><b>Treat this as a screen, not a promise</b>Most of these lots sit in a special district where the base rule is not the rule that governs. ${LOTS.features.filter(f=>f.properties.lm===1).length} are landmarked and cannot be built on at all.</p>`;
+          <p class="flag"><b>Floor area on paper only</b>Most of these lots sit in a special district where the base rule is not the rule that governs. ${LOTS.features.filter(f=>f.properties.lm===1).length} are landmarked and cannot be built on at all.</p>`;
       }
       if(this.style==='landmark'){
         const n=LOTS.features.filter(f=>f.properties.lm===1).length;
@@ -621,11 +621,11 @@ const LAYERS=[
           <li><i style="background:#14120F"></i><span>designated</span><b>${n} lots</b></li>
           <li><i style="background:#E9E4D6"></i><span>not designated</span><b>${LOTS.features.length-n} lots</b></li>
           </ul></div>
-          <p class="flag"><b>This is why the capacity figure is a screen, not a promise</b>A landmarked lot can carry unbuilt floor area on paper and never be able to use it.</p>`;
+          <p class="flag"><b>Landmarked lots cannot use this floor area</b>A landmarked lot can carry unbuilt floor area on paper and never be able to use it.</p>`;
       }
       if(this.style==='age'){
         return `<div class="key"><h4>Year the building went up</h4>
-          <p>The street rebuilt itself in patches, not all at once.</p><ul>${
+          <p>The year the building on each lot was completed.</p><ul>${
           AGE.map(([y,c])=>`<li><i style="background:${c}"></i><span>${y}s</span></li>`).join('')}</ul></div>`;
       }
       return `<div class="key"><h4>Boundaries only</h4><p>Every lot line, no fill.</p></div>`;
@@ -982,13 +982,13 @@ function wire(){
   }
   if(map.getLayer('shedLine')){
     map.on('mousemove','shedLine',e=>{const x=SHED_BY_BBL.get(String(e.features[0].properties.bbl)); if(!x) return;
-      showTip(e,`<b>${x.addr}</b><em>shed permit ${shedSays(x)}</em><span>a permit, not a sighting</span>`);});
+      showTip(e,`<b>${x.addr}</b><em>shed permit ${shedSays(x)}</em><span>permit record only</span>`);});
     map.on('mouseleave','shedLine',()=>tip.dataset.show='false');
   }
   if(map.getLayer('crashDots')){
     map.on('mousemove','crashDots',e=>{const c=e.lngLat, p=CRASH_STATS.drawn.reduce((x,y)=>
         Math.hypot(y.lon-c.lng,y.lat-c.lat)<Math.hypot(x.lon-c.lng,x.lat-c.lat)?y:x);
-      showTip(e,`<b>${commas(p.inj)} injured</b><em>${p.name?`at ${p.name}, `:''}${commas(p.ft)} ft</em><span>${commas(p.n)} crash${p.n===1?'':'es'} &middot; a count, not a rate</span>`);});
+      showTip(e,`<b>${commas(p.inj)} injured</b><em>${p.name?`at ${p.name}, `:''}${commas(p.ft)} ft</em><span>${commas(p.n)} crash${p.n===1?'':'es'} &middot; counts only</span>`);});
     map.on('mouseleave','crashDots',()=>tip.dataset.show='false');
   }
   map.on('move',syncRuler);
@@ -1037,7 +1037,7 @@ const NOTE_WALK=`Walk widths are gross concrete. Sheds, stairs, newsstands and k
   +(CURB_STATS?` Curb: NYC DOT ParkNYC Block Faces${srcDate('CURB')}. No meter does not mean free to park: other posted `
   +`rules apply and are not in the source.`:'')
   +(CRASH_STATS?` Crashes: NYPD Motor Vehicle Collisions${srcDate('CRASHES')}, ${day(CRASH_META.since)} to ${day(CRASH_META.to)}, `
-  +`police points within ${CRASH_META.near_ft} ft of the centreline, usually the nearest intersection. A count of people hurt, not a rate.`:'')
+  +`police points within ${CRASH_META.near_ft} ft of the centreline, usually the nearest intersection. Counts of people hurt. No rate can be computed.`:'')
   +(BUS_STATS?` Bus: MTA Bus Route Segment Speeds, ${BUS_META.route}, weekdays in ${busMonth()}${srcDate('BUS')}. `
   +`A speed is the average over a whole leg between two timepoints, not a reading at this station. `
   +`A leg with a timepoint off 42nd Street is left out, so some stations have none.`:'');
@@ -1045,7 +1045,7 @@ const NOTE_LOT=`Unbuilt floor area is lot area &times; the base floor area ratio
   +`floor area built. Special district rules are not applied, and a landmarked lot may not be able `
   +`to use it. Lots: NYC MapPLUTO.`
   +(SHED_STATS?` Shed permits: DOB NOW: Build, Approved Permits${srcDate('SHEDS')}, read as of ${day(SHEDS_META.asof)}. `
-  +`A permit is a record, not a sighting, and the length of a shed is not in it.`:'');
+  +`A permit is a record. It does not confirm a shed is standing, and the length of a shed is not in it.`:'');
 const note=t=>`<p class="note">${t} <a href="${METHOD}">Method</a></p>`;
 /* the line runs on past the first and last avenue, so a station can have one on one side only */
 const whereName=x=>x.west&&x.west===x.east?`At ${aveName(x.west)}`
@@ -1128,6 +1128,7 @@ function link(){
 const crossName=n=>{ const v=(window.AVES||[]).find(x=>x.name===n); return v&&v.label?aveName(v.label):n; };
 const visionWhere=v=>v.stated?(v.basis?`${v.place}. ${v.basis}`:`${v.place}, as the piece gives it.`)
   : `The piece names ${v.place} without cross streets. Drawn ${v.from?crossName(v.from):'the west end'} to ${v.to?crossName(v.to):'the east end'}, approximate.`;
+let MORE_OPEN=false;   /* whether the reader has the long card open. kept across stations. */
 function stationHTML(P){
   const parts=[['n',P.north,'North walk'],['r',P.road&&P.road.w,'Roadway'],['s',P.south,'South walk']];
   const whole=parts.every(x=>x[1]!=null);
@@ -1149,37 +1150,44 @@ function stationHTML(P){
       +tags(p)
       +`</button></li>`).join('')}</ul>`
     :`<p class="none">No drawn lot fronts this side here.</p>`)+outList(out);
-  return `<div class="card__top"><span class="micro">Station</span>`
+  return `<div class="card__top"><h3>${where(P)}</h3>`
     +`<button class="mini" type="button" data-close>close</button></div>`
-   +`<h3>${where(P)}</h3>`
    +`<span class="micro">${commas(P.ft)} ft from the west end`
    +(P.at?'':` &middot; `+[P.west&&`${commas(P.ft-P.west.ft)} ft past ${aveShort(P.west.name)}`, P.east&&`${commas(P.east.ft-P.ft)} ft to ${aveShort(P.east.name)}`].filter(Boolean).join(', '))+`</span>`
    /* flex-grow is the width in feet, so the bar is to scale by construction */
    +`<div class="xsec${none?' xsec--none':''}" role="img" aria-label="Cross-section. ${said}.">${parts.map(([k,v])=>
       v!=null?`<i class="xsec__${k}" style="flex:${v} 1 0"></i>`:`<i class="xsec__gap"></i>`).join('')}</div>`
-   +`<div class="xsec__lab"><span class="micro">north</span>`
-   +`<span class="micro">${whole?'drawn to scale':none?'not measured here':'measured parts to scale'}</span><span class="micro">south</span></div>`
+   /* the three widths are read off the bar itself, so the short card needs no rows for them */
+   +`<div class="xsec__lab xsec__lab--fig"><span class="micro">north walk<b>${feet(P.north)}</b></span>`
+   +`<span class="micro">roadway<b>${P.road?P.road.w+' ft':feet(null)}</b></span>`
+   +`<span class="micro">south walk<b>${feet(P.south)}</b></span></div>`
    +`<dl>`
-   +`<div><dt><i class="key-n"></i>North walk</dt><dd>${feet(P.north)}</dd></div>`
-   +`<div><dt><i class="key-r"></i>Roadway</dt><dd>${P.road?`${P.road.w} ft &middot; ${P.road.lanes} moving + ${P.road.park} parked`:feet(null)}</dd></div>`
-   +`<div><dt><i class="key-n"></i>South walk</dt><dd>${feet(P.south)}</dd></div>`
-   +`<div><dt>Trees within ${TREE_REACH} ft</dt><dd>${P.trees.all}${P.trees.all?`<span>${P.trees.n} north, ${P.trees.s} south</span>`:''}</dd></div>`
-   +`<div><dt>Nearest DOT bench</dt><dd>${P.bench?`${away(P.bench)}<span>${P.bench.side==='n'?'north':'south'} side, ${block(P.bench)}`
-     +`${P.bench.installed?`, installed ${day(P.bench.installed)}`:''}</span>`:'no DOT bench recorded on the street'}</dd></div>`
+   +`<div><dt>Nearest DOT bench</dt><dd>${P.bench?`${away(P.bench)}<span>${P.bench.side==='n'?'north':'south'} side, ${block(P.bench)}</span>`:'no DOT bench recorded on the street'}</dd></div>`
    +(P.bus?`<div><dt>M42 bus here, ${hourSpan(P.bus.hour)}</dt><dd>${[P.bus.e,P.bus.w].some(Boolean)?[P.bus.e,P.bus.w].filter(Boolean).map(r=>
        `${r.mph!=null?r.mph.toFixed(2)+' mph':'no buses measured'} ${DIRS[r.dir]}<span>whole leg, ${legName(r)}, ${commas(r.b-r.a)} ft</span>`).join('')
        :'no M42 speed kept here'}</dd></div>`:'')
+   +(P.biggest?`<div><dt>Largest lot here</dt><dd><button class="linkbtn" type="button" data-lot="${P.biggest.bbl}">${P.biggest.addr||'Unnamed lot'}</button>`
+     +`<span>${P.biggest.owner||'owner not recorded'}, ${commas(P.biggest.unbuilt)} sq ft unbuilt</span></dd></div>`:'')
+   /* the card opens short, so it sits under the street and the map never has to move aside for it.
+      everything else recorded here is one press away, and stays open while the reader walks the street. */
+   +`</dl><details class="more"${MORE_OPEN?' open':''}><summary>More recorded at this spot</summary><dl>`
+   +`<div><dt>Cross-section</dt><dd>${whole?'drawn to scale':none?'not measured here':'measured parts to scale'}</dd></div>`
+   +`<div><dt><i class="key-n"></i>North walk</dt><dd>${feet(P.north)}</dd></div>`
+   +`<div><dt><i class="key-r"></i>Roadway</dt><dd>${P.road?`${P.road.w} ft &middot; ${P.road.lanes} moving + ${P.road.park} parked`:feet(null)}</dd></div>`
+   +`<div><dt><i class="key-n"></i>South walk</dt><dd>${feet(P.south)}</dd></div>`
+   +(P.bench&&P.bench.installed?`<div><dt>Nearest bench installed</dt><dd>${day(P.bench.installed)}</dd></div>`:'')
+   +`<div><dt>Trees within ${TREE_REACH} ft</dt><dd>${P.trees.all}${P.trees.all?`<span>${P.trees.n} north, ${P.trees.s} south</span>`:''}</dd></div>`
    +(P.curb?`<div><dt>Metered curb here</dt><dd>${[['north',P.curb.n],['south',P.curb.s]].map(([k,f])=>
        `<span>${k}: ${f?`${f.who.toLowerCase()}, ${(f.com||f.all).hours}`:'no meter'}</span>`).join('')}</dd></div>`:'')
-   +(P.crashes?`<div><dt>Nearest crash place</dt><dd>${(c=>c?`${commas(c.inj)} injured<span>in ${commas(c.n)} crash${c.n===1?'':'es'}${c.name?` at ${c.name}`:''}, ${away(c)}, ${day(CRASH_META.since)} to ${day(CRASH_META.to)}, a count, not a rate</span>`
+   +(P.crashes?`<div><dt>Nearest crash place</dt><dd>${(c=>c?`${commas(c.inj)} injured<span>in ${commas(c.n)} crash${c.n===1?'':'es'}${c.name?` at ${c.name}`:''}, ${away(c)}, ${day(CRASH_META.since)} to ${day(CRASH_META.to)}, counts only</span>`
        :`none within ${P.crashes.reach} ft`)(P.crashes.place)}</dd></div>`:'')
-   +(TIER_STATS?`<div><dt>DOT pedestrian priority tier</dt><dd>${P.tier?`${P.tier.name}<span>tier ${P.tier.rank} of ${TIER_META.length}, a planning rank, not a count</span>`:'no tier in the source here'}</dd></div>`:'')
+   +(TIER_STATS?`<div><dt>DOT pedestrian priority tier</dt><dd>${P.tier?`${P.tier.name}<span>tier ${P.tier.rank} of ${TIER_META.length}. A planning rank. It does not count people.</span>`:'no tier in the source here'}</dd></div>`:'')
    +(P.count?`<div><dt>Pedestrians counted</dt><dd>${commas(P.count.pm)}<span>${span(P.count.win)}, one day in ${day(P.count.p)}, counter ${away(P.count)}, ${block(P.count)}</span></dd></div>`:'')
    +(P.vision?`<div class="pub"><dt>Published vision: ${VISION.by}</dt><dd>${P.vision.says}<span>${visionWhere(P.vision)} `
      +`<a href="${VISION.url}">${VISION.title}</a>, ${VISION.by}, read ${day(VISION.accessed)}. <a href="${METHOD}">Method</a></span></dd></div>`:'')
    +`</dl>`+note(NOTE_WALK)
    +lotList('North',P.lots.n,P.outside.n)+lotList('South',P.lots.s,P.outside.s)
-   +(P.lots.n.length+P.lots.s.length?note(NOTE_LOT):'');
+   +(P.lots.n.length+P.lots.s.length?note(NOTE_LOT):'')+`</details>`;
 }
 
 function lotHTML(p){
@@ -1200,6 +1208,8 @@ function lotHTML(p){
    +`</dl>`+note(NOTE_LOT);
 }
 
+/* toggle does not bubble, so it is caught on the way down */
+$('#readout').addEventListener('toggle',e=>{ if(e.target.matches('details.more')) MORE_OPEN=e.target.open; },true);
 /* one delegated handler for the whole card, bound once */
 $('#readout').addEventListener('click',e=>{
   const b=e.target.closest('button'); if(!b) return;
