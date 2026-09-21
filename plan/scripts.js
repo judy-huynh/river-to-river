@@ -347,9 +347,15 @@ const aveName=n=>aveShort(n)+' Avenue';
 /* the numbered street an address names. a label only: the lot rule is frontage (METHODOLOGY 4) */
 const streetNo=a=>((a||'').toUpperCase().replace(/\s+/g,' ').trim().replace(/\b(\d+)(ST|ND|RD|TH)\b/g,'$1').match(/^(?:[0-9][0-9A-Z-]* )?(?:EAST|WEST|E|W) (\d+) (?:STREET|ST)$/)||[])[1];
 /* the lot row's figures, all from the drawn lots. on is the lots addressed on 42nd Street. */
+/* MapPLUTO owner type: city, mixed, other public authority, fully tax-exempt */
+const PUBLIC_OWN=new Set(['C','M','O','X']);
 const LOT_STATS=(()=>{ const P=LOTS.features.map(f=>f.properties), sum=l=>l.reduce((t,p)=>t+(p.unbuilt||0),0), lm=P.filter(p=>p.lm===1);
+  /* floor area on paper is not floor area anyone may build. both sets that cannot use it are counted
+     here, so the sentence states both and not only the smaller one. */
+  const pub=P.filter(p=>PUBLIC_OWN.has(p.own)), priv=P.filter(p=>p.lm!==1&&!PUBLIC_OWN.has(p.own));
   return {all:P.length, room:P.filter(p=>p.unbuilt>0).length, on:P.filter(p=>streetNo(p.addr)==='42').length,
-    lm:lm.length, unbuilt:sum(P), lmUnbuilt:sum(lm)}; })();
+    lm:lm.length, unbuilt:sum(P), lmUnbuilt:sum(lm),
+    pub:pub.length, pubUnbuilt:sum(pub), priv:priv.length, privUnbuilt:sum(priv)}; })();
 const feet=v=>v==null?'not measured here':v+' ft';
 /* '2026-05-20' to '20 May 2026', '2026-05' to 'May 2026'. no Date object, so no timezone slip. */
 const day=iso=>{const [y,m,d]=iso.split('-'); return (d?+d+' ':'')+MON[m-1]+' '+y;};
@@ -404,9 +410,8 @@ const where=P=>whereName(placeAt(P.ft));
 const crossName=n=>{ const v=(window.AVES||[]).find(x=>x.name===n); return v&&v.label?aveName(v.label):n; };
 
 /* MapPLUTO cuts an address at its field width. said in full where the cut is known. */
-const addrShow=p=>(p.addr||'Unnamed lot').replace(/\bAvenue Of The Amer$/,'Avenue of the Americas');
-/* MapPLUTO owner type: city, mixed, other public authority, fully tax-exempt */
-const PUBLIC_OWN=new Set(['C','M','O','X']);
+const addrShow=p=>(p.addr||'Unnamed lot').replace(/\bAvenue Of The Amer$/,'Avenue of the Americas')
+  .replace(/\b(\d+)(St|Nd|Rd|Th)\b/g,(m,n,s)=>n+s.toLowerCase());   /* MapPLUTO writes '42Nd Street' */
 /* each thing a reader can pick, by row: its station, its own geometry for the map's ring, and the
    words the list and the card use for it. one table, so a list button, a map feature and a ruler
    tick that carry the same row and index are the same item. */
@@ -532,7 +537,7 @@ const LAYERS=[
     id:'benches', group:'People', short:'Benches', name:'Where can you stop?', has:!!BENCH_STATS,
     get fig(){ return [commas(BENCHES.length), `DOT bench${BENCHES.length===1?'':'es'}`]; },
     on:false, open:false, ids:['benchDots'],
-    says:`Every bench the NYC Department of Transportation (DOT) records on 42 Street.`,
+    says:`Every bench the NYC Department of Transportation (DOT) records on 42nd Street.`,
     src:`NYC DOT Seating Locations${srcDate('BENCHES')}.`,
     l2(){
       const g=BENCH_STATS.none[0], len=g[1]-g[0];
@@ -569,15 +574,18 @@ const LAYERS=[
         +(S.oldest?`Oldest run since ${day(S.oldest.since)}. `:'')
         +(S.lapsed.length?`Permits run out are listed newest first. The record does not say whether a shed still stands. `:'')
         +`Permits at one building are read as one run when each starts within ${M.gap_days} days of the last running out. `
-        +`${commas(M.rows.now)} shed permits on 42 Street. Runs dated with ${commas(M.rows.old)} older permits from DOB Permit Issuance.</p>`
+        +`${commas(M.rows.now)} shed permits on 42nd Street. Runs dated with ${commas(M.rows.old)} older permits from DOB Permit Issuance.</p>`
         +`<div class="key"><h4>Each building</h4><ul>${PICKS.sheds.map(k=>`<li><span>${k.name}<br>${k.sub}</span><b>${k.run}</b></li>`).join('')}</ul></div>`;
     }
   },
   {
     id:'crashes', group:'People', short:'Crashes', name:'Who gets hurt?', has:!!CRASH_STATS,
-    get fig(){ return [commas(CRASH_STATS.inj),`people injured since ${day(CRASH_META.since)}`]; },
+    get fig(){ return [commas(CRASH_STATS.inj),`people injured, ${day(CRASH_META.since)} to ${day(CRASH_META.to)}`]; },
     on:false, open:false, ids:['crashDots'],
     get says(){ return `Every crash the police reported within ${CRASH_META.near_ft} ft of the centre of 42nd Street.`; },
+    /* the question is who, so the source's own split stands with the figure, not behind a disclosure */
+    get lead(){ const S=CRASH_STATS, [p,c,m]=S.split.map(x=>commas(x[1]));
+      return `Of the ${commas(S.inj)} injured, ${p} were on foot, ${c} on a bike and ${m} in a vehicle. ${commas(S.k)} people were killed.`; },
     src:`NYPD Motor Vehicle Collisions, Crashes${srcDate('CRASHES')}.`,
     l2(){
       const S=CRASH_STATS, all=picksOf('crashes');
@@ -606,7 +614,7 @@ const LAYERS=[
       if(S.fdr.n)
         o+=`<div class="key"><h4>Not every crash here was on 42nd Street</h4><p>The rule is distance, so a crash on an avenue inside one of the street's intersections is counted. ${commas(S.fdr.n)} of the crashes are ones the source names on the FDR Drive, at the east end, with ${commas(S.fdr.inj)} people injured.</p></div>`;
       if(M.unlocated.n)
-        o+=`<div class="key"><h4>${commas(M.unlocated.n)} more crashes have no point</h4><p>The source records them on 42 Street with no coordinates, so they cannot be placed and are not counted above. ${commas(M.unlocated.inj)} people were injured in them.</p></div>`;
+        o+=`<div class="key"><h4>${commas(M.unlocated.n)} more crashes have no point</h4><p>The source records them on 42nd Street with no coordinates, so they cannot be placed and are not counted above. ${commas(M.unlocated.inj)} people were injured in them.</p></div>`;
       return o;
     }
   },
@@ -701,9 +709,10 @@ const LAYERS=[
         h+=`<div class="key"><h4>The walking surface</h4>
           <p>Measured across ${SW_STATS.n} stretches of the street's own sidewalk. Coverage is ${pct(SW_STATS.coverN,LEN)}% of the north side and ${pct(SW_STATS.coverS,LEN)}% of the south.</p>
           <ul>
-            <li><span>Narrowest</span><b>${SW_STATS.narrow.w} ft</b></li>
+            <li><span>Narrowest &middot; ${SW_STATS.narrow.s===1?'north':'south'} side, ${block(between((SW_STATS.narrow.a+SW_STATS.narrow.b)/2))}</span><b>${SW_STATS.narrow.w} ft</b></li>
             <li><span>Median</span><b>${SW_STATS.med} ft</b></li>
             <li><span>Widest</span><b>${SW_STATS.max} ft</b></li>
+            <li><span>Stretches under 8 ft</span><b>${SW_STATS.under8} of ${SW_STATS.n}</b></li>
           </ul></div>`;
       if(VISION)
         h+=`<p class="note">Published vision: <a href="${VISION.url}">${VISION.title}</a>, ${VISION.by}, read ${day(VISION.accessed)}. A stretch whose ends the piece gives is a ruled bar. One drawn between the nearest avenue crossings, or to the end of the street, is a dashed outline.</p>`;
@@ -734,10 +743,16 @@ const LAYERS=[
   {
     id:'lots', group:'Built', short:'Lots', name:'What could be built?', has:LOTS.features.length>0,
     /* the sum of unbuilt floor area over the drawn lots, in millions of sq ft (METHODOLOGY 2, 4) */
-    get fig(){ return [`${(LOT_STATS.unbuilt/1e6).toFixed(1)}M`,'sq ft allowed and unbuilt, on paper']; },
+    get fig(){ return [`${(this.total()/1e6).toFixed(1)}M`,'sq ft allowed and unbuilt, on paper']; },
+    /* the figure, the sentence and the list are one set: a filter that moves the list moves them all */
+    filtered(){ return this.noLm||this.noPub; },
+    total(){ return this.ranked().reduce((t,p)=>t+(p.unbuilt||0),0); },
     on:true, open:false, ids:['lotFill','lotLine','lmHatch'], opacity:.58,
     get says(){ const S=LOT_STATS;
-      return `${S.all} lots. ${(S.unbuilt/1e6).toFixed(1)} million sq ft allowed and not built, ${pct(S.lmUnbuilt,S.unbuilt)}% of it on landmarked lots.`; },
+      if(this.filtered()) return `${this.ranked().length} of the ${S.all} lots. `
+        +`${(this.total()/1e6).toFixed(1)} million sq ft allowed and not built on them.`;
+      return `${S.all} lots. ${(S.unbuilt/1e6).toFixed(1)} million sq ft allowed and not built, `
+        +`${(S.privUnbuilt/1e6).toFixed(1)} million on private ground, not landmarked.`; },
     src:`NYC MapPLUTO${srcDate('LOTS')||', release date not recorded'}.`,
     styles:[['zoning','The rules that govern it'],['capacity','Room left to build'],
       ['landmark','What cannot be touched'],['age','When it was built'],['plain','Outline only']],
@@ -771,12 +786,14 @@ const LAYERS=[
           <p class="lab" id="lotFindSay" aria-live="polite"></p></div>`
         +`<div class="filters"><p class="lab">Most unbuilt floor area first</p>`
         +`<label class="check"><input type="checkbox" id="lotNoLm"${this.noLm?' checked':''}><span>Leave out landmarked lots</span></label>`
-        +`<label class="check"><input type="checkbox" id="lotNoPub"${this.noPub?' checked':''}><span>Leave out public and tax-exempt owners</span></label></div>`
+        +`<label class="check"><input type="checkbox" id="lotNoPub"${this.noPub?' checked':''}><span>Leave out public and tax-exempt owners</span></label>`
+        +(this.filtered()?`<p class="lab">${list.length} of ${LOT_STATS.all} lots left in. The map still shows the rest.</p>`:'')+`</div>`
         +`<ul class="lotrows">${shown.map(p=>`<li><button type="button" data-lot="${p.bbl}"><b>${addrShow(p)}</b>`
           +`<span>${p.owner||'owner not recorded'} &middot; ${p.zone==='PARK'?'park':commas(p.unbuilt)+' sq ft'}${p.lm===1?' &middot; landmark':''}</span></button></li>`).join('')}</ul>`
         +showAll(this,list.length)
-        /* the sentence behind this flag is in About this data, word for word */
-        +flag('Floor area on paper only');
+        /* the heading carries the caveat itself: a flag with no words under it qualifies nothing,
+           and the full sentence is one disclosure down, where the text budget has room for it */
+        +flag('On paper: the base rule does not govern here');
     },
     /* the set as it is drawn, every count from the records (METHODOLOGY 4) */
     l3(){ const S=LOT_STATS, M=window.LOTS_META, out=(window.LOTS_OUT||[]).length;
@@ -793,7 +810,7 @@ const LAYERS=[
           return rows?`<div class="key"><h4>${h}</h4><p>${note}</p><ul>${rows}</ul></div>`:'';
         }).join('')
         +`<div class="key"><h4>What "up to 15&times;" means</h4><p>You may build floor area up to fifteen times the size of the lot. On a 10,000 sq ft lot that is 150,000 sq ft of building, stacked however the rules allow.</p></div>`
-        +`<div class="key"><h4>Public and tax-exempt owners</h4><p>MapPLUTO owner type C (city), M (mixed city and private), O (other public authority) or X (fully tax-exempt): ${LOTS.features.filter(f=>PUBLIC_OWN.has(f.properties.own)).length} of the ${S.all} lots. A blank owner type is kept in.</p></div>`
+        +`<div class="key"><h4>Who holds the floor area on paper</h4><p>MapPLUTO owner type C (city), M (mixed city and private), O (other public authority) or X (fully tax-exempt): ${S.pub} of the ${S.all} lots, carrying ${commas(S.pubUnbuilt)} sq ft, ${pct(S.pubUnbuilt,S.unbuilt)}% of the total. A blank owner type is kept in. ${commas(S.privUnbuilt)} sq ft, on ${S.priv} lots, is on private ground that is not landmarked.</p></div>`
         +`<div class="key"><h4>The other colourings</h4><p>Room left to build: the gap between what the rules permit and what is standing. What cannot be touched: whatever the zoning allows, these cannot grow. When it was built: the year the building on each lot was completed. Outline only: every lot line, no fill.</p></div>`;
       return o;
     }
@@ -921,7 +938,10 @@ function renderBody(L){
   h+=`<div data-legend></div>`;
   if(L.id==='lots') h+=`<datalist id="lotOpts">${LOTS.features.map(f=>`<option value="${lotOption(f.properties).replace(/"/g,'&quot;')}">`).join('')}</datalist>`;
   L._body.innerHTML=h;
-  L._sw=L._body.querySelector('.swrow'); L._sw.onclick=()=>toggle(L);
+  L._sw=L._body.querySelector('.swrow');
+  /* stacked, the map sits above the rail and off screen, so what the press changed has to be brought into view */
+  L._sw.onclick=()=>{ toggle(L);
+    if(L.on&&matchMedia('(max-width:899px)').matches) $('#map').scrollIntoView({block:'nearest'}); };
   const hourIn=L._body.querySelector('#hourIn');
   if(hourIn) hourIn.oninput=e=>setHour(+e.target.value);
   const sel=L._body.querySelector('#style-'+L.id);
@@ -1377,7 +1397,7 @@ function stationHTML(P){
   const short=order.slice(0,3), rest=Object.keys(F).filter(id=>F[id]&&!short.includes(id));
   /* flags come from the record: the lot's own address and whether it is the largest listed here */
   const tags=p=>{const t=[`${commas(p.unbuilt)} sq ft unbuilt`]; if(p.lm===1) t.push('landmark');
-    if(p.addr&&streetNo(p.addr)!=='42') t.push('not a 42 Street address');
+    if(p.addr&&streetNo(p.addr)!=='42') t.push('not a 42nd Street address');
     const shed=SHED_BY_BBL.get(String(p.bbl)); if(shed) t.push('shed permit '+shedSays(shed));
     return t.join(' &middot; ');};
   /* with the lots row open, the lots that front this station lead the card */
@@ -1646,6 +1666,16 @@ function buildRuler(force){
   if(SEL.st!=null) $('#rulerMark').style.left=(share(SEL.st)*100)+'%';
   clearHubs();
   try{ syncRuler(); }catch(e){}
+  /* measured last: the foot only takes its second line once the readout has its text */
+  stackH();
+}
+/* stacked, the first screen is fixed to the foot of the window, so the map has to give way by
+   exactly what the head and the ruler take. both grow with the reader's minimum font size. */
+function stackH(){
+  const h=e=>{const n=$(e); return n?n.getBoundingClientRect().height:0;};
+  const r=document.documentElement.style;
+  r.setProperty('--head-h',Math.ceil(h('.head'))+'px');
+  r.setProperty('--ruler-h',Math.ceil(h('#rulerCap')+h('#rulerBox')+h('.ruler__foot'))+'px');
 }
 /* a hub name the station's feet would sit on is left out while they do. its bracket stays. */
 function clearHubs(){

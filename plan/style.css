@@ -23,6 +23,7 @@
   --serif:Charter,"Bitstream Charter","Sitka Text",Cambria,"Iowan Old Style",Georgia,serif;
   --mono:Menlo,Consolas,monospace;   /* kept as a token. used nowhere unless a digit-aligned table needs it */
   --rail:clamp(310px,27vw,392px);
+  --map-min:160px;     /* stacked, the shortest the map may be before the first screen gives way */
 
   /* one scale, designed on a 16px floor */
   --t-fine:.8125rem;   /* the map credit and the print foot only */
@@ -389,13 +390,15 @@ a{color:var(--ink); text-underline-offset:2px}
   .panel{order:-1; border-top:1.5px solid var(--ink)}
   /* the first screen is a sheet at the foot of the window, so the map shows above it. Start sits
      beside the heading, where it cannot scroll out of reach. */
-  .intro{position:fixed; z-index:60; left:0; right:0; bottom:0; max-height:45vh;
+  /* it never covers the ruler: on a short phone it yields before the map does */
+  .intro{position:fixed; z-index:60; left:0; right:0; bottom:0;
+    max-height:min(45vh, calc(100svh - var(--head-h,117px) - var(--ruler-h,127px) - var(--map-min)));
     border-top:1.5px solid var(--ink); border-bottom:0; overscroll-behavior:contain;
     display:grid; grid-template-columns:minmax(0,1fr) auto; gap:0 16px; align-items:center}
   .intro p, .intro ol, .intro .about{grid-column:1 / -1}
   .intro .intro__go{grid-column:2; grid-row:1; margin-top:0}
   /* while it is up the map gives way, so the whole ruler shows above it and step 2 has something to point at */
-  .intro:not([hidden]) ~ .draw #map{height:calc(55svh - 225px); min-height:160px}
+  .intro:not([hidden]) ~ .draw #map{height:calc(55svh - var(--head-h,117px) - var(--ruler-h,127px)); min-height:var(--map-min)}
 }
 /* screen only, so paper keeps the rail and the readout */
 @media screen and (max-width:899px){

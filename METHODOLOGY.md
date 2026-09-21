@@ -846,6 +846,10 @@ Unbuilt floor area is a screen. Most lots sit in special districts where the bas
 ratio is not the governing rule, and landmarked lots carry floor area on paper that they may never
 be able to use. The page states both beside the figure.
 
+The two filters in the row, "Leave out landmarked lots" and "Leave out public and tax-exempt
+owners", now drive the figure, the sentence and the list off the same set, so ticking both moves
+the headline from 16.6m to 1.8m. The map keeps drawing the whole set and the row says so.
+
 `node scripts/check/station.js` derives the nearest vertex a second time, in the page's own
 projection, and asserts that every drawn lot is within the baked threshold, every lot in
 `LOTS_OUT` is beyond it with its `off` correct to 0.1 ft, that the two sets add up to the pool,
@@ -872,6 +876,29 @@ lot changed owner. The step is idempotent and `--check` confirms the baked set i
 re-cased. Truncated names are left as PLUTO has them. Against the current PLUTO release (26v2,
 read 19 Sep 2026) three baked lots name a different owner and one BBL is absent; that is a
 vintage difference for the Phase 1 lot bake to settle, not something this step touches.
+
+### 4b. Who holds the floor area on paper (added 20 Sep 2026)
+
+The 16.6m figure is not 16.6m of development opportunity, and the page had been stating only the
+smaller of the two reasons why. Split by MapPLUTO `OwnerType`, carried on each baked lot as `own`:
+
+| Set | Lots | Unbuilt sq ft | Share |
+|---|---|---|---|
+| All lots on the sheet | 124 | 16,571,834 | 100% |
+| Designated landmarks | 16 | 5,560,484 | 34% |
+| Public or tax-exempt owner (C, M, O, X) | 41 | 14,561,995 | 88% |
+| Private ground, not landmarked | 74 | 1,849,382 | 11% |
+
+The two exclusions overlap, so they do not add to 100%. Owner type C is city, M is mixed city and
+private, O is another public authority and X is fully tax-exempt; a blank owner type is kept in,
+counted as private. The largest single line, 4,193,625 sq ft on BBL 1013540001, is a tax-exempt
+lot at the east end whose PLUTO owner name reads "Dada, LLC", which is a name the release does not
+explain and which section 4a's repair does not touch. That is a vintage question for the Phase 1
+lot bake, not a spatial step.
+
+The page states the private non-landmarked total in the row's sentence and the full split one
+disclosure down. Re-derive with the browser console on the plan sheet, or from `LOTS_POLY` in
+`plan/data.js`: sum `unbuilt` over the lots whose `own` is in {C, M, O, X}.
 
 ## 5. Verified and ready to add
 
