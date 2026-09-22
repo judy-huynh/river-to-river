@@ -11,45 +11,98 @@
 
 <header class="head">
   <div class="head__id">
-    <span class="brand">River to River</span>
-    <h1>42nd Street</h1>
-    <span class="kicker" id="devline" hidden>Sheet 01 &middot; existing conditions &middot; <span id="stamp">&mdash;</span></span>
+    <h1>River to River</h1>
+    <p class="head__subject">42nd Street, Manhattan</p>
   </div>
-  <dl class="head__meta">
-    <div><dt>Extent</dt><dd>Hudson to East River, 1.97 mi</dd></div>
-    <div><dt>Lots</dt><dd id="metaLots">—</dd></div>
-    <div><dt>Trees</dt><dd id="metaTrees">—</dd></div>
-    <div><dt>Sources</dt><dd>MapPLUTO &middot; NYC Parks &middot; OSM</dd></div>
-  </dl>
+  <div class="head__tools">
+    <button class="mini" type="button" id="copyLink">Copy link</button>
+    <button class="mini" type="button" id="printSheet">Print</button>
+    <button class="mini" type="button" id="introOpen" aria-controls="intro" aria-expanded="false">How to use</button>
+  </div>
 </header>
 
 <main class="sheet">
 
-  <!-- ══════════ the layer stack. drawing order, top of the list draws on top ══════════ -->
-  <aside class="layers" id="layers" aria-label="Layers">
-    <div class="layers__head">
-      <span>Layers</span>
-      <button class="mini" id="allOff" type="button">clear</button>
-    </div>
+  <!-- ══════════ the first screen. plain instruction only, shut for good once dismissed ══════════ -->
+  <section class="intro" id="intro" aria-labelledby="introTitle">
+    <h2 class="lab" id="introTitle">What this is</h2>
+    <p class="intro__lede">42nd Street is the greatest street in New York, and no one actually thinks that, because it is so busy, chaotic, full of energy, and there is not enough space for people.</p>
+    <p>Public records about 42nd Street, Manhattan, measured in feet along the street from the Hudson River to the East River.</p>
+    <ol>
+      <li>Pick a question from the list.</li>
+      <li>Drag along the bar under the map to move along the street.</li>
+      <li>Click or tap anywhere on the street to see what is recorded at that spot.</li>
+    </ol>
+    <details class="about" id="aboutData">
+      <summary>About the data</summary>
+      <dl class="head__meta">
+        <div><dt>Extent</dt><dd id="metaExtent">Hudson to East River</dd></div>
+        <div><dt>Lots</dt><dd id="metaLots"></dd></div>
+        <div><dt>Trees</dt><dd id="metaTrees"></dd></div>
+      </dl>
+    </details>
+    <button class="intro__go" type="button" id="introGo">Start</button>
+  </section>
+  <!-- the one rule for whether it opens: ?intro=1 always; never once shut, or on a link that points at something -->
+  <script>(function(){ var q=location.search, done=false; try{ done=localStorage.getItem('r2r.intro')==='done'; }catch(e){}
+    document.getElementById('intro').hidden=!(/[?&]intro=1(&|$)/.test(q)||(!done&&!/[?&](st|lot|pick|q|hr|on|by)=/.test(q))); })();</script>
+
+  <!-- ══════════ the rail. each row is a question, grouped People, Movement, Built ══════════ -->
+  <aside class="layers" id="layers" aria-label="Questions about the street">
     <div id="layerList"></div>
 
-    <div class="panel" id="readout" role="status" aria-live="polite" hidden></div>
+    <!-- the station card. wide, it floats over the map, bottom right. stacked, it sits under the ruler. -->
+    <div class="panel" id="readout" role="region" aria-label="Station" hidden></div>
+    <p class="sr" id="said" aria-live="polite"></p>
   </aside>
 
   <!-- ══════════ the drawing ══════════ -->
   <section class="draw">
     <div id="map"></div>
+    <!-- the printed sheet only: a picture of the map, drawn by scripts.js as the sheet goes to print,
+         with north, a scale bar and the basemap credit set over it -->
+    <div class="mapshot" id="mapShot">
+      <img id="mapPrint" alt="The map as it was on screen">
+      <i class="mapshot__pin" id="shotPin" hidden></i>
+      <div class="mapshot__n"><svg viewBox="-12 -12 24 24" width="24" height="24" aria-hidden="true"><g id="northArrow"><path d="M0 -10 L5 8 L0 4 L-5 8 Z" fill="currentColor"/></g></svg><span>N</span></div>
+      <div class="mapshot__scale"><i id="scaleBar"></i><span id="scaleLab"></span></div>
+      <div class="mapshot__credit" id="mapCredit"></div>
+    </div>
 
-    <!-- the whole street, always visible, doubles as the navigator -->
-    <div class="ruler" id="ruler">
-      <svg id="rulerSvg" preserveAspectRatio="none"></svg>
-      <div class="ruler__window" id="rulerWin"></div>
+    <!-- the printed sheet only, and only when there is no picture of the map: the frame is drawn empty and says so -->
+    <div class="mapnone" id="mapNone">
+      <p class="lab">The drawing did not load</p>
+      <p>No picture of the map was available when this sheet was printed. The ruler and every figure on the sheet are computed from local data and print as normal.</p>
+    </div>
+
+    <!-- the whole street, always visible, doubles as the navigator. one caption says what the band under it is -->
+    <p class="ruler__cap lab" id="rulerCap"></p>
+    <!-- a slider: a press picks a station, arrow keys walk it 100 ft at a time. the avenue names are
+         real buttons, and sit beside the slider, not inside it, so they are not lost to a screen reader -->
+    <div class="rulerbox" id="rulerBox">
+      <div class="ruler" id="ruler" tabindex="0" role="slider" aria-orientation="horizontal"
+           aria-label="Station along 42nd Street, feet from the Hudson River" aria-valuemin="0">
+        <svg id="rulerSvg" preserveAspectRatio="none" aria-hidden="true"></svg>
+        <div class="ruler__window" id="rulerWin"></div>
+        <div class="ruler__mark" id="rulerMark" hidden><span id="rulerMarkFt"></span></div>
+      </div>
+      <div class="ruler__aves" id="rulerAves" role="group" aria-label="Stand at an avenue"></div>
     </div>
     <div class="ruler__foot">
-      <span class="mono" id="rulerLeft">Hudson River</span>
-      <span class="mono" id="rulerMid">drag the bar to move along the street</span>
-      <span class="mono" id="rulerRight">East River</span>
+      <span id="rulerLeft">Hudson River</span>
+      <span id="rulerMid"></span>
+      <span id="rulerRight">East River</span>
     </div>
+    <!-- the foot of the printed sheet. filled by scripts.js, never shown on screen. it closes the first page, under the ruler -->
+    <dl class="head__meta printfoot">
+      <div><dt>Sheet</dt><dd>01, existing conditions <span id="stamp"></span></dd></div>
+      <div><dt>Extent</dt><dd id="printExtent"></dd></div>
+      <div><dt>This view</dt><dd id="printLink"></dd></div>
+      <div><dt>Printed</dt><dd id="printDate"></dd></div>
+      <div id="printShot" hidden><dt>Map picture</dt><dd id="printShotText"></dd></div>
+      <div id="printBase" hidden><dt>Basemap</dt><dd id="printBaseText"></dd></div>
+      <div><dt>Method</dt><dd id="printMethod"></dd></div>
+    </dl>
   </section>
 
 </main>
@@ -57,6 +110,7 @@
 <div class="tip" id="tip"></div>
 
 <script src="data.js"></script>
+<script src="station.js"></script>
 <script src="https://api.mapbox.com/mapbox-gl-js/v3.28.1/mapbox-gl.js"></script>
 <script src="scripts.js"></script>
 </body>

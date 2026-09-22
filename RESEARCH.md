@@ -13,7 +13,7 @@ A river to river, auto free light rail boulevard. Traces back to a 1994 City Cou
 Their numbers, which everyone else still quotes:
 - ~500,000 pedestrians a day on 42nd Street
 - pedestrians outnumber motorists at least **5 to 1**
-- the crosstown bus is often **slower than walking**
+- the crosstown bus is often **slower than walking** (vision42's claim, not checked here. What the MTA's speed data shows is in `METHODOLOGY.md` section 3c)
 - 85% of Midtown commuters arrive by transit
 - Times Square alone draws ~165,000 people a day
 - at grade light rail costs roughly **one tenth per mile** of subway

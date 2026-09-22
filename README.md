@@ -29,8 +29,9 @@ Then <http://127.0.0.1:8042/plan/>. The pure SVG pages work either way.
 
 | Folder | What it is | Status |
 |---|---|---|
-| `plan/` | **Sheet 01, existing conditions.** Five toggleable layers over the real street: trees, roadway, lots and buildable capacity, landmarks, avenue labels. Full-street ruler at the bottom doubles as the navigator. | live, newest |
-| `analysis/` | The 82 lots that front the street. Four readings, the ten biggest openings, who holds the ground, how this could be wrong, method. | live |
+| `plan/` | **Sheet 01, existing conditions.** A rail of questions in three groups (People, Movement, Built) over the real street: the pedestrian count, benches, bus speed, roadway and sidewalk, lots and buildable capacity, trees. Each row shows its figure while shut. Full-street ruler at the bottom doubles as the navigator. | live, newest |
+| `field/` | Phone tally page for the six-station pedestrian count. Two files: `index.html` and `sw.js`, which keeps a copy of the page so it opens with no network after the first load over http(s). Opened from `file://` it keeps no offline copy. Exports JSON. Protocol in `METHODOLOGY.md` section 6a. No counts taken yet. | tool, not linked from the site |
+| `analysis/` | The 82 lots that front the street. Four readings, the ten biggest openings, who holds the ground, how this could be wrong, method. | earlier study, being revised |
 | `studies/` | Four ways to draw the street before any data goes on top. `A-unrolled` straightens it onto one axis, `B-ribbon` locks the bearing so it runs flat, `C-void` inverts figure and ground, `D-standard` is B's geometry with C's colours. `00-test.html` prints WebGL and tile status when something looks broken. | reference |
 | `archive/` | Earlier attempts kept for the record. `H` stacked eleven data ribbons on synthetic data. `I` drew every published proposal to its real extent. `J` was the first real parcel page. Screenshots of all of it. | dead |
 | `RESEARCH.md` | Every published proposal for 42nd Street, sourced, plus the gap analysis. | |

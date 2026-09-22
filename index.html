@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>River to River</title>
-<meta name="description" content="A parcel-level reading of a Manhattan crosstown street, river to river. 42nd Street is the first one.">
+<meta name="description" content="Public records about 42nd Street, Manhattan, measured in feet along the street from the Hudson River to the East River.">
 <style>
 :root{
   --paper:#FCFAF5; --paper-2:#F4F0E6; --paper-3:#E9E4D6;
@@ -43,15 +43,9 @@ h2{font:500 11px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;colo
 .name span{color:var(--ink-50);font-weight:400}
 .desc{margin:6px 0 0;font-size:14px;color:var(--ink-70);max-width:62ch}
 
-.findings{list-style:none;padding:0;margin:20px 0 0}
-.findings li{padding:11px 0 11px 18px;border-bottom:1px solid var(--hair);position:relative;
-  font-size:14.5px;color:var(--ink-70)}
-.findings li::before{content:"";position:absolute;left:0;top:19px;width:7px;height:1px;background:var(--alarm)}
-.findings b{color:var(--ink);font-weight:600}
-
 .note{margin-top:20px;padding:16px 18px;background:var(--paper-2);
   border-left:2px solid var(--hair-2);font-size:13.5px;color:var(--ink-70)}
-.note code{font:400 12.5px var(--mono);background:var(--paper-3);padding:1px 5px;border-radius:2px}
+.note a{color:var(--ink)}
 
 footer{margin-top:64px;padding-top:22px;border-top:1px solid var(--hair);
   font:400 12px/1.7 var(--mono);color:var(--ink-50)}
@@ -69,14 +63,16 @@ footer a{color:var(--ink-70)}
   <header>
     <div class="kicker">42nd Street &middot; New York</div>
     <h1>River to River</h1>
-    <p class="sub">A parcel-level reading of a Manhattan crosstown street, from the Hudson to the
-      East River. 42nd Street is the first one.</p>
+    <p class="sub">Public records about 42nd Street, Manhattan, measured in feet along the street from
+      the Hudson River to the East River.</p>
 
     <div class="rule"></div>
     <dl class="meta">
-      <div><dt>Extent</dt><dd>12th Ave to 1st Ave<br>10,411 ft &middot; 1.97 mi</dd></div>
-      <div><dt>Lots</dt><dd>82 fronting the street</dd></div>
-      <div><dt>Sources</dt><dd>MapPLUTO &middot; NYC Parks<br>NYC CSCL &middot; OpenStreetMap</dd></div>
+      <!-- every figure here is filled from plan/data.js by the script at the foot, the same file the sheet reads -->
+      <div><dt>Extent</dt><dd>Hudson to East River<br><span id="metaExtent"></span></dd></div>
+      <div><dt>Lots</dt><dd id="metaLots"></dd></div>
+      <div><dt>Trees</dt><dd id="metaTrees"></dd></div>
+      <div><dt>Sources</dt><dd>MapPLUTO &middot; NYC Parks &middot; NYC DOT &middot; MTA &middot; OSM</dd></div>
       <div><dt>Status</dt><dd>In progress</dd></div>
     </dl>
   </header>
@@ -87,38 +83,30 @@ footer a{color:var(--ink-70)}
       <div class="no">01</div>
       <div>
         <div class="name">Existing conditions</div>
-        <p class="desc">The street as it is. Five layers you turn on and off: trees, roadway, lots
-          and what may be built, protected buildings, avenue names. The whole 1.97 miles sits along
-          the bottom as a ruler you drag to move.</p>
+        <p class="desc">Questions about the street, grouped under People, Movement and Built. Each
+          question shows its figure before it is opened. Click or tap anywhere on the street to see
+          what is recorded at that spot. The whole street runs along the bottom as a ruler you drag
+          to move.</p>
       </div></a></li>
     <li><a href="analysis/">
       <div class="no">02</div>
       <div>
-        <div class="name">The eighty-two lots</div>
-        <p class="desc">Four readings of the same ground, the ten biggest openings, who holds the
-          land, how this could be wrong, and the method.</p>
+        <div class="name">Lot study <span>&middot; an earlier study, being revised</span></div>
+        <p class="desc">Made before the lot rule changed, so its lots and figures do not match
+          sheet 01.</p>
       </div></a></li>
     <li><a href="studies/A-unrolled.html">
-      <div class="no">&mdash;</div>
+      <div class="no">Ref</div>
       <div>
-        <div class="name">Studies <span>&middot; four ways to draw a street</span></div>
+        <div class="name">Studies <span>&middot; ways to draw a street</span></div>
         <p class="desc">Before any data goes on top. The street straightened onto one axis, the
           bearing locked so it runs flat, figure and ground inverted, and the graded basemap.</p>
       </div></a></li>
   </ul>
 
-  <h2>What the data says</h2>
-  <ul class="findings">
-    <li><b>3.4m sq ft</b> of floor area the zoning appears to allow and nobody built</li>
-    <li>only <b>10%</b> of that survives a check against special districts and landmarks</li>
-    <li><b>88%</b> of the capacity sits outside the four famous hubs</li>
-    <li>the largest single opening is a <b>city owned lot</b> at 234 West 42nd</li>
-  </ul>
-
   <div class="note">
-    Work in progress. The text on the sheets is placeholder and the numbers above are the only
-    figures that have been checked end to end. Method and known weaknesses are written down on
-    sheet 02. Repo and notes: <code>github.com/judy-huynh/river-to-river</code>
+    Work in progress. Every source and every spatial step is written down in
+    <a href="https://github.com/judy-huynh/river-to-river/blob/main/METHODOLOGY.md">METHODOLOGY.md</a>.
   </div>
 
   <footer>
@@ -127,5 +115,18 @@ footer a{color:var(--ink-70)}
   </footer>
 
 </div>
+
+<script src="plan/data.js"></script>
+<script>
+/* the same counts the sheet shows, from the same file. if it did not arrive, the page says so. */
+(()=>{ const set=(id,t)=>{ document.getElementById(id).textContent=t; };
+  const LINE=window.LINE42, LOTS=window.LOTS_POLY, TREES=window.TREES, META=window.LOTS_META;
+  if(!LINE||!LOTS||!TREES){ ['metaExtent','metaLots','metaTrees'].forEach(id=>set(id,'data did not load')); return; }
+  const LEN=LINE[LINE.length-1][0], commas=n=>Math.round(n).toLocaleString('en-US');
+  set('metaExtent',`${commas(LEN)} ft \u00b7 ${(LEN/5280).toFixed(2)} mi`);
+  set('metaLots',`${LOTS.features.length} lots`+(META?` with a boundary within ${META.front_ft} ft of the centreline`:''));
+  set('metaTrees',`${TREES.length} trees`);
+})();
+</script>
 </body>
 </html>

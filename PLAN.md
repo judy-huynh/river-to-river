@@ -57,9 +57,11 @@ decisions the author has not made yet.
   42nd Street, and the 42nd Street Ferry once ran from East 42nd Street across to Williamsburg, so
   the street was built river to river and boat to boat. Changing the extent re-bases every
   measurement in the repo.
-- **The lot rule is the address.** If a lot is addressed on 42nd Street it is in the set. Grand
-  Central Terminal, 89 East 42nd Street, is in. Lots addressed on 41st and 43rd are out. The rule
-  applies in both directions with no exceptions, including when it weakens a finding.
+- **The lot rule is frontage** (changed 20 Sep 2026; it was the address). A lot is in the set if
+  any vertex of its boundary lies within 60 ft of the centreline, whatever its address. Grand
+  Central Terminal is in. Measured, the address rule had removed nine through-block lots that
+  front the street and kept five that do not. The rule applies in both directions with no
+  exceptions, including when it weakens a finding. `METHODOLOGY.md` section 4 has the counts.
 - **The instrument diagnoses and then prices one trade.** It does not propose a design. It ends on
   a single quantified claim: this much capacity exists, this is what it is worth, this is how much
   public space it could buy. The reader draws the conclusion.
@@ -67,6 +69,55 @@ decisions the author has not made yet.
   contributions could be added later without a rewrite.
 - **Text contrast may be corrected without asking.** Scoped to text alphas. The data palette is not
   to be changed.
+
+## Decisions made on the author's behalf, 20 Sep 2026
+
+She delegated the judgement calls. Each is reversible and recorded here so she can overrule it.
+
+- **Station card opens short.** Widths on the cross-section bar, bus, nearest bench, largest lot,
+  and one control for everything else. A short card sits under the street, so the map never has
+  to move aside for it and the map and ruler stay in register.
+- **Row sub-lines carry one fact** and are set in the sans. The rest is in the row's own text.
+- **Every label that read as voice was flattened** to a plain factual label. The one sentence in
+  the author's voice is the first line of the first screen, assembled from her own recorded words.
+- **Bus:** walking reference is 3.0 mph; the displayed month is the latest complete month of
+  weekdays; the claim is only what the record supports.
+- **Sheds:** the headline is buildings with a permit in force, not a count of sheds standing.
+- **Sidewalks:** zero-length fragments dropped, heading read at the midpoint.
+- **Fieldwork:** six stations confirmed, Saturday midday to match the city's own count.
+
+## Decisions made on the author's behalf, 20 Sep 2026, second pass (JFTW-72 persona review)
+
+Three personas (a planner reviewing portfolios, a Hell's Kitchen resident on a community board, a
+development associate) ran five tasks each on the built sheet. All three completed the bench task
+with list, map, ruler and card in agreement, so the selection sync defect is closed. What follows
+is what was changed off the back of their reports. Each is reversible.
+
+- **The first screen never covers the ruler.** Stacked, the map gives way by the measured height of
+  the head and the ruler rather than a fixed 225px, and on a short phone the first screen yields
+  before the map does. At a 16px minimum font the ruler's readout wraps to a second line, and that
+  line was being sliced in half on landing. Measured, not assumed, because the reader's font size
+  sets it.
+- **Reader-facing prose spells the street "42nd Street"**, matching the header. The data's own
+  "42 Street" stays in the code and in address matching. Displayed addresses also repair MapPLUTO's
+  "42Nd", which is the spelling section 4a's owner repair never touched.
+- **The lot filters drive the figure, the sentence and the list off one set.** Ticking both moves
+  the headline from 16.6m to 1.8m. Two of the three personas performed exactly that operation and
+  both reported the figure contradicting the control directly below it. The map still draws the
+  whole set and the row now says so.
+- **The lot sentence states the private non-landmarked total** instead of the landmark percentage.
+  88% of the 16.6m sits on public or tax-exempt ground and the sheet had never said so, while
+  stating the smaller 34% landmark share. The full split is one disclosure down and in
+  METHODOLOGY 4b.
+- **The "on paper" flag qualifies the number in its own heading.** It had a heading and no sentence,
+  which is not a caveat.
+- **"Who gets hurt?" answers who.** The source's own split stands with the figure. It was behind a
+  disclosure and below a 92-item list.
+- **The narrowest walk says where it is**, south side between 11th and 10th, and the count of
+  stretches under 8 ft is shown. Both were already computed and thrown away.
+- **The injury figure carries its closing date.** It read "since 1 Jan 2021" and implied currency.
+- **"Show on map" brings the map into view when the sheet is stacked.** On a phone the map is above
+  the rail and off screen, so the press appeared to do nothing.
 
 ## Still open
 

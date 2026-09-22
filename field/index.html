@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#FCFAF5">
+<!-- a working tool. nothing on the site links here, and search engines are asked to leave it out -->
+<meta name="robots" content="noindex,nofollow">
+<title>River to River · 42nd Street · Field tally</title>
+<style>
+/* 42nd STREET FIELD TALLY. Opens with no network, so the tokens are copied from plan/style.css
+   by name and value: nothing here is a new colour. 64px is the smallest thumb target. */
+:root{
+  --paper:#FCFAF5; --paper-2:#F4F0E6; --paper-3:#E9E4D6;
+  --ink:#14120F; --ink-70:rgba(20,18,15,.72); --ink-label:rgba(20,18,15,.58);
+  --hair:rgba(20,18,15,.13); --hair-2:rgba(20,18,15,.22);
+  --sans:"Helvetica Neue",Inter,Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace;
+  --t-micro:11px; --t-small:12px; --t-body:14px;
+  --track:.1em;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0; background:var(--paper); color:var(--ink); font-family:var(--sans);
+  font-size:var(--t-body); -webkit-font-smoothing:antialiased}
+/* one column a thumb can cover. the safe-area insets keep it clear of the notch and home bar */
+.page{max-width:480px; margin:0 auto; display:flex; flex-direction:column; gap:16px;
+  padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right))
+          max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+.page > *{min-width:0}
+
+.head{border-bottom:1.5px solid var(--ink); padding-bottom:8px}
+.head h1{margin:0; font-size:17px; letter-spacing:-.02em; text-transform:uppercase; font-weight:700}
+.head p{margin:4px 0 0; font-size:var(--t-body); font-weight:600}
+.micro{font-family:var(--mono); font-size:var(--t-micro); letter-spacing:var(--track);
+  text-transform:uppercase; color:var(--ink-label)}
+.note{margin:0; font-family:var(--mono); font-size:var(--t-small); line-height:1.5; color:var(--ink-70);
+  overflow-wrap:break-word}
+.field{display:flex; flex-direction:column; gap:8px; border:0; margin:0; padding:0; min-width:0}
+.field legend{padding:0; margin-bottom:8px}
+
+button,select{font:inherit; color:var(--ink); border-radius:0; -webkit-appearance:none; appearance:none;
+  touch-action:manipulation; -webkit-tap-highlight-color:transparent}
+button{cursor:pointer; user-select:none; -webkit-user-select:none}
+button:focus-visible,select:focus-visible{outline:2px solid var(--ink); outline-offset:2px}
+button:disabled,select:disabled{cursor:default; color:var(--ink-label); border-color:var(--hair-2)}
+
+select{width:100%; min-height:64px; padding:8px 44px 8px 16px; font-size:17px; font-weight:600;
+  border:1.5px solid var(--ink); text-overflow:ellipsis;
+  background:var(--paper-2) no-repeat; background-size:7px 7px;
+  /* two half-filled squares meet as a triangle pointing down: opens a list */
+  background-image:linear-gradient(45deg,transparent 50%,var(--ink) 50%),linear-gradient(135deg,var(--ink) 50%,transparent 50%);
+  background-position:right 23px center,right 16px center}
+
+/* the three count hours: radios drawn as one row of thumb targets */
+.seg{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px}
+.seg label{position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px;
+  min-height:64px; padding:8px 4px; border:1.5px solid var(--ink); background:var(--paper-2);
+  text-align:center; cursor:pointer}
+.seg input{position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer}
+.seg b{font-size:17px}
+.seg span{font-family:var(--mono); font-size:var(--t-small); color:var(--ink-70)}
+.seg label:has(input:checked){background:var(--ink); color:var(--paper)}
+.seg label:has(input:checked) span{color:var(--paper)}
+.seg label:has(input:focus-visible){outline:2px solid var(--ink); outline-offset:2px}
+.seg label:has(input:disabled){border-color:var(--hair-2); cursor:default}
+.seg label:has(input:disabled:not(:checked)){color:var(--ink-label)}
+.seg label:has(input:disabled:not(:checked)) span{color:var(--ink-label)}
+
+.clock{display:flex; justify-content:space-between; align-items:baseline; gap:12px; flex-wrap:wrap;
+  border-top:1px solid var(--hair); border-bottom:1px solid var(--hair); padding:8px 0}
+/* the end has to be seen as well as heard: a phone set to silent plays no tone */
+.clock--done{background:var(--ink); color:var(--paper); padding:8px 12px}
+.clock--done .micro{color:var(--paper)}
+/* while counting only the clock, the counters and the two actions are needed on screen */
+.clock{scroll-margin-top:8px}
+.is-live .note--setup{display:none}
+.clock__t{font-family:var(--mono); font-size:30px; font-weight:600; font-variant-numeric:tabular-nums}
+
+/* the three counters. tall enough to hit without looking down */
+.tally{display:flex; flex-direction:column; gap:8px}
+.count{display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%;
+  min-height:88px; padding:12px 16px; text-align:left; border:1.5px solid var(--ink); background:var(--paper-2)}
+.count span{font-size:17px; font-weight:600; line-height:1.2; min-width:0; overflow-wrap:break-word}
+.count b{font-family:var(--mono); font-size:30px; font-variant-numeric:tabular-nums}
+.count:not(:disabled):active{background:var(--ink); color:var(--paper)}
+.count:disabled{background:var(--paper)}
+
+.row{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px}
+/* undo and end stay under the thumb however far the text above has pushed the counters */
+.row--stick{position:sticky; bottom:0; z-index:1; background:var(--paper);
+  padding:8px 0 max(8px,env(safe-area-inset-bottom)); margin:-8px 0}
+.note:empty{display:none}
+.act{min-height:64px; padding:8px 12px; font-size:17px; font-weight:600;
+  border:1.5px solid var(--ink); background:var(--paper)}
+.act--go{background:var(--ink); color:var(--paper)}
+.act--go:disabled{background:var(--paper-3)}
+.act:not(:disabled):active{background:var(--paper-3); color:var(--ink)}
+
+.saved{display:flex; flex-direction:column; gap:8px; border-top:1.5px solid var(--ink); padding-top:12px}
+.saved h2{margin:0}
+.saved ol{list-style:none; margin:0; padding:0}
+.saved li{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:4px 12px; align-items:center;
+  padding:8px 0; border-bottom:1px solid var(--hair)}
+.saved li strong{font-size:var(--t-body)}
+.saved li .note{grid-column:1}
+.saved li button{grid-column:2; grid-row:1 / span 2; min-width:64px; min-height:64px; padding:4px 8px;
+  font-family:var(--mono); font-size:var(--t-small); border:1px solid var(--hair-2); background:none}
+[hidden]{display:none !important}
+</style>
+</head>
+<body>
+<main class="page" id="page">
+
+  <header class="head">
+    <h1>River to River</h1>
+    <p>42nd Street, Manhattan &middot; pedestrian tally</p>
+  </header>
+
+  <div class="field">
+    <label class="micro" for="station">Station</label>
+    <select id="station"></select>
+    <p class="note note--setup" id="stationNote"></p>
+  </div>
+
+  <fieldset class="field">
+    <legend class="micro">Hour counted</legend>
+    <div class="seg" id="windows"></div>
+    <p class="note note--setup" id="windowNote"></p>
+    <p class="note note--setup" id="clockNote"></p>
+  </fieldset>
+
+  <div class="clock" id="clockBox">
+    <span class="micro" id="clockLabel"></span>
+    <span class="clock__t" id="clock" role="timer" aria-live="off" aria-label="Time left"></span>
+  </div>
+  <p class="note" id="status" role="status" aria-live="polite"></p>
+
+  <div class="tally" id="tally"></div>
+
+  <div class="row row--stick">
+    <button class="act" type="button" id="undo">Undo</button>
+    <button class="act act--go" type="button" id="go"></button>
+  </div>
+
+  <section class="saved" aria-labelledby="savedTitle">
+    <h2 class="micro" id="savedTitle"></h2>
+    <ol id="sessions"></ol>
+    <div class="row">
+      <button class="act" type="button" id="copy">Copy JSON</button>
+      <button class="act" type="button" id="export">Export JSON</button>
+    </div>
+    <p class="note" id="storeNote" role="status" aria-live="polite"></p>
+    <p class="note" id="offlineNote"></p>
+  </section>
+
+</main>
+<script>
+(() => {
+'use strict';
+/* The two lines below are written by scripts/bake/field_stations.py from plan/data.js and are
+   never edited by hand. ft is feet along LINE42, city is the city's own count window. */
+const STATIONS=[{"name":"West end","ft":519,"lon":-73.999673,"lat":40.76141,"from":"12 Avenue","to":"11 Avenue"},{"name":"9 Avenue","ft":2538,"lon":-73.99329,"lat":40.758705,"from":"Dyer Avenue","to":"9 Avenue"},{"name":"Times Square","ft":4627,"lon":-73.986681,"lat":40.755924,"from":"7 Avenue","to":"Broadway"},{"name":"Bryant Park","ft":5946,"lon":-73.982508,"lat":40.754162,"from":"Avenue of the Americas","to":"5 Avenue"},{"name":"City counter","ft":7796,"lon":-73.976655,"lat":40.751695,"from":"Park Avenue","to":"Lexington Avenue","counter":true},{"name":"East end","ft":9553,"lon":-73.97109,"lat":40.749358,"from":"2 Avenue","to":"1 Avenue"}];
+const WINDOWS=[{"id":"am","from":8,"to":9,"day":"weekday","city":[7,9]},{"id":"md","from":12,"to":13,"day":"Saturday","city":[12,14]},{"id":"pm","from":17,"to":18,"day":"weekday","city":[16,19]}];
+const KINDS=[['sidewalk','Walking on the sidewalk'],['roadbed','Walking in the roadbed'],['still','Standing or sitting']];
+const MINUTES=10, SPAN=MINUTES*60000, KEY='r2r-field-v1', CONFIRM_MS=3000;
+/* the page notes it is alive every BEAT. a silence longer than GAP is time nobody could tap.
+   a window picked by hand is kept for PICK_MS, then the clock chooses again */
+const BEAT=5000, GAP=15000, PICK_MS=3600000;
+
+const $=id=>document.getElementById(id);
+const hh=h=>String(h).padStart(2,'0')+':00';
+const num=n=>n.toLocaleString('en-US');
+
+/* all state lives here. live is the session being counted, or null. a tap is [ms since start, kind].
+   a session owns a copy of its station (st), so a later re-bake cannot move a count already taken */
+let S={sessions:[], live:null, station:0, window:null, windowAt:0};
+let stored=true;
+function load(){ try{ const v=JSON.parse(localStorage.getItem(KEY)); if(v&&Array.isArray(v.sessions)) S={...S,...v}; }catch(e){ stored=false; }
+  /* anything saved before sessions owned their station gets one now, or a blank that still draws and exports */
+  const own=x=>{ if(x&&!x.st) x.st={...(STATIONS[x.station]||{name:'Station not recorded',ft:null,lon:null,lat:null})};
+    if(x&&!Array.isArray(x.taps)) x.taps=[]; return x; };
+  S.sessions=S.sessions.filter(Boolean).map(own); own(S.live); }
+function save(){ try{ localStorage.setItem(KEY,JSON.stringify(S)); stored=true; }catch(e){ stored=false; } }
+
+/* the window whose hour is nearest the clock, so the usual case needs no tap */
+function nearestWindow(){ const h=new Date().getHours()+new Date().getMinutes()/60;
+  return [...WINDOWS].sort((a,b)=>Math.abs(h-(a.from+a.to)/2)-Math.abs(h-(b.from+b.to)/2))[0].id; }
+
+const tally=taps=>KINDS.map(([k])=>taps.filter(t=>t[1]===k).length);
+
+/* seen is the last moment the page was open and showing. when more than GAP has passed since,
+   nobody could tap: the silence is kept as a gap [from ms, to ms] and the session is marked */
+function beat(){ const L=S.live; if(!L||document.hidden) return;
+  const now=Math.min(Date.now()-L.started,SPAN), was=L.seen||0;
+  if(now-was>GAP){ (L.gaps=L.gaps||[]).push([was,now]); L.interrupted=true; L.seen=now; save(); }
+  else if(now-was>=BEAT||now===SPAN){ L.seen=now; save(); } }
+/* a live session older than its ten minutes is closed with the taps it has, which is what
+   recovers a count when the phone drops the page. minutes is only the time it was watched */
+function settle(){ const L=S.live; if(!L) return; beat();
+  if(Date.now()-L.started>=SPAN) finish(SPAN); }
+/* done is the time left on the clock when the last session ended, or null. drawn until the next choice */
+let done=null;
+function finish(span){ const L=S.live; if(!L) return;
+  const lost=(L.gaps||[]).reduce((a,g)=>a+Math.min(g[1],span)-Math.min(g[0],span),0);
+  const minutes=Math.round((span-lost)/600)/100;
+  if(armed){ clearTimeout(armed.t); armed=null; }
+  S.sessions.push({...L, minutes}); S.live=null; done=SPAN-span; save(); release(); signal();
+  say('Saved. '+KINDS.map(([,label],i)=>label+' '+num(tally(L.taps)[i])).join(', ')+'. '+minutes+' min counted'
+    +(L.interrupted?', interrupted.':'.')); draw(); }
+
+/* an iPhone has no vibrate, so a tone is armed by the Start tap. its silent switch mutes the
+   tone too, which is why the clock row also turns solid. neither runs on an untouched page */
+let tone=null;
+function arm(){ try{ const A=window.AudioContext||window.webkitAudioContext; if(!A) return; tone=tone||new A(); tone.resume(); }catch(e){ tone=null; } }
+function signal(){ if(navigator.userActivation&&!navigator.userActivation.hasBeenActive) return;
+  try{ navigator.vibrate&&navigator.vibrate([300,150,300]); }catch(e){}
+  try{ if(!tone) return; const t=tone.currentTime;
+    [0,.35,.7].forEach(d=>{ const o=tone.createOscillator(), g=tone.createGain(); o.frequency.value=880;
+      g.gain.setValueAtTime(.4,t+d); g.gain.setValueAtTime(0,t+d+.25); o.connect(g).connect(tone.destination); o.start(t+d); o.stop(t+d+.26); }); }catch(e){} }
+
+/* one export row per session and kind, shaped for a bake: the lon/lat the session was taken at
+   ride along so the counts can be re-based. taps are ISO times, minutes is the time watched */
+function rows(){ return S.sessions.flatMap(s=>{ const st=s.st;
+  return KINDS.map(([k])=>{ const t=s.taps.filter(x=>x[1]===k);
+    return {station_ft:st.ft, lon:st.lon, lat:st.lat, window:s.window, kind:k, count:t.length,
+      started_iso:new Date(s.started).toISOString(), minutes:s.minutes,
+      station:st.name, interrupted:!!s.interrupted,
+      gaps:(s.gaps||[]).map(g=>g.map(ms=>new Date(s.started+ms).toISOString())),
+      taps:t.map(x=>new Date(s.started+x[0]).toISOString())}; }); }); }
+
+/* keep the screen awake while counting, where the browser can */
+let lock=null;
+async function hold(){ try{ lock=await navigator.wakeLock.request('screen'); }catch(e){ lock=null; } }
+function release(){ try{ lock&&lock.release(); }catch(e){} lock=null; }
+
+/* the clock is already running, so the counters must be on screen without a scroll */
+function toClock(){ try{ $('clockBox').scrollIntoView({block:'start'}); }catch(e){} }
+function say(t){ $('status').textContent=t; }
+
+/* a second tap inside three seconds confirms. used to end early and to delete */
+let armed=null;
+function confirmTap(id,then){ if(armed&&armed.id===id){ clearTimeout(armed.t); armed=null; then(); return; }
+  if(armed) clearTimeout(armed.t);
+  armed={id, t:setTimeout(()=>{ armed=null; draw(); },CONFIRM_MS)}; draw(); }
+
+/* the phone clock against the hour and the kind of day picked. says nothing when they agree */
+function clockNote(){ const w=WINDOWS.find(x=>x.id===(S.live?S.live.window:S.window)), d=new Date(), h=d.getHours(), day=d.getDay();
+  const dayOk=w.day==='weekday'?day>0&&day<6:day===6, hourOk=h>=w.from&&h<w.to;
+  const t=hourOk&&dayOk?'':'The phone clock reads '+d.toLocaleDateString('en-US',{weekday:'long'})+' '
+    +d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false})+', outside '+hh(w.from)+' to '+hh(w.to)+' on a '+w.day+'.';
+  if($('clockNote').textContent!==t) $('clockNote').textContent=t; }
+
+let drawn=null;
+function draw(){
+  const live=!!S.live, st=live?S.live.st:STATIONS[S.station], wid=live?S.live.window:S.window;
+  const w=WINDOWS.find(x=>x.id===wid);
+  $('station').value=String(live?STATIONS.findIndex(x=>x.ft===st.ft):S.station); $('station').disabled=live;
+  $('stationNote').textContent=(st.ft==null?st.name:'Station '+num(st.ft)+' ft · '+st.from+' to '+st.to+' · '+'lon '+st.lon.toFixed(6)+' · lat '+st.lat.toFixed(6))
+    +(st.counter?' · the city counts here':'');
+  clockNote();
+  document.querySelectorAll('#windows input').forEach(r=>{ r.checked=r.value===wid; r.disabled=live; });
+  $('windowNote').textContent='The city counts '+hh(w.city[0])+' to '+hh(w.city[1])+' on a '+w.day+'.';
+  const n=live?tally(S.live.taps):KINDS.map(()=>0);
+  document.querySelectorAll('.count').forEach((b,i)=>{ b.disabled=!live; b.querySelector('b').textContent=num(n[i]); });
+  $('undo').disabled=!live||!S.live.taps.length;
+  $('go').textContent=live?(armed&&armed.id==='end'?'Tap again to end':'End early'):'Start '+MINUTES+' minutes';
+  $('go').classList.toggle('act--go',!live);
+  $('page').classList.toggle('is-live',live);
+  $('clockBox').classList.toggle('clock--done',!live&&done!==null);
+  $('clockLabel').textContent=live?'Counting':done!==null?'Ended and saved':'Ready';
+  tick();
+  $('storeNote').textContent=stored?'Every tap is saved on this phone.':'This browser is not saving. Export before closing the page.';
+  /* the saved list is rebuilt only when a session or a pending delete changed, not on every tap */
+  const sig=S.sessions.length+'|'+(armed?armed.id:'');
+  if(sig===drawn) return; drawn=sig;
+  /* the rebuilt list loses focus, so remember which delete button had it */
+  const had=document.activeElement&&document.activeElement.dataset?document.activeElement.dataset.i:undefined;
+  $('savedTitle').textContent='Saved sessions · '+num(S.sessions.length);
+  const ol=$('sessions'); ol.textContent='';
+  S.sessions.forEach((s,i)=>{ const li=document.createElement('li'), c=tally(s.taps), x=s.st;
+    const head=document.createElement('strong'), note=document.createElement('p'), del=document.createElement('button');
+    const d=new Date(s.started);
+    head.textContent=x.name+' · '+s.window.toUpperCase()+' · '+d.toLocaleDateString('en-US',{weekday:'short',day:'numeric',month:'short'})
+      +' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',hour12:false});
+    note.className='note';
+    note.textContent=KINDS.map(([k],j)=>k+' '+num(c[j])).join(' · ')+' · '+s.minutes+' min'+(s.interrupted?' · interrupted':'');
+    del.type='button'; del.dataset.i=i; del.textContent=armed&&armed.id==='del'+i?'Tap again':'Delete';
+    del.setAttribute('aria-label','Delete session '+(i+1)+', '+x.name);
+    del.onclick=()=>confirmTap('del'+i,()=>{ S.sessions.splice(i,1); save(); draw(); });
+    li.append(head,del,note); ol.prepend(li); });
+  if(had!==undefined){ const b=ol.querySelectorAll('button'), at=Math.min(+had,S.sessions.length-1);
+    (at<0?$('go'):[...b].find(x=>+x.dataset.i===at)).focus(); }
+  $('export').disabled=$('copy').disabled=!S.sessions.length;
+}
+function tick(){ const left=S.live?Math.max(0,SPAN-(Date.now()-S.live.started)):done!==null?done:SPAN, s=Math.ceil(left/1000);
+  $('clock').textContent=String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0'); }
+
+function build(){
+  STATIONS.forEach((s,i)=>$('station').add(new Option(s.name+' · '+num(s.ft)+' ft',String(i))));
+  WINDOWS.forEach(w=>{ const l=document.createElement('label');
+    l.innerHTML='<input type="radio" name="window"><b></b><span></span>';
+    l.querySelector('input').value=w.id; l.querySelector('b').textContent=w.id.toUpperCase();
+    l.querySelector('span').textContent=hh(w.from)+' to '+hh(w.to);
+    $('windows').append(l); });
+  KINDS.forEach(([k,label])=>{ const b=document.createElement('button'); b.type='button'; b.className='count';
+    b.innerHTML='<span></span><b></b>'; b.querySelector('span').textContent=label;
+    b.onclick=()=>{ if(!S.live) return; settle(); if(!S.live) return;
+      S.live.taps.push([Date.now()-S.live.started,k]); save(); draw(); };
+    $('tally').append(b); });
+  $('station').onchange=e=>{ done=null; S.station=+e.target.value; save(); draw(); };
+  $('windows').onchange=e=>{ done=null; S.window=e.target.value; S.windowAt=Date.now(); save(); draw(); };
+  $('undo').onclick=()=>{ if(S.live&&S.live.taps.length){ S.live.taps.pop(); save(); draw(); } };
+  $('go').onclick=()=>{
+    if(S.live) return confirmTap('end',()=>{ beat(); finish(Math.min(Date.now()-S.live.started,SPAN)); });
+    S.live={st:{...STATIONS[S.station]}, window:S.window, started:Date.now(), seen:0, taps:[]}; done=null; save(); arm(); hold(); say(''); draw(); toClock(); };
+  $('export').onclick=()=>{ const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(rows(),null,1)],{type:'application/json'}));
+    a.download='r2r-tally-'+new Date().toISOString().slice(0,10)+'.json';
+    document.body.append(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000); };
+  $('copy').onclick=async()=>{ try{ await navigator.clipboard.writeText(JSON.stringify(rows())); say('Copied '+num(rows().length)+' rows.'); }
+    catch(e){ say('This browser did not allow the copy. Use Export JSON.'); } };
+}
+
+load();
+if(!STATIONS[S.station]) S.station=0;
+/* a window picked by hand in the last hour survives a reload. otherwise the clock chooses */
+if(S.live&&WINDOWS.some(w=>w.id===S.live.window)) S.window=S.live.window;
+else if(!WINDOWS.some(w=>w.id===S.window)||Date.now()-S.windowAt>PICK_MS) S.window=nearestWindow();
+if(S.live&&!WINDOWS.some(w=>w.id===S.live.window)) S.live.window=S.window;
+build(); settle(); draw();
+if(S.live){ hold(); toClock(); }
+setInterval(()=>{ if(S.live){ settle(); tick(); } else clockNote(); },250);
+/* a phone lets go of the wake lock when the page is hidden */
+document.addEventListener('visibilitychange',()=>{ if(!S.live) return;
+  if(document.hidden){ const now=Math.min(Date.now()-S.live.started,SPAN); if(now-(S.live.seen||0)<=GAP){ S.live.seen=now; save(); } return; }
+  settle(); if(S.live) hold(); draw(); });
+
+/* sw.js keeps a copy of this page so a reload with no signal still opens it */
+const off=$('offlineNote');
+if('serviceWorker' in navigator&&location.protocol!=='file:'){
+  navigator.serviceWorker.register('sw.js').then(()=>navigator.serviceWorker.ready)
+    .then(()=>{ off.textContent='A copy of this page is kept for use with no network.'; })
+    .catch(()=>{ off.textContent='No offline copy was kept. Keep this tab open while out of signal.'; });
+} else off.textContent='No offline copy was kept. Keep this tab open while out of signal.';
+})();
+</script>
+</body>
+</html>
