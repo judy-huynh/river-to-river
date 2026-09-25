@@ -833,6 +833,21 @@ links here. Where, and for how many feet no drawn lot is listed on the same side
 are never named on a card. The station card and the count in the lot row's description are the
 only places the page reads `LOTS_OUT`, and neither adds a lot outside the set to any figure.
 
+### Roadway coverage, and the cross-section where it stops (added 25 Sep 2026)
+
+The roadway width record covers 9,451 ft of the street's 10,411, so 960 ft has no width. It is
+three holes: 13 ft at the Hudson end, 50 ft at the East River end, and one real one of 897 ft
+between 11th and 10th Avenue, stations 949 to 1,846 ft. That single hole is 33.2 per cent of the
+stretch from 12th to 9th Avenue, so a reader working on the west end meets it immediately while a
+reader anywhere else may never see it.
+
+The station card draws the cross-section with flex-grow set to each part's width in feet, so the
+bar is to scale by construction wherever all three parts are recorded. Where one is not, there is
+no width to draw and the missing part is shown as a fixed hatched break. The parts beside it are
+therefore not to scale against it. The card now says so in words and in the bar's accessible name,
+instead of leaving a hatched block that reads as a measured width. Sizing that break from the
+street's average roadway would be interpolation and is not done.
+
 ### The figure on the lot row
 
 The row "What could be built?" shows the sum of `unbuilt` over the drawn lots, computed by the

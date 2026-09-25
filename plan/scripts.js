@@ -1372,6 +1372,9 @@ function stationHTML(P){
   const parts=[['n',P.north,'North walk'],['r',P.road&&P.road.w,'Roadway'],['s',P.south,'South walk']];
   const said=parts.map(([,v,t])=>`${t} ${feet(v)}`).join(', ');
   const none=parts.every(x=>x[1]==null), k=pickOf(), is=id=>!!k&&SEL.pick.row===id;
+  /* a part with no record has no width to draw, so the bar holds a marked break in its place and
+     the parts beside it are not to scale against it. the drawing says so rather than implying one. */
+  const gaps=parts.filter(x=>x[1]==null&&!none).map(x=>x[2].toLowerCase());
   const openRow=LAYERS.find(L=>L.open), here=[...P.lots.n,...P.lots.s];
   const openBtn=id=>row(id)&&!row(id).open?`<button class="linkbtn" type="button" data-open-row="${id}">Open ${row(id).name}</button>`:'';
   const fact=(dt,dd,cls)=>`<div${cls?` class="${cls}"`:''}><dt>${dt}</dt><dd>${dd}</dd></div>`;
@@ -1412,11 +1415,12 @@ function stationHTML(P){
    +(k?`<p class="card__pick">${pickTitle(k)}</p>`:'')
    +`<p class="lab card__pos">${commas(P.ft)} ft from the Hudson River</p>`
    /* flex-grow is the width in feet, so the bar is to scale by construction */
-   +`<div class="xsec${none?' xsec--none':''}" role="img" aria-label="Cross-section, drawn to scale. ${said}.">${parts.map(([c,v])=>
+   +`<div class="xsec${none?' xsec--none':''}${gaps.length?' xsec--part':''}" role="img" aria-label="${gaps.length?`Cross-section. The ${gaps.join(' and ')} has no record here, so the bar is not to scale`:'Cross-section, drawn to scale'}. ${said}.">${parts.map(([c,v])=>
       v!=null?`<i class="xsec__${c}" style="flex:${v} 1 0"></i>`:`<i class="xsec__gap"></i>`).join('')}</div>`
    +`<div class="xsec__lab">${walkLab('North walk',P.north)}`
    +`<span><span class="lab">Roadway</span><b>${width(P.road?P.road.w:null)}</b></span>`
    +walkLab('South walk',P.south)+`</div>`
+   +(gaps.length?`<p class="lab xsec__ref">No ${gaps.join(' or ')} record here. The hatch is that gap, not a width.</p>`:'')
    +(SW_STATS&&!none?`<p class="lab xsec__ref">Whole street: median sidewalk ${SW_STATS.med} ft, average roadway ${ROAD_STATS.avgW} ft</p>`:'')
    +lotsLead
    +`<dl>${short.filter(id=>!(lead==='lots'&&id==='lot')).map(id=>F[id]).join('')}</dl>`
